@@ -37,7 +37,7 @@ export function BottomNav({ selected, onSelect, importBadgeCount = 0 }: BottomNa
                       isSelected ? "text-black" : "text-gray-400"
                     }`}
                   />
-                  {tab.badge > 0 && (
+                  {typeof tab.badge === "number" && tab.badge > 0 && (
                     <span className="absolute -top-1 -right-1 bg-black text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
                       {tab.badge}
                     </span>

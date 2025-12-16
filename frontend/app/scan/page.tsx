@@ -1,7 +1,8 @@
 'use client';
 
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, Clipboard, CheckCircle2, Image as ImageIcon, Loader2, Sparkles, XCircle } from "lucide-react";
+import { ArrowLeft, Camera, Clipboard, CheckCircle2, Loader2, Sparkles, XCircle } from "lucide-react";
 
 type TemplateIngredient = { item: string; amount: string | null };
 type TemplateRecipe = {
@@ -184,7 +185,14 @@ export default function ScanPage() {
             </label>
             {previewUrl && (
               <div className="relative overflow-hidden rounded-2xl border border-gray-200">
-                <img src={previewUrl} alt="Preview" className="w-full" />
+                <Image
+                  src={previewUrl}
+                  alt="Preview"
+                  width={1200}
+                  height={800}
+                  className="w-full h-auto object-cover"
+                  unoptimized
+                />
                 <button
                   type="button"
                   onClick={clearSelection}

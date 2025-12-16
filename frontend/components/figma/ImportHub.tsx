@@ -9,12 +9,23 @@ interface ImportHubProps {
   sharedRecipesCount?: number;
 }
 
+type ImportMethod = {
+  id: Screen | "addManually";
+  icon: typeof Link2;
+  title: string;
+  description: string;
+  color: string;
+  action: () => void;
+  badge?: number;
+  disabled?: boolean;
+};
+
 export function ImportHub({
   onNavigate,
   onAddManually,
   sharedRecipesCount = 0,
 }: ImportHubProps) {
-  const importMethods = [
+  const importMethods: ImportMethod[] = [
     {
       id: "importFromLink" as const,
       icon: Link2,

@@ -1,5 +1,20 @@
-backend/.venv/
-backend/.env
-backend/.env.save
+.DS_Store
+
+# Frontend build artifacts & deps
+frontend/.next/
 frontend/node_modules/
+frontend/.env
+frontend/.env.*
+frontend/.vercel
+
+# Backend environments & local artifacts
+backend/.venv/
 backend/venv/
+backend/.env
+backend/.env.*
+backend/storage/
+backend/recipefy.db
+
+# General env overrides
+.env
+.env.*

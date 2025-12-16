@@ -328,7 +328,7 @@ export function Home({
     setMessages((prev) => [...prev, userMessage, thinkingMessage]);
     setIsAssistantThinking(true);
 
-    const useFallbackResponse = (reason?: "empty" | "error") => {
+    const showFallbackResponse = (reason?: "empty" | "error") => {
       const fallback = generateAssistantResponse(question, allRecipes, picksOfTheDay);
       if (reason === "error") {
         setAssistantError("ChefGPT is offline right now. Showing smart suggestions instead.");
@@ -342,7 +342,7 @@ export function Home({
     };
 
     if (!finderCandidates.length) {
-      useFallbackResponse("empty");
+      showFallbackResponse("empty");
       setIsAssistantThinking(false);
       return;
     }
@@ -389,8 +389,9 @@ export function Home({
           recipes: suggestedRecipes,
         },
       ]);
-    } catch (error) {
-      useFallbackResponse("error");
+    } catch (assistantFailure) {
+      console.error(assistantFailure);
+      showFallbackResponse("error");
     } finally {
       setIsAssistantThinking(false);
     }
@@ -449,6 +450,11 @@ export function Home({
           inboxCount={inboxCount}
         />
       </div>
+      {importQueueCount > 0 && (
+        <p className="px-6 -mt-6 mb-8 text-sm text-gray-500">
+          {importQueueCount} {importQueueCount === 1 ? "import" : "imports"} in progress
+        </p>
+      )}
 
       <div className="px-6 mb-8">
         <div className="flex items-center justify-between mb-4">
@@ -681,11 +687,12 @@ const generateAssistantResponse = (
   const pick = (predicate: (recipe: Recipe) => boolean) => recipes.filter(predicate).slice(0, 3);
 
   if (lower.includes("schnell") || lower.includes("fast") || lower.includes("quick")) {
-    filtered = pick(
-      (recipe) =>
-        recipe.tags?.some((tag) => tag.toLowerCase() === "quick") ||
-        (recipe.totalTime && Number.parseInt(recipe.totalTime, 10) < 30)
-    );
+    filtered = pick((recipe) => {
+      const hasQuickTag = recipe.tags?.some((tag) => tag.toLowerCase() === "quick") ?? false;
+      const hasShortTime =
+        typeof recipe.totalTime === "string" && Number.parseInt(recipe.totalTime, 10) < 30;
+      return hasQuickTag || hasShortTime;
+    });
     return {
       response: "Hier sind schnelle Rezepte, die du in unter 30 Minuten zubereiten kannst:",
       recipes: filtered,
@@ -712,7 +719,7 @@ const generateAssistantResponse = (
     filtered = pick(
       (recipe) =>
         recipe.category === "Breakfast" ||
-        recipe.tags?.some((tag) => tag.toLowerCase() === "breakfast")
+        (recipe.tags?.some((tag) => tag.toLowerCase() === "breakfast") ?? false)
     );
     return {
       response: "Perfekt für ein leckeres Frühstück:",
@@ -722,7 +729,9 @@ const generateAssistantResponse = (
 
   if (lower.includes("dessert") || lower.includes("nachtisch")) {
     filtered = pick(
-      (recipe) => recipe.category === "Dessert" || recipe.tags?.some((tag) => tag.toLowerCase() === "dessert")
+      (recipe) =>
+        recipe.category === "Dessert" ||
+        (recipe.tags?.some((tag) => tag.toLowerCase() === "dessert") ?? false)
     );
     return {
       response: "Süße Dessert-Ideen für dich:",

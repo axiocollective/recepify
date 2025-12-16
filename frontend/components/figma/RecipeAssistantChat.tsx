@@ -18,6 +18,10 @@ interface ChatMessage extends RecipeAssistantMessage {
   id: string;
 }
 
+type MessageBlock =
+  | { type: "list"; items: string[] }
+  | { type: "paragraph"; text: string };
+
 const generateId = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -88,7 +92,7 @@ export function RecipeAssistantChat({ recipe }: RecipeAssistantChatProps) {
     }
   }, [questionCount, limitNoticeShown]);
 
-  const parseBlocks = (content: string) => {
+  const parseBlocks = (content: string): MessageBlock[] => {
     const normalized = content.replace(/\r\n?/g, "\n").trim();
     if (!normalized) return [];
     const segments = normalized.split(/\n{2,}/).map((segment) => segment.trim());
@@ -104,7 +108,7 @@ export function RecipeAssistantChat({ recipe }: RecipeAssistantChatProps) {
         }
         return { type: "paragraph", text: lines.join(" ") };
       })
-      .filter(Boolean);
+      .filter((block): block is MessageBlock => Boolean(block));
   };
 
   const renderBoldText = (text: string) => {

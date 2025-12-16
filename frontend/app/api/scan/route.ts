@@ -30,6 +30,41 @@ const DEFAULT_TEMPLATE: TemplateRecipe = {
   notes: [],
 };
 
+type UnknownRecord = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is UnknownRecord =>
+  typeof value === "object" && value !== null;
+
+const normalizeTemplateIngredient = (entry: unknown): TemplateIngredient | null => {
+  if (!isRecord(entry)) {
+    return null;
+  }
+  const amountRaw = "amount" in entry ? entry.amount : null;
+  const itemRaw = "item" in entry ? entry.item : null;
+  const item = typeof itemRaw === "string" ? itemRaw.trim() : String(itemRaw ?? "").trim();
+  if (!item) {
+    return null;
+  }
+  const amount =
+    typeof amountRaw === "string" ? amountRaw.trim() : amountRaw != null ? String(amountRaw).trim() : "";
+  return {
+    item,
+    amount: amount || null,
+  };
+};
+
+const normalizeTextEntry = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = String(value).trim();
+  return text || null;
+};
+
 function normalizeExtension(filename?: string | null): string | null {
   if (!filename) return null;
   const idx = filename.lastIndexOf(".");
@@ -79,14 +114,21 @@ function parseTemplateJson(raw: string | undefined): TemplateRecipe | null {
       ...parsed,
       ingredients: Array.isArray(parsed.ingredients)
         ? parsed.ingredients
-            .map((entry: any) => ({
-              amount: entry?.amount ? String(entry.amount).trim() || null : null,
-              item: entry?.item ? String(entry.item).trim() : "",
-            }))
-            .filter((ingredient) => ingredient.item)
+            .map((entry: unknown) => normalizeTemplateIngredient(entry))
+            .filter(
+              (ingredient: TemplateIngredient | null): ingredient is TemplateIngredient => Boolean(ingredient)
+            )
         : [],
-      steps: Array.isArray(parsed.steps) ? parsed.steps.map((step: any) => String(step).trim()).filter(Boolean) : [],
-      notes: Array.isArray(parsed.notes) ? parsed.notes.map((note: any) => String(note).trim()).filter(Boolean) : [],
+      steps: Array.isArray(parsed.steps)
+        ? parsed.steps
+            .map((step: unknown) => normalizeTextEntry(step))
+            .filter((step: string | null): step is string => Boolean(step))
+        : [],
+      notes: Array.isArray(parsed.notes)
+        ? parsed.notes
+            .map((note: unknown) => normalizeTextEntry(note))
+            .filter((note: string | null): note is string => Boolean(note))
+        : [],
     };
     merged.title = merged.title?.trim() ?? "";
     merged.description = merged.description?.trim() || null;
@@ -106,42 +148,38 @@ async function buildTemplate(rawText: string, openAiKey: string): Promise<Templa
   }
 
   const client = new OpenAI({ apiKey: openAiKey });
-  const instructions = [
-    {
-      role: "system",
-      content:
-        "You are an expert culinary editor. Convert the provided OCR text into a structured recipe JSON object. " +
-        "Populate missing fields with null and keep ingredient wording faithful to the source. Always respond with JSON.",
-    },
-    {
-      role: "user",
-      content: [
-        {
-          type: "text",
-          text:
-            `Return JSON using this shape:\n` +
-            JSON.stringify(DEFAULT_TEMPLATE, null, 2) +
-            `\nOCR TEXT:\n"""${rawText}"""`,
-        },
-      ],
-    },
-  ];
+  const prompt =
+    "You are an expert culinary editor. Convert the provided OCR text into a structured recipe JSON object. " +
+    "Populate missing fields with null and keep ingredient wording faithful to the source. Always respond with JSON.\n" +
+    "Return JSON using this shape:\n" +
+    JSON.stringify(DEFAULT_TEMPLATE, null, 2) +
+    `\nOCR TEXT:\n"""${rawText}"""`;
 
   const response = await client.responses.create({
     model: "gpt-4o-mini",
-    input: instructions,
+    input: prompt,
     max_output_tokens: 800,
   });
 
   const textBlocks: string[] = [];
-  const output = response.output ?? [];
-  for (const block of output) {
-    for (const item of block.content ?? []) {
-      if (item.type === "output_text" && item.text) {
-        textBlocks.push(item.text);
+  const outputBlocks = Array.isArray(response.output) ? response.output : [];
+  for (const block of outputBlocks) {
+    const contentItems = isRecord(block) && Array.isArray(block.content) ? block.content : [];
+    for (const item of contentItems) {
+      if (!isRecord(item)) {
+        continue;
       }
-      if ((item as any).text?.value) {
-        textBlocks.push((item as any).text.value);
+      if (item.type === "output_text" && typeof item.text === "string") {
+        textBlocks.push(item.text);
+        continue;
+      }
+      if (typeof item.text === "string") {
+        textBlocks.push(item.text);
+        continue;
+      }
+      const nestedText = item.text;
+      if (isRecord(nestedText) && typeof nestedText.value === "string") {
+        textBlocks.push(nestedText.value);
       }
     }
   }

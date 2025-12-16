@@ -92,3 +92,15 @@ Die Next.js App nutzt Supabase Auth für die Anmeldung. Richte folgende Schritte
 5. `npm install` ausführen, damit `@supabase/supabase-js` installiert wird, anschließend `npm run dev`.
 
 Danach erscheint vor der App ein Login-Screen mit „Continue with Google/Apple“ sowie E-Mail-Magic-Link.
+
+## Deployment (GitHub & Vercel)
+
+1. **Repo vorbereiten** – das Build-Directory `.next/` und lokale Datenbanken sind jetzt in `.gitignore` hinterlegt, daher genügt ein `git status`, um nur echte Änderungen zu sehen. Vor jedem Push einmal `npm run lint && npm run build` laufen lassen.
+2. **Commit & Push** – falls das Repo noch nicht verbunden ist: `git remote add origin <github-url>` und `git push -u origin main`. Secrets (`.env`, `.env.local`) bleiben lokal.
+3. **Vercel einrichten**
+   - Auf [vercel.com](https://vercel.com) „New Project → Import Git Repo“, `Recepify/frontend` als Root Directory wählen.
+   - Install Command `npm install`, Build Command `npm run build`, Output `.next`.
+   - Unter „Environment Variables“ alle Werte aus `frontend/.env.local` sowie benötigte Backend-URLs eintragen.
+4. **Deploys verifizieren** – nach dem ersten Deploy prüft Vercel Preview/Production automatisch jeden neuen Push. Fehlerhafte Builds lassen sich über das Dashboard einsehen (Logs + Rollbacks).
+
+Optional kannst du ein `vercel env pull .env.local` nutzen, sobald Vercel die Variablen verwaltet.

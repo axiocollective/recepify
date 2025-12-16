@@ -102,6 +102,41 @@ export function MyRecipes({
   const resetFilters = () => {
     setFilters({ cookingTime: "", tag: "", favoritesOnly: false, source: "" });
     previousInitialTagRef.current = null;
+    onClearInitialTag?.();
+  };
+
+  const parseMinutesFromDuration = (value?: string | null): number | undefined => {
+    if (!value) {
+      return undefined;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      return undefined;
+    }
+    const colonMatch = normalized.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
+    if (colonMatch) {
+      const hours = Number.parseInt(colonMatch[1], 10);
+      const minutes = Number.parseInt(colonMatch[2], 10);
+      const seconds = colonMatch[3] ? Number.parseInt(colonMatch[3], 10) : 0;
+      return hours * 60 + minutes + Math.round(seconds / 60);
+    }
+    const totalMinutes =
+      (Number.parseFloat((normalized.match(/(\d+(?:[.,]\d+)?)\s*h/) ?? [])[1]?.replace(",", ".") ?? "0") || 0) * 60 +
+      (Number.parseFloat((normalized.match(/(\d+(?:[.,]\d+)?)\s*m/) ?? [])[1]?.replace(",", ".") ?? "0") || 0);
+    if (totalMinutes > 0) {
+      return Math.round(totalMinutes);
+    }
+    const isoHours = normalized.match(/(\d+)h/);
+    const isoMinutes = normalized.match(/(\d+)m/);
+    if (isoHours || isoMinutes) {
+      return (Number(isoHours?.[1]) || 0) * 60 + (Number(isoMinutes?.[1]) || 0);
+    }
+    const plainMatch = normalized.match(/(\d+)\s*(min|m|minutes?)/);
+    if (plainMatch) {
+      return Number.parseInt(plainMatch[1], 10);
+    }
+    const numeric = Number.parseInt(normalized, 10);
+    return Number.isFinite(numeric) ? numeric : undefined;
   };
 
   const filteredRecipes = recipes.filter((recipe) => {
@@ -542,43 +577,3 @@ function RecipeListCard({ recipe, onClick, onEdit, onDelete, onFavoriteToggle }:
     </div>
   );
 }
-  const parseMinutesFromDuration = (value?: string | null): number | undefined => {
-    if (!value) {
-      return undefined;
-    }
-    const normalized = value.trim().toLowerCase();
-    if (!normalized) {
-      return undefined;
-    }
-    const colonMatch = normalized.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
-    if (colonMatch) {
-      const hours = Number.parseInt(colonMatch[1], 10);
-      const minutes = Number.parseInt(colonMatch[2], 10);
-      const seconds = colonMatch[3] ? Number.parseInt(colonMatch[3], 10) : 0;
-      return hours * 60 + minutes + Math.round(seconds / 60);
-    }
-    const totalMinutes =
-      (Number.parseFloat((normalized.match(/(\d+(?:[.,]\d+)?)\s*h/) ?? [])[1]?.replace(",", ".") ?? "0") || 0) *
-        60 +
-      (Number.parseFloat((normalized.match(/(\d+(?:[.,]\d+)?)\s*m/) ?? [])[1]?.replace(",", ".") ?? "0") || 0);
-    if (totalMinutes > 0) {
-      return Math.round(totalMinutes);
-    }
-    const isoHours = normalized.match(/(\d+)h/);
-    const isoMinutes = normalized.match(/(\d+)m/);
-    if (isoHours || isoMinutes) {
-      return (Number(isoHours?.[1]) || 0) * 60 + (Number(isoMinutes?.[1]) || 0);
-    }
-    const plainMatch = normalized.match(/(\d+)\s*(min|m|minutes?)/);
-    if (plainMatch) {
-      return Number.parseInt(plainMatch[1], 10);
-    }
-    const numeric = Number.parseInt(normalized, 10);
-    return Number.isFinite(numeric) ? numeric : undefined;
-  };
-
-  const resetFilters = () => {
-    setFilters({ cookingTime: "", tag: "", favoritesOnly: false });
-    previousInitialTagRef.current = null;
-    onClearInitialTag?.();
-  };

@@ -1,5 +1,6 @@
 'use client';
 
+import NextImage from "next/image";
 import { ArrowLeft, Camera, Image as ImageIcon, Sparkles, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { importFromScan, type ImportedRecipePayload } from "@/lib/api";
@@ -91,7 +92,14 @@ export function ScanRecipe({ onBack, onScanComplete }: ScanRecipeProps) {
 
         {previewImage ? (
           <div className="relative rounded-xl overflow-hidden border border-gray-200">
-            <img src={previewImage} alt="Recipe preview" className="w-full h-auto" />
+            <NextImage
+              src={previewImage}
+              alt="Recipe preview"
+              width={1200}
+              height={800}
+              className="w-full h-auto object-cover"
+              unoptimized
+            />
             {isScanning && (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center px-4">
                 <div className="bg-white rounded-xl px-6 py-4 space-y-3 w-full max-w-sm">

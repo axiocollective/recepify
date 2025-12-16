@@ -515,13 +515,6 @@ const updateTag = (index: number, value: string) => {
   const hasServings = typeof formData.servings === "number" && formData.servings > 0;
   const canGenerateSteps = ingredientSummaries.length > 0 && descriptionText.length >= 20;
   const canCalculateNutrition = hasServings && hasIngredientAmounts && ingredientSummaries.length > 0;
-  const hasNutritionValues = Boolean(
-    formData.nutrition &&
-      (formData.nutrition.calories ||
-        formData.nutrition.protein ||
-        formData.nutrition.carbs ||
-        formData.nutrition.fat)
-  );
   const hasSteps = formData.steps.some((step) => step?.trim().length);
   const canSuggestTagsWithAI = descriptionText.length > 0 || hasSteps;
   const canGenerateDescription =
@@ -750,7 +743,7 @@ const updateTag = (index: number, value: string) => {
       }
     }
     if (!raw.length) {
-      const match = normalized.match(/\[([^\]]+)\]/s);
+      const match = normalized.match(/\[([\s\S]+)\]/);
       if (match) {
         raw = match[1]
           .split(",")

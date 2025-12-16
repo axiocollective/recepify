@@ -96,7 +96,7 @@ export function ImportFromWebsite({ onBack, onImport }: ImportFromWebsiteProps) 
           </div>
           <h2 className="text-xl font-medium mb-2">Paste any recipe link</h2>
           <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
-            We'll automatically detect if it's from TikTok, Instagram, Pinterest, or any recipe website.
+            We&apos;ll automatically detect if it&apos;s from TikTok, Instagram, Pinterest, or any recipe website.
           </p>
         </div>
 
@@ -187,7 +187,7 @@ export function ImportFromWebsite({ onBack, onImport }: ImportFromWebsiteProps) 
               <span className="w-6 h-6 bg-black text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium">3</span>
               <div className="pt-0.5">
                 <p className="font-medium text-gray-900">Paste above</p>
-                <p className="text-gray-500 mt-0.5">We'll extract the recipe and let you edit it before saving.</p>
+                <p className="text-gray-500 mt-0.5">We&apos;ll extract the recipe and let you edit it before saving.</p>
               </div>
             </div>
           </div>

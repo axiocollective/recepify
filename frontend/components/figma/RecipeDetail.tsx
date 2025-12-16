@@ -801,7 +801,7 @@ export function RecipeDetail({
         }
         return { name, amount };
       })
-      .filter((item): item is { name: string; amount?: string } => Boolean(item));
+      .filter((item): item is { name: string; amount: string | undefined } => Boolean(item));
     if (!items.length) {
       setShoppingStatus({ type: "error", message: "Please select at least one ingredient." });
       return;

@@ -39,6 +39,7 @@ import {
   importFromPinterest as importPinterestService,
   type ImportedRecipePayload,
   type ImportResponsePayload,
+  type RecipeReadPayload,
 } from "@/lib/api";
 
 type AppTab = "home" | "import" | "myRecipes" | "shoppingList" | "profile";
@@ -135,7 +136,12 @@ const parseMinutesFromDuration = (value?: string | null): number | undefined => 
   return Number.isNaN(numeric) ? undefined : numeric;
 };
 
-const mapApiRecipeToFigma = (apiRecipe: ApiRecipe): Recipe => {
+type ApiRecipeWithFavorite = (ApiRecipe | RecipeReadPayload) & { isFavorite?: boolean };
+
+const hasIsFavoriteFlag = (recipe: ApiRecipe | RecipeReadPayload): recipe is ApiRecipeWithFavorite =>
+  typeof recipe === "object" && recipe !== null && "isFavorite" in recipe;
+
+const mapApiRecipeToFigma = (apiRecipe: ApiRecipe | RecipeReadPayload): Recipe => {
   const ingredients = apiRecipe.ingredients
     .map((ingredient, index) => {
       const split = splitIngredientLine(ingredient.line ?? undefined);
@@ -237,7 +243,7 @@ const mapApiRecipeToFigma = (apiRecipe: ApiRecipe): Recipe => {
     sourceUrl: apiRecipe.sourceUrl ?? undefined,
     sourceDomain: apiRecipe.sourceDomain ?? undefined,
     importedAt: apiRecipe.importedAt ?? new Date().toISOString(),
-    isFavorite: Boolean((apiRecipe as any).isFavorite),
+    isFavorite: hasIsFavoriteFlag(apiRecipe) ? Boolean(apiRecipe.isFavorite) : false,
   };
 };
 

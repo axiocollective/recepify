@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import { Clock, Users, Tag } from "lucide-react";
 import type { RecipeReadPayload } from "@/lib/api";
+import type { RecipeIngredient } from "@/types/figma";
 import { formatIngredientText } from "@/lib/utils";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -71,12 +72,20 @@ export default async function ShareRecipePage({ params }: SharePageProps) {
             <h2 className="text-lg font-semibold text-gray-900 mb-3">Ingredients</h2>
             {recipe.ingredients.length ? (
               <ul className="space-y-2 text-gray-700">
-                {recipe.ingredients.map((ingredient) => (
-                  <li key={ingredient.id} className="flex gap-2">
-                    <span className="text-gray-400">•</span>
-                    <span>{ingredient.line || formatIngredientText(ingredient)}</span>
-                  </li>
-                ))}
+                {recipe.ingredients.map((ingredient) => {
+                  const normalizedIngredient: RecipeIngredient = {
+                    id: ingredient.id,
+                    line: ingredient.line ?? undefined,
+                    amount: ingredient.amount ?? undefined,
+                    name: ingredient.name ?? undefined,
+                  };
+                  return (
+                    <li key={ingredient.id} className="flex gap-2">
+                      <span className="text-gray-400">•</span>
+                      <span>{ingredient.line || formatIngredientText(normalizedIngredient)}</span>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className="text-sm text-gray-500">No ingredients provided.</p>

@@ -14,15 +14,23 @@ const generateDraftId = () => {
   return `draft-${Math.random().toString(36).slice(2, 10)}`;
 };
 
-const createManualDraft = (): Recipe => ({
-  id: generateDraftId(),
-  title: "",
-  description: "",
-  ingredients: [""],
-  steps: [""],
-  tags: [],
-  source: "web"
-});
+const createManualDraft = (): Recipe => {
+  const draftId = generateDraftId();
+  return {
+    id: draftId,
+    title: "",
+    description: "",
+    ingredients: [
+      {
+        id: `${draftId}-ingredient-1`,
+        line: "",
+      },
+    ],
+    steps: [""],
+    tags: [],
+    source: "web",
+  };
+};
 
 export default function AddRecipePage() {
   const [importUrl, setImportUrl] = useState("");
