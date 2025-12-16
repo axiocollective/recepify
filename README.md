@@ -104,3 +104,11 @@ Danach erscheint vor der App ein Login-Screen mit „Continue with Google/Apple�
 4. **Deploys verifizieren** – nach dem ersten Deploy prüft Vercel Preview/Production automatisch jeden neuen Push. Fehlerhafte Builds lassen sich über das Dashboard einsehen (Logs + Rollbacks).
 
 Optional kannst du ein `vercel env pull .env.local` nutzen, sobald Vercel die Variablen verwaltet.
+
+## Railway Backend (mit Docker)
+
+TikTok-Importe benötigen `ffmpeg`. Für Deployments auf Railway (oder anderen Containern) läuft die FastAPI-App daher über `backend/Dockerfile`, das alle Abhängigkeiten inkl. `ffmpeg` installiert. Schritte:
+
+1. Railway → Service → *Settings → Deploy* → **Builder = Dockerfile**, Pfad `backend/Dockerfile`.
+2. Environment Variablen setzen (`DATABASE_URL`, `OPENAI_API_KEY`, `GOOGLE_VISION_API_KEY`, `STORAGE_DIR`, `ASSISTANT_MODEL_PRIORITY`, `FRONTEND_ORIGINS` usw.).
+3. Redeploy auslösen – danach stehen alle Importpfade bereit (Web, TikTok, Pinterest, Scan).
