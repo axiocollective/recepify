@@ -20,13 +20,15 @@ const inputClasses =
 
 interface ProfileProps {
   name: string;
+  email: string;
   onNameChange: (value: string) => void;
+  onEmailChange: (value: string) => void;
+  onLogout: () => void;
 }
 
 type EditableField = "name" | "email" | null;
 
-export function Profile({ name, onNameChange }: ProfileProps) {
-  const [email, setEmail] = useState("andreas@example.com");
+export function Profile({ name, email, onNameChange, onEmailChange, onLogout }: ProfileProps) {
   const [pendingName, setPendingName] = useState(name);
   const [pendingEmail, setPendingEmail] = useState(email);
   const [isEditing, setIsEditing] = useState<EditableField>(null);
@@ -40,6 +42,10 @@ export function Profile({ name, onNameChange }: ProfileProps) {
   useEffect(() => {
     setPendingName(name);
   }, [name]);
+
+  useEffect(() => {
+    setPendingEmail(email);
+  }, [email]);
 
   const handleEditToggle = (field: EditableField) => {
     setIsEditing((prev) => (prev === field ? null : field));
@@ -69,7 +75,7 @@ export function Profile({ name, onNameChange }: ProfileProps) {
   };
 
   const handleLogout = () => {
-    setStatusMessage({ type: "success", text: "You have been logged out." });
+    onLogout();
   };
 
   return (
@@ -135,7 +141,7 @@ export function Profile({ name, onNameChange }: ProfileProps) {
                 setStatusMessage({ type: "error", text: "Please enter a valid email." });
                 return;
               }
-              setEmail(next);
+              onEmailChange(next);
               setPendingEmail(next);
               setIsEditing(null);
               setStatusMessage({ type: "success", text: "Email updated." });

@@ -13,6 +13,7 @@ import { ImportHub } from "@/components/figma/ImportHub";
 import { ImportInbox } from "@/components/figma/ImportInbox";
 import { MyRecipes } from "@/components/figma/MyRecipes";
 import { Profile } from "@/components/figma/Profile";
+import { LoginScreen } from "@/components/figma/LoginScreen";
 import { RecipeDetail } from "@/components/figma/RecipeDetail";
 import { RecipeEdit } from "@/components/figma/RecipeEdit";
 import { RecordVoiceRecipe } from "@/components/figma/RecordVoiceRecipe";
@@ -342,7 +343,9 @@ export function FigmaExperience() {
   const [importItems, setImportItems] = useState<ImportItem[]>([]);
   const [toolReturnScreen, setToolReturnScreen] = useState<Screen>("home");
   const [inboxReturnScreen, setInboxReturnScreen] = useState<Screen>("home");
-  const [userName, setUserName] = useState("Andi Schmidt");
+  const [userName, setUserName] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingRecipes, setIsLoadingRecipes] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const clearMyRecipesTagFilter = useCallback(() => {
@@ -350,6 +353,20 @@ export function FigmaExperience() {
   }, []);
   const [shoppingListItems, setShoppingListItems] = useState<ShoppingListItem[]>([]);
   const [reviewRecipeId, setReviewRecipeId] = useState<string | null>(null);
+  const persistIdentity = useCallback((nextName: string, nextEmail: string) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem("recepify:userName", nextName);
+    window.localStorage.setItem("recepify:userEmail", nextEmail);
+  }, []);
+  const clearIdentity = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.removeItem("recepify:userName");
+    window.localStorage.removeItem("recepify:userEmail");
+  }, []);
   const persistShoppingListItems = useCallback((items: ShoppingListItem[]) => {
     saveShoppingListItems(serializeShoppingListItems(items)).catch((error) => {
       console.error("Failed to save shopping list items", error);
@@ -375,9 +392,53 @@ export function FigmaExperience() {
 
   const handleNameChange = (value: string) => {
     setUserName(value);
+    if (isAuthenticated) {
+      persistIdentity(value, userEmail);
+    }
+  };
+
+  const handleEmailChange = (value: string) => {
+    setUserEmail(value);
+    if (isAuthenticated) {
+      persistIdentity(userName || "", value);
+    }
+  };
+
+  const handleLogin = ({ name, email }: { name: string; email: string }) => {
+    setUserName(name);
+    setUserEmail(email);
+    setIsAuthenticated(true);
+    persistIdentity(name, email);
+    setActiveTab("profile");
+    setScreen("profile");
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setUserName("");
+    setUserEmail("");
+    setShoppingListItems([]);
+    setSelectedRecipe(null);
+    clearIdentity();
   };
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const storedName = window.localStorage.getItem("recepify:userName");
+    const storedEmail = window.localStorage.getItem("recepify:userEmail");
+    if (storedName && storedEmail) {
+      setUserName(storedName);
+      setUserEmail(storedEmail);
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
     let isMounted = true;
     const loadRecipes = async () => {
       setIsLoadingRecipes(true);
@@ -408,9 +469,12 @@ export function FigmaExperience() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
     let isMounted = true;
     const loadShoppingList = async () => {
       try {
@@ -427,7 +491,7 @@ export function FigmaExperience() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isAuthenticated]);
 
   const startImportJob = (platform: ImportItem["platform"], label: string) => {
     const job: ImportItem = {
@@ -896,7 +960,13 @@ export function FigmaExperience() {
         );
       case "profile":
         return (
-          <Profile name={userName} onNameChange={handleNameChange} />
+          <Profile
+            name={userName}
+            email={userEmail}
+            onNameChange={handleNameChange}
+            onEmailChange={handleEmailChange}
+            onLogout={handleLogout}
+          />
         );
       case "recipeDetail":
         return (
@@ -929,6 +999,10 @@ export function FigmaExperience() {
         return null;
     }
   };
+
+  if (!isAuthenticated) {
+    return <LoginScreen onSubmit={handleLogin} />;
+  }
 
   return (
     <div className="min-h-screen bg-neutral-100">

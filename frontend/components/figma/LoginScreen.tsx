@@ -1,81 +1,86 @@
 'use client';
 
-import { Apple, Mail } from "lucide-react";
+import { useState } from "react";
+import { ChefHat } from "lucide-react";
 
 interface LoginScreenProps {
-  onContinue: () => void;
+  onSubmit: (payload: { name: string; email: string }) => void;
 }
 
-const RecipefyMark = () => (
-  <svg
-    className="h-7 w-7 text-white"
-    viewBox="0 0 32 32"
-    fill="currentColor"
-    aria-hidden="true"
-  >
-    <path d="M9.355 4.57a2 2 0 0 1 1.932-1.57h9.426a2 2 0 0 1 1.934 1.57l.71 3.591a4.7 4.7 0 0 1-1.591 4.494v11.96A3.385 3.385 0 0 1 18.39 28H13.6a3.385 3.385 0 0 1-3.366-3.385V12.655a4.7 4.7 0 0 1-1.592-4.494zM6.75 13.875a1.25 1.25 0 1 1 2.5 0V22.5a4.75 4.75 0 0 0 4.75 4.75h3.75a4.75 4.75 0 0 0 4.75-4.75v-8.625a1.25 1.25 0 1 1 2.5 0V22.5a7.25 7.25 0 0 1-7.25 7.25H14A7.25 7.25 0 0 1 6.75 22.5z" />
-  </svg>
-);
+export function LoginScreen({ onSubmit }: LoginScreenProps) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-const GoogleGlyph = () => (
-  <svg className="h-5 w-5" viewBox="0 0 533.5 544.3" aria-hidden="true">
-    <path
-      fill="#4285f4"
-      d="M533.5 278.4c0-18.5-1.5-37.1-4.7-55.3H272v104.8h147.3c-6.2 33.3-25.5 61.5-54.1 80.4v66h87.4c51 46.9 80.9 116.1 80.9 191.7z"
-    />
-    <path
-      fill="#34a853"
-      d="M272 544.3c73.7 0 135.5-24.3 180.7-66.2l-87.4-66c-24.2 15.9-55.3 25.3-93.3 25.3-71.5 0-132.2-47.9-154-112.5H28.1v70.4C74.7 486.7 165.4 544.3 272 544.3z"
-    />
-    <path
-      fill="#fbbc04"
-      d="M118 324.9c-10.8-31.9-10.8-66.5 0-98.4V156H28.1c-19 36.5-28 77-28 121.6s9 85.1 28 121.6z"
-    />
-    <path
-      fill="#ea4335"
-      d="M272 107.7c38.6-.6 75.4 13.9 103.6 41l77.4-77.4C409.3 27.4 340.6.1 272 0 165.4 0 74.7 57.6 28.1 156l89.9 70.4C139.8 155.6 200.5 107.7 272 107.7z"
-    />
-  </svg>
-);
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    if (!trimmedName) {
+      setError("Please enter your name.");
+      return;
+    }
+    if (!trimmedEmail || !trimmedEmail.includes("@")) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    onSubmit({ name: trimmedName, email: trimmedEmail });
+  };
 
-export function LoginScreen({ onContinue }: LoginScreenProps) {
   return (
-    <div className="flex min-h-[calc(100vh-3rem)] w-full items-center justify-center bg-white px-6 py-10">
-      <div className="w-full max-w-sm text-center">
-        <div className="mb-6 flex items-center justify-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0f0b23]">
-            <RecipefyMark />
+    <div className="min-h-screen bg-neutral-100 flex items-center justify-center px-6 py-10">
+      <div className="w-full max-w-md rounded-3xl bg-white shadow-xl p-8 space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center">
+            <ChefHat className="w-6 h-6" />
           </div>
-          <span className="text-[28px] font-semibold leading-none text-[#0f0b23]">Recipefy</span>
+          <div>
+            <p className="text-sm text-gray-500">Welcome to Recepify</p>
+            <h1 className="text-2xl font-semibold text-gray-900">Sign in to continue</h1>
+          </div>
         </div>
-        <p className="text-lg text-[#5f6b7b]">A home for all your recipes</p>
 
-        <div className="mt-10 space-y-3">
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div>
+            <label className="text-sm font-medium text-gray-700">
+              Full name
+              <input
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 transition focus:border-black focus:outline-none focus:ring-2 focus:ring-black/10"
+                placeholder="e.g. Andi Schmidt"
+              />
+            </label>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700">
+              Email address
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 transition focus:border-black focus:outline-none focus:ring-2 focus:ring-black/10"
+                placeholder="you@example.com"
+              />
+            </label>
+          </div>
+          {error && <p className="text-sm text-red-500">{error}</p>}
           <button
-            type="button"
-            onClick={onContinue}
-            className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-[18px] bg-black text-base font-semibold text-white transition hover:bg-black/90"
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full rounded-2xl bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <Apple className="h-5 w-5" aria-hidden="true" />
-            Continue with Apple
+            {isSubmitting ? "Checking..." : "Continue"}
           </button>
-          <button
-            type="button"
-            onClick={onContinue}
-            className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-[18px] border border-[#e4e7ec] bg-white text-base font-semibold text-[#101828] transition hover:bg-[#f5f7fb]"
-          >
-            <GoogleGlyph />
-            Continue with Google
-          </button>
-          <button
-            type="button"
-            onClick={onContinue}
-            className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-[18px] border border-[#e4e7ec] bg-white text-base font-semibold text-[#101828] transition hover:bg-[#f5f7fb]"
-          >
-            <Mail className="h-5 w-5" aria-hidden="true" />
-            Continue with Email
-          </button>
-        </div>
+        </form>
+        <p className="text-xs text-gray-500 text-center leading-relaxed">
+          This lightweight login stores your name and email locally so you can test Recepify without a
+          full authentication setup.
+        </p>
       </div>
     </div>
   );
