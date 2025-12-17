@@ -18,3 +18,4 @@ backend/recipefy.db
 # General env overrides
 .env
 .env.*
+backend/recommended/
