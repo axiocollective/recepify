@@ -463,7 +463,7 @@ export function Home({
                   setActiveFilter(tag);
                   onQuickFilter(tag);
                 }}
-                className={`flex-shrink-0 inline-flex items-center gap-2 rounded-[18px] border px-4 py-2.5 text-sm font-medium transition-all ${
+                className={`flex-shrink-0 inline-flex items-center gap-2 rounded-[22px] border px-5 py-3 text-base font-medium transition-all ${
                   isActive
                     ? "border-black bg-black text-white"
                     : "border-gray-200 bg-[#f7f8fc] text-[#1f2533] hover:border-gray-300 hover:bg-white"
