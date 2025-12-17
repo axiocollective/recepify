@@ -19,3 +19,4 @@ backend/recipefy.db
 .env
 .env.*
 backend/recommended/
+backend/recommended/
