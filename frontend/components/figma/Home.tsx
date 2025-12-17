@@ -10,7 +10,16 @@ import {
   Send,
   X,
   Flame,
+  Zap,
+  Salad,
+  Coffee,
+  ChefHat,
+  IceCream,
+  Pizza,
+  Leaf,
+  Sprout,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { Recipe, Screen } from "@/types/figma";
 import type { RecipeFinderCandidatePayload } from "@/types/assistant";
 import { PlaceholderThumbnail } from "@/components/placeholder-thumbnail";
@@ -49,6 +58,16 @@ const PREDEFINED_TAGS = [
   "Kids-Friendly",
   "One-Pot",
 ];
+
+const TAG_ICON_MAP: Partial<Record<string, LucideIcon>> = {
+  quick: Zap,
+  healthy: Salad,
+  breakfast: Coffee,
+  dessert: IceCream,
+  italian: Pizza,
+  vegetarian: Leaf,
+  vegan: Sprout,
+};
 
 interface HomeProps {
   onNavigate: (screen: Screen) => void;
@@ -242,6 +261,7 @@ export function Home({
   const [inputText, setInputText] = useState("");
   const [isAssistantThinking, setIsAssistantThinking] = useState(false);
   const [assistantError, setAssistantError] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const firstName = userName.split(" ")[0] || userName;
   const MAX_USER_MESSAGES = 5;
   const assistantLibraryPrompt =
@@ -283,6 +303,8 @@ export function Home({
     return Array.from(extras).sort((a, b) => a.localeCompare(b));
   }, [allRecipes]);
   const quickTags = [...PREDEFINED_TAGS, ...customTags];
+  const getTagIcon = (tag: string): LucideIcon =>
+    TAG_ICON_MAP[tag.toLowerCase()] ?? ChefHat;
   const finderCandidates = useMemo(() => buildRecipeFinderCandidates(allRecipes), [allRecipes]);
   const isSendDisabled = isAssistantThinking || !inputText.trim();
 
@@ -427,19 +449,31 @@ export function Home({
       </div>
 
       <div className="mb-10">
-        <div className="px-6 mb-4">
-          <h2 className="text-sm text-gray-600">Quick filters</h2>
+        <div className="px-6 mb-3">
+          <h2 className="text-sm font-semibold text-gray-800">Quick filters</h2>
         </div>
         <div className="flex gap-3 px-6 overflow-x-auto no-scrollbar pb-1">
-          {quickTags.map((tag) => (
-            <button
-              key={tag}
-              onClick={() => onQuickFilter(tag)}
-              className="flex-shrink-0 px-4 py-2 rounded-full bg-gray-100 text-sm text-gray-700 hover:bg-gray-200 transition-colors"
-            >
-              {tag}
-            </button>
-          ))}
+          {quickTags.map((tag) => {
+            const Icon = getTagIcon(tag);
+            const isActive = activeFilter === tag;
+            return (
+              <button
+                key={tag}
+                onClick={() => {
+                  setActiveFilter(tag);
+                  onQuickFilter(tag);
+                }}
+                className={`flex-shrink-0 inline-flex items-center gap-2 rounded-[18px] border px-4 py-2.5 text-sm font-medium transition-all ${
+                  isActive
+                    ? "border-black bg-black text-white"
+                    : "border-gray-200 bg-[#f7f8fc] text-[#1f2533] hover:border-gray-300 hover:bg-white"
+                }`}
+              >
+                <Icon className={`h-4 w-4 ${isActive ? "text-white" : "text-[#1f2937]"}`} />
+                {tag}
+              </button>
+            );
+          })}
         </div>
       </div>
 
