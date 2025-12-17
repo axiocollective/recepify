@@ -1,5 +1,9 @@
-import { FigmaExperience } from "@/app/_components/figma-experience";
+'use client';
 
-export default function HomePage() {
-  return <FigmaExperience />;
+import { useRouter } from "next/navigation";
+import { LoginScreen } from "@/components/figma/LoginScreen";
+
+export default function LandingPage() {
+  const router = useRouter();
+  return <LoginScreen onContinue={() => router.push("/home")} />;
 }
