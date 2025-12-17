@@ -374,11 +374,17 @@ export function FigmaExperience() {
     window.localStorage.removeItem("recepify:userName");
     window.localStorage.removeItem("recepify:userEmail");
   }, []);
-  const persistShoppingListItems = useCallback((items: ShoppingListItem[]) => {
-    saveShoppingListItems(serializeShoppingListItems(items)).catch((error) => {
-      console.error("Failed to save shopping list items", error);
-    });
-  }, []);
+  const persistShoppingListItems = useCallback(
+    (items: ShoppingListItem[]) => {
+      if (!userEmail) {
+        return;
+      }
+      saveShoppingListItems(serializeShoppingListItems(items), userEmail).catch((error) => {
+        console.error("Failed to save shopping list items", error);
+      });
+    },
+    [userEmail]
+  );
   const replaceShoppingListItems = useCallback(
     (items: ShoppingListItem[]) => {
       setShoppingListItems(items);
@@ -492,13 +498,13 @@ export function FigmaExperience() {
   }, [isAuthenticated, userEmail]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !userEmail) {
       return;
     }
     let isMounted = true;
     const loadShoppingList = async () => {
       try {
-        const apiItems = await fetchShoppingListItems();
+        const apiItems = await fetchShoppingListItems(userEmail);
         if (!isMounted) {
           return;
         }
@@ -511,7 +517,7 @@ export function FigmaExperience() {
     return () => {
       isMounted = false;
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, userEmail]);
 
   const startImportJob = (platform: ImportItem["platform"], label: string) => {
     const job: ImportItem = {

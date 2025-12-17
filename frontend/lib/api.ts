@@ -251,15 +251,25 @@ interface ShoppingListSyncPayload {
   items: ShoppingListItemPayload[];
 }
 
-export async function fetchShoppingListItems(): Promise<ShoppingListItemPayload[]> {
-  return request<ShoppingListItemPayload[]>("/api/shopping-list");
+export async function fetchShoppingListItems(userEmail?: string): Promise<ShoppingListItemPayload[]> {
+  const headers = userEmail?.trim()
+    ? { "X-User-Email": userEmail.trim() }
+    : undefined;
+  return request<ShoppingListItemPayload[]>("/api/shopping-list", {
+    headers,
+  });
 }
 
 export async function saveShoppingListItems(
-  items: ShoppingListItemPayload[]
+  items: ShoppingListItemPayload[],
+  userEmail?: string
 ): Promise<ShoppingListItemPayload[]> {
+  const headers = userEmail?.trim()
+    ? { "X-User-Email": userEmail.trim() }
+    : undefined;
   return request<ShoppingListItemPayload[]>("/api/shopping-list", {
     method: "PUT",
+    headers,
     body: JSON.stringify({ items } satisfies ShoppingListSyncPayload),
   });
 }

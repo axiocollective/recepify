@@ -6,9 +6,9 @@ import re
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional, Union
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5, NAMESPACE_DNS
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Header
 from sqlmodel import Session, select
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
@@ -1108,13 +1108,24 @@ def _normalize_text(value: Optional[str]) -> Optional[str]:
     return cleaned or None
 
 
+def _resolve_user_id(raw_email: Optional[str]) -> UUID:
+    if not raw_email:
+        return DEFAULT_USER_ID
+    normalized = raw_email.strip().lower()
+    if not normalized:
+        return DEFAULT_USER_ID
+    return uuid5(NAMESPACE_DNS, f"recepify:{normalized}")
+
+
 @router.get("/shopping-list", response_model=List[ShoppingListItemDTO])
 def get_shopping_list_items(
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
     session: Session = Depends(get_db_session),
 ) -> List[ShoppingListItemDTO]:
+    user_id = _resolve_user_id(x_user_email)
     items = session.exec(
         select(ShoppingListItem)
-        .where(ShoppingListItem.user_id == DEFAULT_USER_ID)
+        .where(ShoppingListItem.user_id == user_id)
         .order_by(ShoppingListItem.created_at)
     ).all()
     return items
@@ -1123,10 +1134,12 @@ def get_shopping_list_items(
 @router.put("/shopping-list", response_model=List[ShoppingListItemDTO])
 def replace_shopping_list_items(
     payload: ShoppingListSyncDTO,
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
     session: Session = Depends(get_db_session),
 ) -> List[ShoppingListItemDTO]:
+    user_id = _resolve_user_id(x_user_email)
     existing_items = session.exec(
-        select(ShoppingListItem).where(ShoppingListItem.user_id == DEFAULT_USER_ID)
+        select(ShoppingListItem).where(ShoppingListItem.user_id == user_id)
     ).all()
     for item in existing_items:
         session.delete(item)
@@ -1141,7 +1154,7 @@ def replace_shopping_list_items(
         normalized_amount = _normalize_text(entry.amount)
         item = ShoppingListItem(
             id=entry.id or uuid4(),
-            user_id=DEFAULT_USER_ID,
+            user_id=user_id,
             name=normalized_name,
             amount=normalized_amount,
             is_checked=bool(entry.is_checked),
