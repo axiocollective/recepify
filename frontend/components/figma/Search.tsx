@@ -33,7 +33,6 @@ export function Search({ recipes, onRecipeSelect }: SearchProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     mealType: "",
-    cookingTime: "",
     tag: "",
     source: "",
     favoritesOnly: false,
@@ -54,13 +53,6 @@ export function Search({ recipes, onRecipeSelect }: SearchProps) {
     }
     if (filters.tag && !(recipe.tags || []).includes(filters.tag)) {
       return false;
-    }
-    if (filters.cookingTime) {
-      const totalTime = recipe.totalTime || recipe.cookTime || "";
-      const minutes = parseInt(totalTime);
-      if (filters.cookingTime === "quick" && minutes > 30) return false;
-      if (filters.cookingTime === "medium" && (minutes <= 30 || minutes > 60)) return false;
-      if (filters.cookingTime === "long" && minutes <= 60) return false;
     }
     return true;
   });
@@ -128,31 +120,6 @@ export function Search({ recipes, onRecipeSelect }: SearchProps) {
               </div>
             </div>
 
-            {/* Cooking Time */}
-            <div>
-              <label className="text-xs text-gray-600 mb-2 block">Cooking Time</label>
-              <div className="flex gap-2 flex-wrap">
-                {[
-                  { value: "", label: "All" },
-                  { value: "quick", label: "Quick (<30 min)" },
-                  { value: "medium", label: "Medium (30-60 min)" },
-                  { value: "long", label: "Long (>60 min)" }
-                ].map((time) => (
-                  <button
-                    key={time.value}
-                    onClick={() => setFilters({ ...filters, cookingTime: time.value })}
-                    className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                      filters.cookingTime === time.value
-                        ? "bg-black text-white"
-                        : "bg-white border border-gray-200 hover:bg-gray-50"
-                    }`}
-                  >
-                    {time.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Tags */}
             <div>
               <label className="text-xs text-gray-600 mb-2 block">Tags</label>
@@ -215,7 +182,6 @@ export function Search({ recipes, onRecipeSelect }: SearchProps) {
                 onClick={() =>
                   setFilters({
                     mealType: "",
-                    cookingTime: "",
                     tag: "",
                     source: "",
                     favoritesOnly: false,

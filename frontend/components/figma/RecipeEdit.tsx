@@ -2,44 +2,11 @@
 
 import NextImage from "next/image";
 import { ArrowLeft, Save, Plus, X, Trash2, Upload, Camera, Sparkles, Loader2 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Recipe, RecipeIngredient } from "@/types/figma";
 import { askRecipeAssistant } from "@/lib/api";
 import type { RecipeAssistantRecipePayload } from "@/types/assistant";
-import { convertMeasurement, type UnitSystem } from "@/lib/unit-converter";
-
-const QUICK_TAGS = [
-  "breakfast",
-  "lunch",
-  "dinner",
-  "snack",
-  "dessert",
-  "appetizer",
-  "salad",
-  "soup",
-  "stew",
-  "vegetarian",
-  "vegan",
-  "gluten-free",
-  "dairy-free",
-  "keto",
-  "low-carb",
-  "high-protein",
-  "meat",
-  "poultry",
-  "seafood",
-  "spicy",
-  "quick",
-  "healthy",
-  "comfort food",
-  "bbq",
-  "grill",
-  "side dish",
-  "meal prep",
-  "budget-friendly",
-  "kids-friendly",
-  "one-pot",
-];
+import { POPULAR_RECIPE_TAG_COUNT, RECIPE_TAGS } from "@/constants/recipe-tags";
 
 const normalizeTagKey = (tag?: string | null) =>
   (tag ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -81,27 +48,6 @@ const detectRecipeLanguage = (value: Recipe): SupportedLanguage => {
   }
   return "en";
 };
-
-const UNIT_LABEL_TRANSLATIONS: Record<SupportedLanguage, Record<string, string>> = {
-  en: {},
-  de: {
-    kg: "kg",
-    g: "g",
-    l: "l",
-    ml: "ml",
-    lb: "Pfund",
-    oz: "Unzen",
-    gal: "Gallonen",
-    qt: "Quart",
-    pt: "Pint",
-    cup: "Tasse",
-    tbsp: "EL",
-    tsp: "TL",
-  },
-};
-
-const localizeUnitLabel = (unit: string, locale: SupportedLanguage) =>
-  UNIT_LABEL_TRANSLATIONS[locale][unit] ?? unit;
 
 const stripCodeFences = (text: string): string => {
   const codeMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -162,6 +108,84 @@ const parseStepsFromReply = (reply: string): string[] => {
       );
   }
   return steps;
+};
+
+const limitToTwoSentences = (text: string, maxChars = 200): string => {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+  const sentences = normalized.match(/[^.!?]+[.!?]?/g)?.map((sentence) => sentence.trim()).filter(Boolean);
+  if (!sentences || sentences.length === 0) {
+    return normalized;
+  }
+  const combined = sentences.slice(0, 2).join(" ").trim();
+  if (combined.length <= maxChars) {
+    return combined;
+  }
+  const safeSlice = combined.slice(0, maxChars + 1);
+  const lastSpace = safeSlice.lastIndexOf(" ");
+  const candidate = lastSpace > 0 ? safeSlice.slice(0, lastSpace) : combined.slice(0, maxChars);
+  return candidate.replace(/[.,;:!?-]+$/, "").trim();
+};
+
+const extractUnitLabelFromAmount = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim();
+  if (!normalized) {
+    return null;
+  }
+  const match = normalized.match(/[\p{L}]+(?:[\p{L}\s\/-]*)?$/u);
+  if (!match) {
+    return null;
+  }
+  return match[0].trim().toLowerCase();
+};
+
+const UNDER_30_MINUTES_TAG = "under 30 minutes";
+
+const parseMinutesFromTimeText = (value?: string | null): number | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+  const colonMatch = normalized.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
+  if (colonMatch) {
+    const hours = Number.parseInt(colonMatch[1], 10);
+    const minutes = Number.parseInt(colonMatch[2], 10);
+    const seconds = colonMatch[3] ? Number.parseInt(colonMatch[3], 10) : 0;
+    return hours * 60 + minutes + Math.round(seconds / 60);
+  }
+  const totalMinutes =
+    (Number.parseFloat((normalized.match(/(\d+(?:[.,]\d+)?)\s*h/) ?? [])[1]?.replace(",", ".") ?? "0") || 0) * 60 +
+    (Number.parseFloat((normalized.match(/(\d+(?:[.,]\d+)?)\s*m/) ?? [])[1]?.replace(",", ".") ?? "0") || 0);
+  if (totalMinutes > 0) {
+    return Math.round(totalMinutes);
+  }
+  const isoHours = normalized.match(/(\d+)h/);
+  const isoMinutes = normalized.match(/(\d+)m/);
+  if (isoHours || isoMinutes) {
+    return (Number(isoHours?.[1]) || 0) * 60 + (Number(isoMinutes?.[1]) || 0);
+  }
+  const plainMatch = normalized.match(/(\d+)\s*(min|m|minutes?)/);
+  if (plainMatch) {
+    return Number.parseInt(plainMatch[1], 10);
+  }
+  const numeric = Number.parseInt(normalized, 10);
+  return Number.isFinite(numeric) ? numeric : undefined;
+};
+
+const normalizeIngredientLabel = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return normalized || null;
 };
 
 const parseNumberFromValue = (value: unknown): number | undefined => {
@@ -271,10 +295,36 @@ export function RecipeEdit({ recipe, onBack, onSave }: RecipeEditProps) {
   const [nutritionStatus, setNutritionStatus] = useState<AiStatus>(null);
   const [descriptionStatus, setDescriptionStatus] = useState<AiStatus>(null);
   const [tagStatus, setTagStatus] = useState<AiStatus>(null);
-  const [unitConversionLoading, setUnitConversionLoading] = useState<UnitSystem | null>(null);
-  const [unitConversionStatus, setUnitConversionStatus] = useState<AiStatus>(null);
   const [isTranslatingRecipe, setIsTranslatingRecipe] = useState(false);
   const [translationStatus, setTranslationStatus] = useState<AiStatus>(null);
+  const [isAddingIngredientUnits, setIsAddingIngredientUnits] = useState(false);
+  const [ingredientUnitsStatus, setIngredientUnitsStatus] = useState<AiStatus>(null);
+  const [showAllTags, setShowAllTags] = useState(false);
+  const ensureUnderThirtyMinutesTag = useCallback((minutes?: number) => {
+    setFormData((prev) => {
+      const existingTags = prev.tags ?? [];
+      const hasUnderThirtyTag = existingTags.some(
+        (tag) => (tag ?? "").trim().toLowerCase() === UNDER_30_MINUTES_TAG
+      );
+      const shouldHaveTag = typeof minutes === "number" && minutes > 0 && minutes <= 30;
+      if (shouldHaveTag && !hasUnderThirtyTag) {
+        return { ...prev, tags: [...existingTags, UNDER_30_MINUTES_TAG] };
+      }
+      if (!shouldHaveTag && hasUnderThirtyTag) {
+        return {
+          ...prev,
+          tags: existingTags.filter(
+            (tag) => (tag ?? "").trim().toLowerCase() !== UNDER_30_MINUTES_TAG
+          ),
+        };
+      }
+      return prev;
+    });
+  }, []);
+  useEffect(() => {
+    const minutes = parseMinutesFromTimeText(formData.totalTime);
+    ensureUnderThirtyMinutesTag(minutes);
+  }, [formData.totalTime, formData.tags, ensureUnderThirtyMinutesTag]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const showVideo = formData.source === "tiktok" && Boolean(formData.videoUrl);
   const createEmptyIngredient = (): RecipeIngredient => ({
@@ -334,58 +384,6 @@ export function RecipeEdit({ recipe, onBack, onSave }: RecipeEditProps) {
     }));
   };
 
-  const handleConvertIngredients = (target: UnitSystem) => {
-    if (unitConversionLoading) {
-      return;
-    }
-    setUnitConversionStatus(null);
-    setUnitConversionLoading(target);
-    let convertedCount = 0;
-    const recipeLanguage = detectRecipeLanguage(formData);
-    setFormData((prev) => {
-      const nextIngredients = prev.ingredients.map((ingredient) => {
-        if (!ingredient.amount?.trim()) {
-          return ingredient;
-        }
-        const conversion = convertMeasurement(ingredient.amount, target);
-        if (!conversion) {
-          return ingredient;
-        }
-        convertedCount += 1;
-        const localizedUnit = localizeUnitLabel(conversion.unit, recipeLanguage);
-        const updatedAmount = `${conversion.formattedValue} ${localizedUnit}`.trim();
-        let updatedName = ingredient.name ?? "";
-        if (conversion.remainder) {
-          updatedName = [conversion.remainder, updatedName].filter(Boolean).join(" ").trim();
-        }
-        const updatedLine = [updatedAmount, updatedName || ingredient.line]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
-        return {
-          ...ingredient,
-          amount: updatedAmount,
-          name: updatedName || ingredient.name,
-          line: updatedLine || ingredient.line,
-        };
-      });
-      return { ...prev, ingredients: nextIngredients };
-    });
-    setUnitConversionLoading(null);
-    const convertedText =
-      target === "metric"
-        ? "All values have been converted to metric units. Please double-check for accuracy."
-        : "All values have been converted to US units. Please double-check for accuracy.";
-    const alreadyText =
-      target === "metric"
-        ? "All values have been converted to metric units. Please double-check for accuracy."
-        : "All values have been converted to US units. Please double-check for accuracy.";
-    setUnitConversionStatus({
-      type: "success",
-      message: convertedCount > 0 ? convertedText : alreadyText,
-    });
-  };
-
   const applyTranslatedRecipe = (payload: Recipe) => {
     setFormData((prev) => ({
       ...prev,
@@ -399,13 +397,20 @@ export function RecipeEdit({ recipe, onBack, onSave }: RecipeEditProps) {
   };
 
   const currentRecipeLanguage = useMemo(() => detectRecipeLanguage(formData), [formData]);
-  const targetTranslationLabel =
-    currentRecipeLanguage === "de" ? "Translate to English" : "Translate to German";
-  const targetTranslationLanguage: SupportedLanguage =
-    currentRecipeLanguage === "de" ? "en" : "de";
+  const needsEnglishTranslation = currentRecipeLanguage !== "en";
+  const translationButtonLabel = isTranslatingRecipe ? "Translating..." : "Translate";
+  const translationButtonClasses = (() => {
+    if (isTranslatingRecipe) {
+      return "bg-gradient-to-br from-purple-400 to-purple-500 text-white opacity-80 cursor-wait";
+    }
+    return needsEnglishTranslation
+      ? "bg-gradient-to-br from-purple-500 to-purple-600 text-white hover:shadow-md"
+      : "bg-gray-100 text-gray-400 cursor-not-allowed";
+  })();
+  const recipeLanguageLabel = currentRecipeLanguage === "de" ? "German" : "English";
 
   const handleTranslateRecipe = async () => {
-    if (isTranslatingRecipe) {
+    if (isTranslatingRecipe || !needsEnglishTranslation) {
       return;
     }
     setTranslationStatus(null);
@@ -416,7 +421,7 @@ export function RecipeEdit({ recipe, onBack, onSave }: RecipeEditProps) {
         messages: [
           {
             role: "user",
-            content: `Translate this entire recipe into ${targetTranslationLanguage === "de" ? "German" : "English"}. Return valid JSON with the same structure (title, description, notes, ingredients (amount/name/line), steps, tags). Do not add commentary.`,
+            content: `Translate this entire recipe into English. Return valid JSON with the same structure (title, description, notes, ingredients (amount/name/line), steps, tags). Do not add commentary.`,
           },
         ],
       });
@@ -450,7 +455,7 @@ export function RecipeEdit({ recipe, onBack, onSave }: RecipeEditProps) {
       applyTranslatedRecipe(translated);
       setTranslationStatus({
         type: "success",
-        message: `Recipe translated to ${targetTranslationLanguage === "de" ? "German" : "English"}. Please review for accuracy.`,
+        message: "Recipe translated to English. Please review for accuracy.",
       });
     } catch (error) {
       setTranslationStatus({
@@ -509,6 +514,9 @@ const updateTag = (index: number, value: string) => {
     .map(describeIngredient)
     .filter((value) => value.length > 0);
   const descriptionText = (formData.description ?? "").trim();
+  const missingIngredientAmounts = formData.ingredients.filter(
+    (ingredient) => !ingredient.amount?.trim()
+  );
   const hasIngredientAmounts =
     formData.ingredients.length > 0 &&
     formData.ingredients.every((ingredient) => Boolean(ingredient.amount?.trim()));
@@ -519,6 +527,26 @@ const updateTag = (index: number, value: string) => {
   const canSuggestTagsWithAI = descriptionText.length > 0 || hasSteps;
   const canGenerateDescription =
     Boolean(formData.title?.trim()) && ingredientSummaries.length > 0 && hasSteps;
+  const hasIngredientDetails =
+    formData.ingredients.length > 0 &&
+    formData.ingredients.every((ingredient) =>
+      Boolean(`${ingredient.name ?? ""} ${ingredient.line ?? ""}`.trim())
+    );
+  const hasRobustDescription = descriptionText.length >= 40;
+  const hasSolidTitle = Boolean((formData.title ?? "").trim().length >= 5);
+  const canAddIngredientUnits =
+    missingIngredientAmounts.length > 0 &&
+    hasIngredientDetails &&
+    hasSolidTitle &&
+    hasRobustDescription &&
+    hasSteps;
+  const existingIngredientUnits = Array.from(
+    new Set(
+      formData.ingredients
+        .map((ingredient) => extractUnitLabelFromAmount(ingredient.amount))
+        .filter((unit): unit is string => Boolean(unit))
+    )
+  );
 
   const buildAssistantRecipePayload = (): RecipeAssistantRecipePayload => ({
     title: formData.title || "Untitled Recipe",
@@ -548,8 +576,7 @@ const updateTag = (index: number, value: string) => {
         messages: [
           {
             role: "user",
-            content:
-              "Generate a clear, logically ordered list of cooking steps for this recipe. Respond ONLY in JSON with the shape {\"steps\": [\"Step 1\", \"Step 2\", ...]}. Each step should be 1–3 sentences, detailed enough to cook without being verbose.",
+            content: `Generate a clear, logically ordered list of cooking steps for this recipe. Each step must be written in ${recipeLanguageLabel} and span 1–3 sentences, detailed enough to cook without being verbose. Respond ONLY in JSON with the shape {"steps": ["Step 1", "Step 2", ...]} and no commentary.`,
           },
         ],
       });
@@ -582,12 +609,11 @@ const updateTag = (index: number, value: string) => {
         messages: [
           {
             role: "user",
-            content:
-              "Craft a teaser-style recipe description (maximum 200 characters). Highlight key flavors, cooking method, and the occasion it fits, without fluff, repeated openings, emojis, or lists. Plain text only.",
+            content: `Write at most two crisp sentences (maximum 200 characters total) in ${recipeLanguageLabel} that capture this recipe's key flavors and cooking style. Keep it punchy, no emojis, no lists—plain text only.`,
           },
         ],
       });
-      const summary = response.reply.trim();
+      const summary = limitToTwoSentences(response.reply, 200);
       if (!summary) {
         throw new Error("ChefGPT did not return a usable description.");
       }
@@ -606,6 +632,161 @@ const updateTag = (index: number, value: string) => {
       });
     } finally {
       setIsGeneratingDescription(false);
+    }
+  };
+
+  const handleAddIngredientUnits = async () => {
+    if (!canAddIngredientUnits || isAddingIngredientUnits) {
+      return;
+    }
+    setIngredientUnitsStatus(null);
+    setIsAddingIngredientUnits(true);
+    try {
+      const missingEntries = missingIngredientAmounts.map((ingredient) => {
+        const index = formData.ingredients.indexOf(ingredient);
+        const safeId = ingredient.id ?? `missing-${index}`;
+        return {
+          id: safeId,
+          index,
+          label: ingredient.name || ingredient.line || `Ingredient ${index + 1}`,
+          normalizedLabel: normalizeIngredientLabel(
+            ingredient.name || ingredient.line || `Ingredient ${index + 1}`
+          ),
+        };
+      });
+      const preferredUnitsInstruction = existingIngredientUnits.length
+        ? `Match these existing units when possible: ${existingIngredientUnits.join(", ")}.`
+        : "Default to metric-friendly units such as g, ml, or kg.";
+      const ingredientList = missingEntries
+        .map((item) => `- id: ${item.id} | ingredient: ${item.label}`)
+        .join("\n");
+      const response = await askRecipeAssistant({
+        recipe: buildAssistantRecipePayload(),
+        messages: [
+          {
+            role: "user",
+            content: `Some ingredients are missing quantities. Base your reasoning only on the recipe title, description, ingredient text, steps, and servings count—ignore photos, videos, or TikTok files. For each listed id, propose a realistic amount written in ${recipeLanguageLabel}. ${preferredUnitsInstruction} If no units exist yet, choose sensible metric units. Respond ONLY with JSON array [{"id":"...", "amount":"..."}] covering the ids below. Keep outputs short (e.g., "200 g"). Ingredients:\n${ingredientList}`,
+          },
+        ],
+      });
+      const normalized = cleanJsonText(response.reply);
+      const parsed = extractJsonObject(normalized);
+      const updates: Record<string, string> = {};
+      const applyUpdate = (id?: string | null, amount?: string | null, fallbackLabel?: string | null) => {
+        const cleanedAmount = amount?.trim();
+        if (!cleanedAmount) {
+          return;
+        }
+        let resolvedId = id?.trim();
+        if (!resolvedId && fallbackLabel) {
+          const normalized = normalizeIngredientLabel(fallbackLabel);
+          const matched = normalized
+            ? missingEntries.find((entry) => entry.normalizedLabel && entry.normalizedLabel === normalized)
+            : undefined;
+          if (matched) {
+            resolvedId = matched.id;
+          }
+        }
+        if (!resolvedId) {
+          return;
+        }
+        updates[resolvedId] = cleanedAmount;
+      };
+
+      const accumulateUpdates = (value: unknown) => {
+        if (!value) {
+          return;
+        }
+        if (Array.isArray(value)) {
+          value.forEach((entry) => {
+            if (entry && typeof entry === "object") {
+              const typed = entry as Record<string, unknown>;
+              applyUpdate(
+                typeof typed.id === "string" ? typed.id : undefined,
+                typeof typed.amount === "string" ? typed.amount : undefined,
+                typeof typed.ingredient === "string"
+                  ? typed.ingredient
+                  : typeof typed.name === "string"
+                    ? typed.name
+                    : undefined
+              );
+            }
+          });
+          return;
+        }
+        if (typeof value === "object") {
+          const record = value as Record<string, unknown>;
+          if (Array.isArray(record.ingredients)) {
+            accumulateUpdates(record.ingredients);
+            return;
+          }
+          Object.entries(record).forEach(([key, entryValue]) => {
+            if (typeof entryValue === "string") {
+              applyUpdate(key, entryValue);
+            } else if (entryValue && typeof entryValue === "object") {
+              const typed = entryValue as Record<string, unknown>;
+              applyUpdate(
+                typeof typed.id === "string" ? typed.id : key,
+                typeof typed.amount === "string"
+                  ? typed.amount
+                  : typeof typed.value === "string"
+                    ? typed.value
+                    : undefined,
+                typeof typed.ingredient === "string"
+                  ? typed.ingredient
+                  : typeof typed.name === "string"
+                    ? typed.name
+                    : undefined
+              );
+            }
+          });
+        }
+      };
+
+      let updatesSource: unknown = parsed;
+      if (!updatesSource) {
+        try {
+          updatesSource = JSON.parse(normalized);
+        } catch {
+          updatesSource = null;
+        }
+      }
+      accumulateUpdates(updatesSource);
+      if (!Object.keys(updates).length) {
+        throw new Error("ChefGPT did not return any ingredient amounts.");
+      }
+      setFormData((prev) => ({
+        ...prev,
+        ingredients: prev.ingredients.map((ingredient, index) => {
+          const identifier = ingredient.id ?? `missing-${index}`;
+          const update = updates[identifier];
+          if (!update) {
+            return ingredient;
+          }
+          const updatedLine = ingredient.line?.trim()
+            ? ingredient.line
+            : [update, ingredient.name].filter(Boolean).join(" ").trim();
+          return {
+            ...ingredient,
+            amount: update,
+            line: updatedLine || ingredient.line,
+          };
+        }),
+      }));
+      setIngredientUnitsStatus({
+        type: "success",
+        message: "Ingredient amounts were generated with ChefGPT. Please verify—they may be inaccurate.",
+      });
+    } catch (error) {
+      setIngredientUnitsStatus({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to estimate ingredient amounts with ChefGPT right now.",
+      });
+    } finally {
+      setIsAddingIngredientUnits(false);
     }
   };
 
@@ -670,7 +851,7 @@ const updateTag = (index: number, value: string) => {
       text.includes(keyword) || ingredientsSummary.includes(keyword);
     const addTag = (tag: string) => {
       const normalizedTag = tag.toLowerCase();
-      if (!QUICK_TAGS.includes(normalizedTag)) {
+      if (!RECIPE_TAGS.includes(normalizedTag)) {
         return;
       }
       const normalized = normalizeTagKey(normalizedTag);
@@ -705,6 +886,12 @@ const updateTag = (index: number, value: string) => {
     if (contains("one pot") || contains("one-pot") || contains("skillet")) addTag("one-pot");
     if (contains("protein") || contains("chicken") || contains("tempeh")) addTag("high-protein");
     if (contains("snack") || contains("bite")) addTag("snack");
+    if (contains("easy") || contains("simple") || contains("effortless")) addTag("easy");
+    if (contains("bake") || contains("baked") || contains("pastry")) addTag("baking");
+    if (contains("oven")) addTag("oven");
+    if (contains("party") || contains("crowd") || contains("sharing")) addTag("party");
+    if (contains("family")) addTag("family");
+    if (contains("make ahead") || contains("make-ahead") || contains("overnight")) addTag("make-ahead");
 
     const mealKeywords: Record<string, string[]> = {
       "breakfast": ["breakfast", "brunch", "morning", "oats", "pancake", "smoothie"],
@@ -719,8 +906,24 @@ const updateTag = (index: number, value: string) => {
       }
     });
 
+    const cuisineKeywords: Record<string, string[]> = {
+      "asian": ["asian", "thai", "japanese", "chinese", "korean", "vietnamese", "sichuan"],
+      "american": ["american", "tex-mex", "southern", "new york"],
+      "mediterranean": ["mediterranean", "greek", "italian", "spanish"],
+      "european": ["european", "french", "german", "italian"],
+      "latin american": ["latin american", "mexican", "peruvian", "argentinian"],
+      "middle eastern": ["middle eastern", "lebanese", "persian", "turkish"],
+      "north african": ["moroccan", "north african", "tagine"],
+      "scandinavian": ["scandinavian", "swedish", "norwegian", "danish"],
+    };
+    Object.entries(cuisineKeywords).forEach(([tag, keywords]) => {
+      if (keywords.some((keyword) => contains(keyword))) {
+        addTag(tag);
+      }
+    });
+
     if (suggestions.size < 3) {
-      QUICK_TAGS.filter((tag) => {
+      RECIPE_TAGS.filter((tag) => {
         const normalized = normalizeTagKey(tag);
         return normalized && !normalizedExisting.has(normalized) && !suggestions.has(normalized);
       })
@@ -752,7 +955,7 @@ const updateTag = (index: number, value: string) => {
       }
     }
     const normalizeTag = (tag: string) =>
-      QUICK_TAGS.find((quick) => quick.toLowerCase() === tag.toLowerCase());
+      RECIPE_TAGS.find((candidate) => candidate.toLowerCase() === tag.toLowerCase());
     return raw
       .map((value) => String(value ?? "").trim())
       .map((value) => value.replace(/^["']|["']$/g, ""))
@@ -795,7 +998,7 @@ const updateTag = (index: number, value: string) => {
         messages: [
           {
             role: "user",
-            content: `Select the most relevant tags for this recipe using ONLY the following list: ${QUICK_TAGS.join(
+            content: `Select the most relevant tags for this recipe using ONLY the following list: ${RECIPE_TAGS.join(
               ", "
             )}. Respond strictly in JSON like {"tags":["Tag1","Tag2"]} using the exact casing provided.`,
           },
@@ -858,19 +1061,15 @@ const updateTag = (index: number, value: string) => {
           <div className="flex items-center gap-2">
             <button
               onClick={handleTranslateRecipe}
-              disabled={isTranslatingRecipe}
-              className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-sm transition-all ${
-                isTranslatingRecipe
-                  ? "bg-gradient-to-br from-purple-400 to-purple-500 text-white opacity-80 cursor-wait"
-                  : "bg-gradient-to-br from-purple-500 to-purple-600 text-white hover:shadow-md"
-              }`}
+              disabled={!needsEnglishTranslation || isTranslatingRecipe}
+              className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-sm transition-all ${translationButtonClasses}`}
             >
               {isTranslatingRecipe ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <Sparkles className="w-4 h-4" />
               )}
-              {isTranslatingRecipe ? "Translating..." : targetTranslationLabel}
+              {translationButtonLabel}
             </button>
             <button
               onClick={handleSave}
@@ -1155,40 +1354,22 @@ const updateTag = (index: number, value: string) => {
             <h2 className="text-sm text-gray-600">Ingredients</h2>
             <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => handleConvertIngredients("metric")}
-                disabled={Boolean(unitConversionLoading) && unitConversionLoading !== "metric"}
+                onClick={handleAddIngredientUnits}
+                disabled={!canAddIngredientUnits || isAddingIngredientUnits}
                 className={`px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 shadow-sm transition-all ${
-                  unitConversionLoading === "metric"
+                  isAddingIngredientUnits
                     ? "bg-gradient-to-br from-purple-400 to-purple-500 text-white opacity-80 cursor-wait"
-                    : unitConversionLoading
-                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                      : "bg-gradient-to-br from-purple-500 to-purple-600 text-white hover:shadow-md"
+                    : canAddIngredientUnits
+                      ? "bg-gradient-to-br from-purple-500 to-purple-600 text-white hover:shadow-md"
+                      : "bg-gray-200 text-gray-400 cursor-not-allowed"
                 }`}
               >
-                {unitConversionLoading === "metric" ? (
+                {isAddingIngredientUnits ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
                   <Sparkles className="w-3.5 h-3.5" />
                 )}
-                {unitConversionLoading === "metric" ? "Converting..." : "Convert to Metric"}
-              </button>
-              <button
-                onClick={() => handleConvertIngredients("us")}
-                disabled={Boolean(unitConversionLoading) && unitConversionLoading !== "us"}
-                className={`px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 shadow-sm transition-all ${
-                  unitConversionLoading === "us"
-                    ? "bg-gradient-to-br from-purple-400 to-purple-500 text-white opacity-80 cursor-wait"
-                    : unitConversionLoading
-                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                      : "bg-gradient-to-br from-purple-500 to-purple-600 text-white hover:shadow-md"
-                }`}
-              >
-                {unitConversionLoading === "us" ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5" />
-                )}
-                {unitConversionLoading === "us" ? "Converting..." : "Convert to US"}
+                {isAddingIngredientUnits ? "Adding units..." : "Fill ingredient amounts"}
               </button>
               <button
                 onClick={addIngredient}
@@ -1199,13 +1380,13 @@ const updateTag = (index: number, value: string) => {
               </button>
             </div>
           </div>
-          {unitConversionStatus && (
+          {ingredientUnitsStatus && (
             <p
               className={`text-xs ${
-                unitConversionStatus.type === "error" ? "text-red-500" : "text-gray-500"
+                ingredientUnitsStatus.type === "error" ? "text-red-500" : "text-gray-500"
               }`}
             >
-              {unitConversionStatus.message}
+              {ingredientUnitsStatus.message}
             </p>
           )}
           
@@ -1368,14 +1549,14 @@ const updateTag = (index: number, value: string) => {
             {(formData.tags && formData.tags.length > 0) ? (
               <div className="flex flex-wrap gap-2">
                 {formData.tags.map((tag, index) => {
-                  const isQuick = QUICK_TAGS.includes((tag ?? "").toLowerCase());
+                  const isQuick = RECIPE_TAGS.includes((tag ?? "").toLowerCase());
                   return (
                     <div
                       key={`${tag}-${index}`}
                       className="flex items-center gap-1 bg-gray-100 rounded-lg pl-3 pr-1 py-1"
                     >
                       {isQuick ? (
-                        <span className="text-sm text-gray-700">{tag}</span>
+                        <span className="text-sm text-gray-700 capitalize">{tag}</span>
                       ) : (
                         <input
                           type="text"
@@ -1403,7 +1584,7 @@ const updateTag = (index: number, value: string) => {
           <div>
             <label className="block text-xs text-gray-500 mb-2">Suggested Tags</label>
             <div className="flex flex-wrap gap-2">
-              {QUICK_TAGS.map((quickTag) => {
+              {(showAllTags ? RECIPE_TAGS : RECIPE_TAGS.slice(0, POPULAR_RECIPE_TAG_COUNT)).map((quickTag) => {
                 const isSelected = (formData.tags || []).includes(quickTag);
                 return (
                   <button
@@ -1421,7 +1602,7 @@ const updateTag = (index: number, value: string) => {
                         });
                       }
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg text-xs transition-colors capitalize ${
                       isSelected
                         ? "bg-black text-white"
                         : "bg-white border border-gray-200 hover:bg-gray-50"
@@ -1432,6 +1613,15 @@ const updateTag = (index: number, value: string) => {
                 );
               })}
             </div>
+            {RECIPE_TAGS.length > POPULAR_RECIPE_TAG_COUNT && (
+              <button
+                type="button"
+                onClick={() => setShowAllTags((prev) => !prev)}
+                className="mt-3 text-xs text-gray-500 underline"
+              >
+                {showAllTags ? "Show fewer tags" : "Show all tags"}
+              </button>
+            )}
           </div>
         </div>
 

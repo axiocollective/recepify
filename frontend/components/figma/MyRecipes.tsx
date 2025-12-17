@@ -7,39 +7,9 @@ import { Grid, List, Search, Heart, Clock, SlidersHorizontal, Edit3, Trash2, X }
 import type { Recipe } from "@/types/figma";
 import { PlaceholderThumbnail } from "@/components/placeholder-thumbnail";
 import { getFriendlyDuration } from "@/lib/utils";
+import { RECIPE_TAGS } from "@/constants/recipe-tags";
 
-const TAG_FILTER_OPTIONS = [
-  "Breakfast",
-  "Lunch",
-  "Dinner",
-  "Snack",
-  "Dessert",
-  "Appetizer",
-  "Salad",
-  "Soup",
-  "Stew",
-  "Vegetarian",
-  "Vegan",
-  "Gluten-Free",
-  "Dairy-Free",
-  "Keto",
-  "Low-Carb",
-  "High-Protein",
-  "Meat",
-  "Poultry",
-  "Seafood",
-  "Spicy",
-  "Quick",
-  "Healthy",
-  "Comfort Food",
-  "BBQ",
-  "Grill",
-  "Side Dish",
-  "Meal Prep",
-  "Budget-Friendly",
-  "Kids-Friendly",
-  "One-Pot",
-];
+const TAG_FILTER_OPTIONS = RECIPE_TAGS;
 
 const SOURCE_FILTER_OPTIONS = [
   { value: "", label: "All" },
@@ -75,7 +45,6 @@ export function MyRecipes({
   const normalizedInitialTag = initialTag ?? "";
   const [showFilters, setShowFilters] = useState(Boolean(normalizedInitialTag));
   const [filters, setFilters] = useState({
-    cookingTime: "",
     tag: normalizedInitialTag,
     favoritesOnly: false,
     source: "",
@@ -83,7 +52,7 @@ export function MyRecipes({
   const [recipePendingDelete, setRecipePendingDelete] = useState<Recipe | null>(null);
   const previousInitialTagRef = useRef<string | null>(normalizedInitialTag || null);
   const hasActiveFilters = Boolean(
-    filters.cookingTime || filters.tag || filters.favoritesOnly || filters.source
+    filters.tag || filters.favoritesOnly || filters.source
   );
 
   useEffect(() => {
@@ -101,43 +70,9 @@ export function MyRecipes({
   }, [normalizedInitialTag, onClearInitialTag]);
 
   const resetFilters = () => {
-    setFilters({ cookingTime: "", tag: "", favoritesOnly: false, source: "" });
+    setFilters({ tag: "", favoritesOnly: false, source: "" });
     previousInitialTagRef.current = null;
     onClearInitialTag?.();
-  };
-
-  const parseMinutesFromDuration = (value?: string | null): number | undefined => {
-    if (!value) {
-      return undefined;
-    }
-    const normalized = value.trim().toLowerCase();
-    if (!normalized) {
-      return undefined;
-    }
-    const colonMatch = normalized.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
-    if (colonMatch) {
-      const hours = Number.parseInt(colonMatch[1], 10);
-      const minutes = Number.parseInt(colonMatch[2], 10);
-      const seconds = colonMatch[3] ? Number.parseInt(colonMatch[3], 10) : 0;
-      return hours * 60 + minutes + Math.round(seconds / 60);
-    }
-    const totalMinutes =
-      (Number.parseFloat((normalized.match(/(\d+(?:[.,]\d+)?)\s*h/) ?? [])[1]?.replace(",", ".") ?? "0") || 0) * 60 +
-      (Number.parseFloat((normalized.match(/(\d+(?:[.,]\d+)?)\s*m/) ?? [])[1]?.replace(",", ".") ?? "0") || 0);
-    if (totalMinutes > 0) {
-      return Math.round(totalMinutes);
-    }
-    const isoHours = normalized.match(/(\d+)h/);
-    const isoMinutes = normalized.match(/(\d+)m/);
-    if (isoHours || isoMinutes) {
-      return (Number(isoHours?.[1]) || 0) * 60 + (Number(isoMinutes?.[1]) || 0);
-    }
-    const plainMatch = normalized.match(/(\d+)\s*(min|m|minutes?)/);
-    if (plainMatch) {
-      return Number.parseInt(plainMatch[1], 10);
-    }
-    const numeric = Number.parseInt(normalized, 10);
-    return Number.isFinite(numeric) ? numeric : undefined;
   };
 
   const filteredRecipes = recipes.filter((recipe) => {
@@ -161,19 +96,6 @@ export function MyRecipes({
       if (recipeSource !== filters.source) {
         return false;
       }
-    }
-    if (filters.cookingTime) {
-      const minutes =
-        parseMinutesFromDuration(recipe.totalTime) ??
-        parseMinutesFromDuration(recipe.cookTime) ??
-        parseMinutesFromDuration(recipe.prepTime) ??
-        parseMinutesFromDuration(recipe.duration);
-      if (!minutes) {
-        return false;
-      }
-      if (filters.cookingTime === "quick" && minutes > 30) return false;
-      if (filters.cookingTime === "medium" && (minutes <= 30 || minutes > 60)) return false;
-      if (filters.cookingTime === "long" && minutes <= 60) return false;
     }
     return true;
   });
@@ -244,7 +166,7 @@ export function MyRecipes({
           </button>
           {filters.tag && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-black text-white rounded-full text-xs">
-              <span>{filters.tag}</span>
+              <span className="capitalize">{filters.tag}</span>
               <button
                 type="button"
                 onClick={() => {
@@ -278,30 +200,6 @@ export function MyRecipes({
           </div>
           <div className="space-y-4">
             <div>
-              <label className="text-xs text-gray-600 mb-2 block">Cooking Time</label>
-              <div className="flex gap-2 flex-wrap">
-                {[
-                  { value: "", label: "All" },
-                  { value: "quick", label: "Quick (<30 min)" },
-                  { value: "medium", label: "Medium (30-60 min)" },
-                  { value: "long", label: "Long (>60 min)" },
-                ].map((time) => (
-                  <button
-                    key={time.value}
-                    onClick={() => setFilters({ ...filters, cookingTime: time.value })}
-                    className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
-                      filters.cookingTime === time.value
-                        ? "bg-black text-white"
-                        : "bg-white border border-gray-200 hover:bg-gray-50"
-                    }`}
-                  >
-                    {time.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
               <label className="text-xs text-gray-600 mb-2 block">Tags</label>
               <div className="flex gap-2 flex-wrap">
                 {["", ...TAG_FILTER_OPTIONS].map((tag) => (
@@ -314,7 +212,7 @@ export function MyRecipes({
                         : "bg-white border border-gray-200 hover:bg-gray-50"
                     }`}
                   >
-                    {tag || "All"}
+                    <span className={tag ? "capitalize" : undefined}>{tag || "All"}</span>
                   </button>
                 ))}
               </div>

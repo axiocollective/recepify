@@ -1,7 +1,7 @@
 'use client';
 
 import NextImage from "next/image";
-import { ArrowLeft, Camera, Image as ImageIcon, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Camera, Image as ImageIcon, Loader2, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { importFromScan, type ImportedRecipePayload } from "@/lib/api";
 import { useImportProgress } from "@/lib/use-import-progress";
@@ -67,7 +67,6 @@ export function ScanRecipe({ onBack, onScanComplete }: ScanRecipeProps) {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
       <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center gap-4 z-10">
         <button
           onClick={onBack}
@@ -78,142 +77,127 @@ export function ScanRecipe({ onBack, onScanComplete }: ScanRecipeProps) {
         <h1 className="text-xl font-semibold">Scan Recipe</h1>
       </div>
 
-      {/* Content */}
-      <div className="px-6 py-8 space-y-8">
-        <div className="text-center">
-          <div className="w-20 h-20 bg-black rounded-full flex items-center justify-center mx-auto mb-4">
-            <Camera className="w-9 h-9 text-white" />
-          </div>
-          <h2 className="text-xl font-medium mb-2">Scan a recipe</h2>
-          <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
-            Take a photo of a recipe card, cookbook page, or handwritten recipe. Our AI will extract the details.
-          </p>
-        </div>
-
+      <div className="px-6 py-12 max-w-md mx-auto">
         {previewImage ? (
-          <div className="relative rounded-xl overflow-hidden border border-gray-200">
-            <NextImage
-              src={previewImage}
-              alt="Recipe preview"
-              width={1200}
-              height={800}
-              className="w-full h-auto object-cover"
-              unoptimized
-            />
-            {isScanning && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center px-4">
-                <div className="bg-white rounded-xl px-6 py-4 space-y-3 w-full max-w-sm">
-                  <div className="flex items-center gap-3 text-sm font-medium text-gray-900">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{message || "ChefGPT is doing its magic..."}</span>
+          <div className="mb-8">
+            <div className="relative rounded-2xl overflow-hidden border border-gray-200">
+              <NextImage
+                src={previewImage}
+                alt="Recipe preview"
+                width={1400}
+                height={1000}
+                className="w-full h-auto object-cover"
+                unoptimized
+              />
+              {isScanning && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <div className="bg-white rounded-xl px-6 py-4 flex items-center gap-3 shadow-lg">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span className="font-medium text-sm text-gray-900">{message || "Scanning recipe..."}</span>
                   </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-black transition-[width] duration-500 ease-out"
-                      style={{ width: `${Math.min(98, Math.max(progress || 12, 10))}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500">This can take a few seconds.</p>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ) : (
-          <div>
-            <label className="block">
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleFileSelect}
-                className="hidden"
-                disabled={isScanning}
-              />
-              <div
-                className={`border-2 border-dashed border-gray-200 rounded-xl p-12 text-center transition-colors ${
-                  isScanning ? "opacity-60 cursor-not-allowed" : "hover:border-gray-300 cursor-pointer"
-                }`}
-              >
-                <Camera className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="font-medium text-gray-900 mb-1">Take a photo</p>
-                <p className="text-sm text-gray-500">
-                  {isScanning ? "Processing…" : "Tap to open camera"}
-                </p>
+          <>
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-black rounded-full flex items-center justify-center mx-auto mb-4">
+                <Camera className="w-7 h-7 text-white" />
               </div>
-            </label>
-          </div>
+              <h2 className="text-2xl font-medium mb-3">Scan anything</h2>
+              <p className="text-gray-500 max-w-xs mx-auto leading-relaxed mb-1">
+                Capture handwritten recipes from grandma, cookbook pages, recipe cards, or any printed recipe.
+              </p>
+              <p className="text-sm text-gray-400 max-w-xs mx-auto">
+                Our AI will extract all the details for you.
+              </p>
+            </div>
+
+            <div className="space-y-3 mb-8">
+              <label className="block">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  disabled={isScanning}
+                />
+                <div className="border border-gray-200 rounded-2xl p-5 flex items-center gap-4 hover:border-gray-300 hover:bg-gray-50 transition cursor-pointer">
+                  <div className="w-11 h-11 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Camera className="w-5 h-5 text-gray-700" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="font-medium text-gray-900">Take a photo</p>
+                    <p className="text-sm text-gray-500">Open camera to capture recipe</p>
+                  </div>
+                </div>
+              </label>
+
+              <label className="block">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  disabled={isScanning}
+                />
+                <div className="border border-gray-200 rounded-2xl p-5 flex items-center gap-4 hover:border-gray-300 hover:bg-gray-50 transition cursor-pointer">
+                  <div className="w-11 h-11 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <ImageIcon className="w-5 h-5 text-gray-700" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="font-medium text-gray-900">Choose from gallery</p>
+                    <p className="text-sm text-gray-500">Select an existing photo</p>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </>
         )}
 
         {!previewImage && (
-          <div>
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-2 bg-white text-gray-400">OR</span>
-              </div>
+          <div className="mt-12 pt-8 border-t border-gray-100">
+            <h3 className="text-sm font-medium text-gray-900 mb-4">Tips for best results</h3>
+            <div className="space-y-4 text-sm">
+              {[
+                {
+                  title: "Good lighting",
+                  subtitle: "Ensure recipe is well-lit and clearly visible",
+                },
+                {
+                  title: "Straight angle",
+                  subtitle: "Photo from directly above works best",
+                },
+                {
+                  title: "Review & edit",
+                  subtitle: "Edit any details after AI extraction",
+                },
+              ].map((tip, index) => (
+                <div key={tip.title} className="flex gap-3">
+                  <span className="w-5 h-5 bg-black text-white rounded-full flex items-center justify-center text-xs">
+                    {index + 1}
+                  </span>
+                  <div>
+                    <p className="text-gray-900">{tip.title}</p>
+                    <p className="text-gray-500 mt-0.5">{tip.subtitle}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-            <label className="block mt-6">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileSelect}
-                className="hidden"
-                disabled={isScanning}
-              />
-              <div
-                className={`border border-gray-200 rounded-xl p-6 text-center transition-colors ${
-                  isScanning ? "opacity-60 cursor-not-allowed" : "hover:border-gray-300 hover:bg-gray-50 cursor-pointer"
-                }`}
-              >
-                <ImageIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                <p className="font-medium text-gray-900 mb-1">Upload from gallery</p>
-                <p className="text-sm text-gray-500">
-                  {isScanning ? "Processing…" : "Choose an existing photo"}
-                </p>
-              </div>
-            </label>
+            <div className="mt-8 flex items-center justify-center gap-2 text-sm text-gray-400">
+              <Sparkles className="w-4 h-4" />
+              <span>Powered by AI text recognition</span>
+            </div>
           </div>
         )}
 
         {error && (
-          <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">
+          <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3 mt-6">
             {error}
           </div>
         )}
-
-        <div className="bg-gray-50 rounded-xl p-5">
-          <h3 className="font-medium text-gray-900 mb-3">Tips for best results</h3>
-          <div className="space-y-3 text-sm text-gray-600">
-            <div className="flex gap-3">
-              <span className="w-6 h-6 bg-black text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium">1</span>
-              <div className="pt-0.5">
-                <p className="font-medium text-gray-900">Good lighting</p>
-                <p className="text-gray-500 mt-0.5">Make sure the recipe is well-lit and clearly visible.</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <span className="w-6 h-6 bg-black text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium">2</span>
-              <div className="pt-0.5">
-                <p className="font-medium text-gray-900">Straight angle</p>
-                <p className="text-gray-500 mt-0.5">Take the photo from directly above for best text recognition.</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <span className="w-6 h-6 bg-black text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium">3</span>
-              <div className="pt-0.5">
-                <p className="font-medium text-gray-900">Review & edit</p>
-                <p className="text-gray-500 mt-0.5">You can edit any details after the AI extracts the recipe.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
-          <Sparkles className="w-4 h-4" />
-          <span>Powered by AI text recognition</span>
-        </div>
       </div>
     </div>
   );

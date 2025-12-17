@@ -35,6 +35,7 @@ import {
   toNumber,
   formatNumber,
 } from "@/lib/unit-converter";
+import { RECIPE_TAGS } from "@/constants/recipe-tags";
 
 interface RecipeDetailProps {
   recipe: Recipe;
@@ -51,38 +52,150 @@ interface RecipeDetailProps {
 
 type AssistantMessage = { role: "user" | "assistant"; text: string };
 
-const QUICK_TAG_LIBRARY = [
-  "breakfast",
-  "lunch",
-  "dinner",
-  "snack",
-  "dessert",
-  "appetizer",
-  "salad",
-  "soup",
-  "stew",
-  "vegetarian",
-  "vegan",
-  "gluten-free",
-  "dairy-free",
-  "keto",
-  "low-carb",
-  "high-protein",
-  "meat",
-  "poultry",
-  "seafood",
-  "spicy",
-  "quick",
-  "healthy",
-  "comfort food",
-  "bbq",
-  "grill",
-  "side dish",
-  "meal prep",
-  "budget-friendly",
-  "kids-friendly",
-  "one-pot",
-];
+const QUICK_TAG_LIBRARY = RECIPE_TAGS;
+
+const normalizeTagKey = (tag?: string | null) =>
+  (tag ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const sanitizeTags = (tags?: string[]) =>
+  (tags ?? [])
+    .map((tag) => (tag ?? "").trim().toLowerCase())
+    .filter((tag) => Boolean(tag) && !tag.startsWith("#"));
+
+const parseSuggestedTags = (reply: string): string[] => {
+  const cleaned = stripCodeFences(reply).trim();
+  const parsed = extractJsonObject(cleaned);
+  let raw: unknown[] = [];
+  if (parsed) {
+    if (Array.isArray((parsed as { tags?: unknown }).tags)) {
+      raw = ((parsed as { tags?: unknown }).tags as unknown[]) ?? [];
+    } else if (Array.isArray(parsed)) {
+      raw = parsed as unknown[];
+    }
+  }
+  if (!raw.length) {
+    const match = cleaned.match(/\[([\s\S]+)\]/);
+    if (match) {
+      raw = match[1]
+        .split(",")
+        .map((value) => value.replace(/["']/g, "").trim())
+        .filter(Boolean);
+    }
+  }
+  const normalizeTag = (tag: string) =>
+    RECIPE_TAGS.find((candidate) => candidate.toLowerCase() === tag.toLowerCase());
+  return raw
+    .map((value) => String(value ?? "").trim())
+    .map((value) => value.replace(/^["']|["']$/g, ""))
+    .map(normalizeTag)
+    .filter((tag): tag is string => Boolean(tag));
+};
+
+const buildHeuristicTags = (recipe: Recipe): string[] => {
+  const normalizedExisting = new Set(
+    sanitizeTags(recipe.tags)
+      .map(normalizeTagKey)
+      .filter(Boolean)
+  );
+  const suggestions = new Map<string, string>();
+  const text = `${recipe.title ?? ""} ${recipe.description ?? ""} ${recipe.notes ?? ""}`.toLowerCase();
+  const ingredientsSummary = recipe.ingredients
+    .map((ingredient) => `${ingredient.name ?? ""} ${ingredient.line ?? ""}`)
+    .join(" ")
+    .toLowerCase();
+  const contains = (keyword: string) =>
+    text.includes(keyword) || ingredientsSummary.includes(keyword);
+  const addTag = (tag: string) => {
+    const normalizedTag = tag.toLowerCase();
+    if (!RECIPE_TAGS.includes(normalizedTag)) {
+      return;
+    }
+    const normalized = normalizeTagKey(normalizedTag);
+    if (!normalized || normalizedExisting.has(normalized) || suggestions.has(normalized)) {
+      return;
+    }
+    suggestions.set(normalized, normalizedTag);
+  };
+
+  if (contains("vegan") || contains("plant-based") || contains("tofu")) addTag("vegan");
+  if (contains("vegetarian") || contains("egg") || contains("cheese")) addTag("vegetarian");
+  if (contains("gluten-free") || contains("almond flour")) addTag("gluten-free");
+  if (contains("dairy-free") || contains("lactose")) addTag("dairy-free");
+  if (contains("keto")) addTag("keto");
+  if (contains("low carb") || contains("zoodle")) addTag("low-carb");
+  if (contains("spicy") || contains("chili") || contains("sriracha")) addTag("spicy");
+  if (contains("quick") || contains("15-minute") || contains("weeknight")) addTag("quick");
+  if (contains("healthy") || contains("salad") || contains("fresh")) addTag("healthy");
+  if (contains("comfort") || contains("creamy") || contains("casserole")) addTag("comfort food");
+  if (contains("salad") || contains("greens") || contains("vinaigrette")) addTag("salad");
+  if (contains("soup") || contains("broth") || contains("ramen") || contains("pho")) addTag("soup");
+  if (contains("stew") || contains("goulash") || contains("ragout")) addTag("stew");
+  if (contains("bbq") || contains("barbecue") || contains("smoked")) addTag("bbq");
+  if (contains("grill") || contains("grilled")) addTag("grill");
+  if (contains("side dish") || contains("side") || contains("garnish")) addTag("side dish");
+  if (contains("meat") || contains("beef") || contains("pork") || contains("lamb") || contains("steak"))
+    addTag("meat");
+  if (contains("chicken") || contains("turkey") || contains("duck") || contains("poultry")) addTag("poultry");
+  if (contains("seafood") || contains("fish") || contains("salmon") || contains("tuna") || contains("shrimp") || contains("prawn") || contains("crab"))
+    addTag("seafood");
+  if (contains("prep") || contains("batch")) addTag("meal prep");
+  if (contains("budget") || contains("affordable") || contains("beans")) addTag("budget-friendly");
+  if (contains("kid") || contains("family-friendly")) addTag("kids-friendly");
+  if (contains("one pot") || contains("one-pot") || contains("skillet")) addTag("one-pot");
+  if (contains("protein") || contains("tempeh")) addTag("high-protein");
+  if (contains("snack") || contains("bite")) addTag("snack");
+  if (contains("easy") || contains("simple") || contains("effortless")) addTag("easy");
+  if (contains("bake") || contains("baked") || contains("pastry")) addTag("baking");
+  if (contains("oven")) addTag("oven");
+  if (contains("party") || contains("crowd") || contains("sharing")) addTag("party");
+  if (contains("family")) addTag("family");
+  if (contains("make ahead") || contains("make-ahead") || contains("overnight")) addTag("make-ahead");
+
+  const mealKeywords: Record<string, string[]> = {
+    breakfast: ["breakfast", "brunch", "morning", "oats", "pancake", "smoothie"],
+    lunch: ["lunch", "midday", "salad bowl", "wrap"],
+    dinner: ["dinner", "supper", "evening", "pasta"],
+    dessert: ["dessert", "sweet", "cake", "cookie", "brownie"],
+    appetizer: ["appetizer", "starter", "finger food"],
+  };
+  Object.entries(mealKeywords).forEach(([tag, keywords]) => {
+    if (keywords.some((keyword) => contains(keyword))) {
+      addTag(tag);
+    }
+  });
+
+  const cuisineKeywords: Record<string, string[]> = {
+    asian: ["asian", "thai", "japanese", "chinese", "korean", "vietnamese", "sichuan"],
+    american: ["american", "tex-mex", "southern", "new york"],
+    mediterranean: ["mediterranean", "greek", "italian", "spanish"],
+    european: ["european", "french", "german", "italian"],
+    "latin american": ["latin american", "mexican", "peruvian", "argentinian"],
+    "middle eastern": ["middle eastern", "lebanese", "persian", "turkish"],
+    "north african": ["moroccan", "north african", "tagine"],
+    scandinavian: ["scandinavian", "swedish", "norwegian", "danish"],
+  };
+  Object.entries(cuisineKeywords).forEach(([tag, keywords]) => {
+    if (keywords.some((keyword) => contains(keyword))) {
+      addTag(tag);
+    }
+  });
+
+  if (suggestions.size < 3) {
+    RECIPE_TAGS.filter((tag) => {
+      const normalized = normalizeTagKey(tag);
+      return normalized && !normalizedExisting.has(normalized) && !suggestions.has(normalized);
+    })
+      .slice(0, Math.max(0, 3 - suggestions.size))
+      .forEach((tag) => {
+        const normalized = normalizeTagKey(tag);
+        if (normalized && !suggestions.has(normalized)) {
+          suggestions.set(normalized, tag);
+        }
+      });
+  }
+
+  return Array.from(suggestions.values());
+};
 
 const scaleAmountValue = (rawAmount: string, multiplier: number): string | null => {
   const trimmed = rawAmount.trim();
@@ -494,6 +607,8 @@ export function RecipeDetail({
   const [customTagValue, setCustomTagValue] = useState("");
   const [isUpdatingTags, setIsUpdatingTags] = useState(false);
   const [tagUpdateError, setTagUpdateError] = useState<string | null>(null);
+  const [isSuggestingTags, setIsSuggestingTags] = useState(false);
+  const [tagSuggestionStatus, setTagSuggestionStatus] = useState<AiStatus>(null);
   const [isImageOverlayOpen, setIsImageOverlayOpen] = useState(false);
   const isReviewPromptVisible = Boolean(showReviewPrompt);
   const handleDismissReviewPrompt = () => {
@@ -518,6 +633,8 @@ export function RecipeDetail({
     setIsTagPickerOpen(false);
     setCustomTagValue("");
     setTagUpdateError(null);
+    setIsSuggestingTags(false);
+    setTagSuggestionStatus(null);
     setIsUpdatingTags(false);
     setShareStatus(null);
   }, [recipe.id, recipe.servings]);
@@ -571,6 +688,9 @@ export function RecipeDetail({
     recipe.ingredients.length > 0 &&
     recipe.ingredients.every((ingredient) => Boolean(ingredient.amount?.trim()));
   const hasServings = Boolean(recipe.servings && recipe.servings > 0);
+  const canSuggestTagsWithAI =
+    descriptionText.length > 0 ||
+    (recipe.steps ?? []).some((step) => (step ?? "").trim().length > 0);
   const canGenerateStepsWithAI = ingredientSummaries.length > 0 && descriptionText.length >= 20;
   const canCalculateNutritionWithAI = hasServings && hasIngredientAmounts;
   const shouldShowInstructionsSection = hasInstructions || canGenerateStepsWithAI;
@@ -594,9 +714,7 @@ export function RecipeDetail({
       return { ...ingredient, amount: converted };
     });
   }, [recipe.ingredients, unitSystem]);
-  const existingTags = (recipe.tags ?? [])
-    .map((tag) => (tag ?? "").toLowerCase())
-    .filter((tag) => tag.length > 0);
+  const existingTags = sanitizeTags(recipe.tags);
   const normalizedTagSet = new Set(existingTags.map((tag) => tag.toLowerCase()));
   const canInlineEditTags = Boolean(onUpdateTags);
   const hasJustAddedToList = shoppingStatus?.type === "success";
@@ -813,12 +931,13 @@ export function RecipeDetail({
     });
   };
 
-  const handleApplyTags = async (nextTags: string[]) => {
+  const handleApplyTags = async (nextTags: string[]): Promise<number> => {
     if (!onUpdateTags) {
-      return;
+      return 0;
     }
     setIsUpdatingTags(true);
     setTagUpdateError(null);
+    const previousTagSet = new Set(existingTags.map((tag) => tag.toLowerCase()));
     try {
       const normalizedTags = nextTags
         .map((tag) => (tag ?? "").trim().toLowerCase())
@@ -834,10 +953,19 @@ export function RecipeDetail({
       });
       await onUpdateTags(recipe, uniqueTags);
       setCustomTagValue("");
+      let added = 0;
+      uniqueTags.forEach((tag) => {
+        if (!previousTagSet.has(tag)) {
+          added += 1;
+          previousTagSet.add(tag);
+        }
+      });
+      return added;
     } catch (error) {
       setTagUpdateError(
         error instanceof Error ? error.message : "Unable to update tags right now."
       );
+      return 0;
     } finally {
       setIsUpdatingTags(false);
     }
@@ -865,6 +993,64 @@ export function RecipeDetail({
       return;
     }
     void handleApplyTags([...existingTags, trimmed.toLowerCase()]);
+  };
+
+  const handleSuggestTagsWithAI = async () => {
+    if (!canInlineEditTags || isSuggestingTags || !canSuggestTagsWithAI) {
+      return;
+    }
+    setTagSuggestionStatus(null);
+    setIsSuggestingTags(true);
+    try {
+      const response = await askRecipeAssistant({
+        recipe: buildAssistantRecipePayload(recipe),
+        messages: [
+          {
+            role: "user",
+            content: `Select the most relevant tags for this recipe using ONLY the following list: ${RECIPE_TAGS.join(
+              ", "
+            )}. Respond strictly in JSON like {"tags":["Tag1","Tag2"]} using the exact casing provided.`,
+          },
+        ],
+      });
+      let tags = parseSuggestedTags(response.reply);
+      if (!tags.length) {
+        tags = buildHeuristicTags(recipe);
+      }
+      if (!tags.length) {
+        throw new Error("ChefGPT could not determine relevant tags for this recipe.");
+      }
+      const added = await handleApplyTags([...existingTags, ...tags]);
+      setTagSuggestionStatus({
+        type: "success",
+        message:
+          added > 0
+            ? `ChefGPT added ${added} tag${added === 1 ? "" : "s"} to this recipe.`
+            : "All suggested tags were already applied.",
+      });
+    } catch (error) {
+      const fallback = buildHeuristicTags(recipe);
+      if (fallback.length) {
+        const added = await handleApplyTags([...existingTags, ...fallback]);
+        setTagSuggestionStatus({
+          type: "error",
+          message:
+            added > 0
+              ? `ChefGPT is offline, but heuristics added ${added} tag${added === 1 ? "" : "s"}.`
+              : "ChefGPT is offline and no new tags were added.",
+        });
+      } else {
+        setTagSuggestionStatus({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "ChefGPT did not return any tags. Try again later.",
+        });
+      }
+    } finally {
+      setIsSuggestingTags(false);
+    }
   };
 
   const handleShareRecipe = async () => {
@@ -1057,7 +1243,7 @@ export function RecipeDetail({
               existingTags.map((tag) => (
                 <span
                   key={tag}
-                  className="px-3 py-1.5 bg-gray-50 text-gray-700 rounded-full text-xs"
+                  className="px-3 py-1.5 bg-gray-50 text-gray-700 rounded-full text-xs capitalize"
                 >
                   {tag}
                 </span>
@@ -1113,7 +1299,7 @@ export function RecipeDetail({
                         type="button"
                         disabled={disabled}
                         onClick={() => handleAddTagInline(tag)}
-                        className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                        className={`px-3 py-1.5 rounded-full text-xs border transition-colors capitalize ${
                           disabled
                             ? "bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed"
                             : "bg-white border-gray-200 hover:border-gray-400"
@@ -1124,6 +1310,35 @@ export function RecipeDetail({
                     );
                   })}
                 </div>
+              </div>
+              <div className="pt-2 border-t border-dashed border-gray-200 space-y-2">
+                <button
+                  type="button"
+                  onClick={handleSuggestTagsWithAI}
+                  disabled={isSuggestingTags || !canSuggestTagsWithAI}
+                  className={`w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${
+                    isSuggestingTags || !canSuggestTagsWithAI
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm hover:from-purple-600 hover:to-purple-700"
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  {isSuggestingTags ? "Finding tags..." : "Suggest tags with AI"}
+                </button>
+                {tagSuggestionStatus && (
+                  <p
+                    className={`text-xs ${
+                      tagSuggestionStatus.type === "success" ? "text-green-600" : "text-red-500"
+                    }`}
+                  >
+                    {tagSuggestionStatus.message}
+                  </p>
+                )}
+                {!canSuggestTagsWithAI && (
+                  <p className="text-xs text-gray-400">
+                    Add a description or at least one step to enable AI tag suggestions.
+                  </p>
+                )}
               </div>
               <form
                 className="flex flex-col gap-2 sm:flex-row"
