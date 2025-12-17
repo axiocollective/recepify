@@ -80,6 +80,7 @@ export function MyRecipes({
     favoritesOnly: false,
     source: "",
   });
+  const [recipePendingDelete, setRecipePendingDelete] = useState<Recipe | null>(null);
   const previousInitialTagRef = useRef<string | null>(normalizedInitialTag || null);
   const hasActiveFilters = Boolean(
     filters.cookingTime || filters.tag || filters.favoritesOnly || filters.source
@@ -176,6 +177,22 @@ export function MyRecipes({
     }
     return true;
   });
+
+  const handleDeleteRequest = (recipe: Recipe) => {
+    setRecipePendingDelete(recipe);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!recipePendingDelete) {
+      return;
+    }
+    onRecipeDelete(recipePendingDelete);
+    setRecipePendingDelete(null);
+  };
+
+  const handleCancelDelete = () => {
+    setRecipePendingDelete(null);
+  };
 
   return (
     <div className="min-h-screen bg-white pb-16">
@@ -366,7 +383,7 @@ export function MyRecipes({
                   recipe={recipe}
                   onClick={() => onRecipeSelect(recipe)}
                   onEdit={() => onRecipeEdit(recipe)}
-                  onDelete={() => onRecipeDelete(recipe)}
+                  onDelete={() => handleDeleteRequest(recipe)}
                   onFavoriteToggle={() => onRecipeToggleFavorite(recipe)}
                 />
               ))}
@@ -379,12 +396,41 @@ export function MyRecipes({
                   recipe={recipe}
                   onClick={() => onRecipeSelect(recipe)}
                   onEdit={() => onRecipeEdit(recipe)}
-                  onDelete={() => onRecipeDelete(recipe)}
+                  onDelete={() => handleDeleteRequest(recipe)}
                   onFavoriteToggle={() => onRecipeToggleFavorite(recipe)}
                 />
               ))}
             </div>
           )}
+        </div>
+      )}
+      {recipePendingDelete && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-6">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold">Delete recipe?</h3>
+              <p className="mt-2 text-sm text-gray-600">
+                &ldquo;{recipePendingDelete.title}&rdquo; will be permanently removed from your recipes.
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleCancelDelete}
+                className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Keep recipe
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="flex-1 rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -430,40 +476,50 @@ function RecipeGridCard({ recipe, onClick, onEdit, onDelete, onFavoriteToggle }:
         ) : (
           <PlaceholderThumbnail className="absolute inset-0" />
         )}
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onEdit();
-            }}
-            className="w-10 h-10 rounded-full bg-white/90 backdrop-blur text-gray-900 flex items-center justify-center shadow"
-          >
-            <Edit3 className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete();
-            }}
-            className="w-10 h-10 rounded-full bg-red-50/90 backdrop-blur text-red-600 flex items-center justify-center shadow"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onFavoriteToggle();
-            }}
-            className={`w-10 h-10 rounded-full backdrop-blur flex items-center justify-center shadow ${
-              recipe.isFavorite ? "bg-black/90 text-white" : "bg-white/90 text-gray-900"
-            }`}
-            aria-pressed={recipe.isFavorite}
-          >
-            <Heart className={`w-4 h-4 ${recipe.isFavorite ? "fill-current" : ""}`} />
-          </button>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 pointer-events-none">
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onEdit();
+              }}
+              className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 shadow"
+              aria-label="Edit recipe"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete();
+              }}
+              className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-red-600/90 px-3 py-1.5 text-xs font-medium text-white shadow"
+              aria-label="Delete recipe"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </button>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onFavoriteToggle();
+              }}
+              className={`pointer-events-auto inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium shadow ${
+                recipe.isFavorite ? "bg-black/90 text-white" : "bg-white/90 text-gray-900"
+              }`}
+              aria-pressed={recipe.isFavorite}
+              aria-label={recipe.isFavorite ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Heart className={`w-3.5 h-3.5 ${recipe.isFavorite ? "fill-current" : ""}`} />
+              Favorite
+            </button>
+          </div>
         </div>
         {recipe.isFavorite && (
           <div className="absolute top-2 right-2 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-sm">
@@ -547,6 +603,7 @@ function RecipeListCard({ recipe, onClick, onEdit, onDelete, onFavoriteToggle }:
             onEdit();
           }}
           className="w-8 h-8 rounded-full bg-white shadow flex items-center justify-center"
+          aria-label="Edit recipe"
         >
           <Edit3 className="w-4 h-4 text-gray-800" />
         </button>
@@ -557,6 +614,7 @@ function RecipeListCard({ recipe, onClick, onEdit, onDelete, onFavoriteToggle }:
             onDelete();
           }}
           className="w-8 h-8 rounded-full bg-red-50 text-red-600 shadow flex items-center justify-center"
+          aria-label="Delete recipe"
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -570,6 +628,7 @@ function RecipeListCard({ recipe, onClick, onEdit, onDelete, onFavoriteToggle }:
             recipe.isFavorite ? "bg-black text-white" : "bg-white text-gray-800"
           }`}
           aria-pressed={recipe.isFavorite}
+          aria-label={recipe.isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <Heart className={`w-4 h-4 ${recipe.isFavorite ? "fill-current" : ""}`} />
         </button>
