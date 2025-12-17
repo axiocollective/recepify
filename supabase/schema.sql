@@ -48,3 +48,17 @@ create table if not exists public.recipe_tag (
     name text not null
 );
 create index if not exists idx_recipe_tag_recipe on public.recipe_tag(recipe_id);
+
+create table if not exists public.shopping_list_item (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null,
+    name text not null,
+    amount text,
+    is_checked boolean not null default false,
+    recipe_id text,
+    recipe_name text,
+    created_at timestamptz not null default timezone('utc'::text, now()),
+    updated_at timestamptz not null default timezone('utc'::text, now())
+);
+create index if not exists idx_shopping_list_user on public.shopping_list_item(user_id);
+create index if not exists idx_shopping_list_recipe on public.shopping_list_item(recipe_id);

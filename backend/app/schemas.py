@@ -96,3 +96,18 @@ class UserSettingsUpdateDTO(BaseModel):
         default=None, alias="languagePreference"
     )
     notifications_enabled: Optional[bool] = Field(default=None, alias="notificationsEnabled")
+
+
+class ShoppingListItemDTO(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
+
+    id: Optional[UUID] = None
+    name: str
+    amount: Optional[str] = None
+    is_checked: bool = Field(default=False, alias="isChecked")
+    recipe_id: Optional[str] = Field(default=None, alias="recipeId")
+    recipe_name: Optional[str] = Field(default=None, alias="recipeName")
+
+
+class ShoppingListSyncDTO(BaseModel):
+    items: List[ShoppingListItemDTO] = Field(default_factory=list)

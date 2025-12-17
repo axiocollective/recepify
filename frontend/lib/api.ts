@@ -237,3 +237,29 @@ export async function updateUserSettings(
     body: JSON.stringify(payload),
   });
 }
+
+export interface ShoppingListItemPayload {
+  id: string;
+  name: string;
+  amount?: string | null;
+  isChecked: boolean;
+  recipeId?: string | null;
+  recipeName?: string | null;
+}
+
+interface ShoppingListSyncPayload {
+  items: ShoppingListItemPayload[];
+}
+
+export async function fetchShoppingListItems(): Promise<ShoppingListItemPayload[]> {
+  return request<ShoppingListItemPayload[]>("/api/shopping-list");
+}
+
+export async function saveShoppingListItems(
+  items: ShoppingListItemPayload[]
+): Promise<ShoppingListItemPayload[]> {
+  return request<ShoppingListItemPayload[]>("/api/shopping-list", {
+    method: "PUT",
+    body: JSON.stringify({ items } satisfies ShoppingListSyncPayload),
+  });
+}

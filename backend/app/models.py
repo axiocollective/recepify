@@ -96,3 +96,17 @@ class UserSettings(SQLModel, table=True):
     notifications_enabled: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class ShoppingListItem(SQLModel, table=True):
+    __tablename__ = "shopping_list_item"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    user_id: UUID = Field(index=True)
+    name: str
+    amount: Optional[str] = None
+    is_checked: bool = Field(default=False, nullable=False)
+    recipe_id: Optional[str] = None
+    recipe_name: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)

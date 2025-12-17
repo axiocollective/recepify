@@ -30,6 +30,8 @@ import type { Recipe as ApiRecipe } from "@/types/recipe";
 import { formatDuration, splitIngredientLine, formatIngredientText } from "@/lib/utils";
 import {
   fetchRecipes,
+  fetchShoppingListItems,
+  saveShoppingListItems,
   createRecipe,
   deleteRecipe as deleteRecipeApi,
   updateRecipe as updateRecipeApi,
@@ -40,6 +42,7 @@ import {
   type ImportedRecipePayload,
   type ImportResponsePayload,
   type RecipeReadPayload,
+  type ShoppingListItemPayload,
 } from "@/lib/api";
 
 type AppTab = "home" | "import" | "myRecipes" | "shoppingList" | "profile";
@@ -83,7 +86,11 @@ const generateId = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
-  return `draft-${Math.random().toString(36).slice(2, 9)}`;
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
 };
 
 const toNumber = (value?: string | null): number | undefined => {
@@ -291,6 +298,25 @@ const mapFigmaRecipeToApiPayload = (recipe: Recipe): ImportedRecipePayload => {
   };
 };
 
+const mapApiShoppingListItem = (item: ShoppingListItemPayload): ShoppingListItem => ({
+  id: item.id,
+  name: item.name,
+  amount: item.amount ?? undefined,
+  isChecked: Boolean(item.isChecked),
+  recipeId: item.recipeId ?? undefined,
+  recipeName: item.recipeName ?? undefined,
+});
+
+const serializeShoppingListItems = (items: ShoppingListItem[]): ShoppingListItemPayload[] =>
+  items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    amount: item.amount ?? null,
+    isChecked: item.isChecked,
+    recipeId: item.recipeId ?? null,
+    recipeName: item.recipeName ?? null,
+  }));
+
 const createDraftRecipe = (title: string, source: Recipe["source"], description?: string): Recipe => ({
   id: generateId(),
   title: title || "New Recipe",
@@ -324,6 +350,28 @@ export function FigmaExperience() {
   }, []);
   const [shoppingListItems, setShoppingListItems] = useState<ShoppingListItem[]>([]);
   const [reviewRecipeId, setReviewRecipeId] = useState<string | null>(null);
+  const persistShoppingListItems = useCallback((items: ShoppingListItem[]) => {
+    saveShoppingListItems(serializeShoppingListItems(items)).catch((error) => {
+      console.error("Failed to save shopping list items", error);
+    });
+  }, []);
+  const replaceShoppingListItems = useCallback(
+    (items: ShoppingListItem[]) => {
+      setShoppingListItems(items);
+      persistShoppingListItems(items);
+    },
+    [persistShoppingListItems]
+  );
+  const updateShoppingListItemsState = useCallback(
+    (updater: (prev: ShoppingListItem[]) => ShoppingListItem[]) => {
+      setShoppingListItems((prev) => {
+        const next = updater(prev);
+        persistShoppingListItems(next);
+        return next;
+      });
+    },
+    [persistShoppingListItems]
+  );
 
   const handleNameChange = (value: string) => {
     setUserName(value);
@@ -357,6 +405,25 @@ export function FigmaExperience() {
 
     loadRecipes();
 
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadShoppingList = async () => {
+      try {
+        const apiItems = await fetchShoppingListItems();
+        if (!isMounted) {
+          return;
+        }
+        setShoppingListItems(apiItems.map(mapApiShoppingListItem));
+      } catch (error) {
+        console.error("Failed to load shopping list items", error);
+      }
+    };
+    loadShoppingList();
     return () => {
       isMounted = false;
     };
@@ -657,7 +724,7 @@ export function FigmaExperience() {
     if (!items.length) {
       return;
     }
-    setShoppingListItems((prev) => [
+    updateShoppingListItemsState((prev) => [
       ...prev,
       ...items.map((item) => ({
         id: generateId(),
@@ -823,7 +890,7 @@ export function FigmaExperience() {
         return (
           <ShoppingList
             items={shoppingListItems}
-            onUpdateItems={setShoppingListItems}
+            onUpdateItems={replaceShoppingListItems}
             onBack={() => goToScreen("home")}
           />
         );

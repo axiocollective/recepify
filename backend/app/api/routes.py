@@ -6,7 +6,7 @@ import re
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional, Union
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlmodel import Session, select
@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator, model_v
 
 from ..config import get_settings
 from ..dependencies import get_db_session
-from ..models import Ingredient, InstructionStep, Recipe, RecipeTag, UserSettings
+from ..models import Ingredient, InstructionStep, Recipe, RecipeTag, ShoppingListItem, UserSettings
 from ..schemas import (
     IngredientDTO,
     InstructionStepDTO,
@@ -23,6 +23,8 @@ from ..schemas import (
     RecipeReadDTO,
     UserSettingsReadDTO,
     UserSettingsUpdateDTO,
+    ShoppingListItemDTO,
+    ShoppingListSyncDTO,
 )
 from ..services import import_instagram as instagram_service
 from ..services import import_scan as scan_service
@@ -1097,3 +1099,60 @@ def recipe_finder(payload: RecipeFinderRequest) -> RecipeFinderResponse:
             + "\n\n(ChefGPT is temporarily offline, so these are keyword-based matches.)"
         )
     return RecipeFinderResponse(reply=fallback_reply.strip(), matches=fallback_matches[:3])
+
+
+def _normalize_text(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+@router.get("/shopping-list", response_model=List[ShoppingListItemDTO])
+def get_shopping_list_items(
+    session: Session = Depends(get_db_session),
+) -> List[ShoppingListItemDTO]:
+    items = session.exec(
+        select(ShoppingListItem)
+        .where(ShoppingListItem.user_id == DEFAULT_USER_ID)
+        .order_by(ShoppingListItem.created_at)
+    ).all()
+    return items
+
+
+@router.put("/shopping-list", response_model=List[ShoppingListItemDTO])
+def replace_shopping_list_items(
+    payload: ShoppingListSyncDTO,
+    session: Session = Depends(get_db_session),
+) -> List[ShoppingListItemDTO]:
+    existing_items = session.exec(
+        select(ShoppingListItem).where(ShoppingListItem.user_id == DEFAULT_USER_ID)
+    ).all()
+    for item in existing_items:
+        session.delete(item)
+    session.commit()
+
+    now = datetime.utcnow()
+    new_items: List[ShoppingListItem] = []
+    for entry in payload.items:
+        normalized_name = _normalize_text(entry.name)
+        if not normalized_name:
+            continue
+        normalized_amount = _normalize_text(entry.amount)
+        item = ShoppingListItem(
+            id=entry.id or uuid4(),
+            user_id=DEFAULT_USER_ID,
+            name=normalized_name,
+            amount=normalized_amount,
+            is_checked=bool(entry.is_checked),
+            recipe_id=_normalize_text(entry.recipe_id),
+            recipe_name=_normalize_text(entry.recipe_name),
+            created_at=now,
+            updated_at=now,
+        )
+        new_items.append(item)
+
+    if new_items:
+        session.add_all(new_items)
+    session.commit()
+    return new_items
