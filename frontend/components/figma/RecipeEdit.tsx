@@ -642,6 +642,11 @@ const updateTag = (index: number, value: string) => {
     setIngredientUnitsStatus(null);
     setIsAddingIngredientUnits(true);
     try {
+      const baselineServings = formData.servings && formData.servings > 0 ? formData.servings : 4;
+      const recipePayload = {
+        ...buildAssistantRecipePayload(),
+        servings: String(baselineServings),
+      };
       const missingEntries = missingIngredientAmounts.map((ingredient) => {
         const index = formData.ingredients.indexOf(ingredient);
         const safeId = ingredient.id ?? `missing-${index}`;
@@ -657,15 +662,16 @@ const updateTag = (index: number, value: string) => {
       const preferredUnitsInstruction = existingIngredientUnits.length
         ? `Match these existing units when possible: ${existingIngredientUnits.join(", ")}.`
         : "Default to metric-friendly units such as g, ml, or kg.";
+      const servingsInstruction = `Assume this recipe makes ${baselineServings} servings (4 people) and scale all ingredient amounts for that yield.`;
       const ingredientList = missingEntries
         .map((item) => `- id: ${item.id} | ingredient: ${item.label}`)
         .join("\n");
       const response = await askRecipeAssistant({
-        recipe: buildAssistantRecipePayload(),
+        recipe: recipePayload,
         messages: [
           {
             role: "user",
-            content: `Some ingredients are missing quantities. Base your reasoning only on the recipe title, description, ingredient text, steps, and servings count—ignore photos, videos, or TikTok files. For each listed id, propose a realistic amount written in ${recipeLanguageLabel}. ${preferredUnitsInstruction} If no units exist yet, choose sensible metric units. Respond ONLY with JSON array [{"id":"...", "amount":"..."}] covering the ids below. Keep outputs short (e.g., "200 g"). Ingredients:\n${ingredientList}`,
+            content: `Some ingredients are missing quantities. Base your reasoning only on the recipe title, description, ingredient text, steps, and servings count—ignore photos, videos, or TikTok files. ${servingsInstruction} For each listed id, propose a realistic amount written in ${recipeLanguageLabel}. ${preferredUnitsInstruction} If no units exist yet, choose sensible metric units. Respond ONLY with JSON array [{"id":"...", "amount":"..."}] covering the ids below. Keep outputs short (e.g., "200 g"). Ingredients:\n${ingredientList}`,
           },
         ],
       });
@@ -757,6 +763,7 @@ const updateTag = (index: number, value: string) => {
       }
       setFormData((prev) => ({
         ...prev,
+        servings: prev.servings && prev.servings > 0 ? prev.servings : baselineServings,
         ingredients: prev.ingredients.map((ingredient, index) => {
           const identifier = ingredient.id ?? `missing-${index}`;
           const update = updates[identifier];
