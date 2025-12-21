@@ -68,43 +68,68 @@ export function ImportFromInstagram({ onBack, onImport }: ImportFromInstagramPro
         </div>
       </div>
 
-      <div className="px-6 py-8 pb-16 space-y-8">
-        <div className="text-center space-y-3">
-          <div className="w-16 h-16 mx-auto rounded-full bg-black flex items-center justify-center text-white">
+      <div className="px-6 py-8">
+        <div className="flex justify-center mb-6">
+          <div className="w-16 h-16 bg-black rounded-full flex items-center justify-center text-white">
             <Instagram className="w-7 h-7" />
           </div>
-          <h2 className="text-2xl">Paste your Instagram link</h2>
+        </div>
+
+        <div className="text-center mb-8">
+          <h2 className="text-2xl mb-2">Share from Instagram</h2>
           <p className="text-sm text-gray-600">
-            We’ll download the video, transcribe the audio, and turn it into a recipe automatically.
+            Import recipes directly from Instagram reels or posts
           </p>
         </div>
 
+        <div className="space-y-4 mb-8">
+          <h3 className="text-sm text-gray-600">How to import:</h3>
+          <div className="space-y-3">
+            {[
+              { step: 1, text: "Open Instagram app" },
+              { step: 2, text: "Find the recipe reel or post" },
+              { step: 3, text: "Tap the Share button" },
+              { step: 4, text: "Select 'Copy Link'" },
+              { step: 5, text: "Paste the link below" },
+            ].map(({ step, text }) => (
+              <div key={step} className="flex gap-3">
+                <div className="w-6 h-6 bg-black text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs">
+                  {step}
+                </div>
+                <p className="flex-1 pt-0.5 text-sm text-gray-700">{text}</p>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={handleCopyInstructions}
+            className="w-full px-3 py-2 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            {copied ? (
+              <>
+                <Check className="w-3 h-3" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <Copy className="w-3 h-3" />
+                Copy instructions
+              </>
+            )}
+          </button>
+        </div>
+
         <div className="space-y-4">
-          <label className="block text-xs text-gray-600">Instagram reel or post URL</label>
-          <div className="relative">
+          <div>
+            <label className="block text-xs text-gray-600 mb-2">Instagram Reel or Post Link</label>
             <input
               type="url"
               value={url}
               onChange={(event) => setUrl(event.target.value)}
               placeholder="https://www.instagram.com/reel/..."
-              className="w-full px-4 py-3.5 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 text-sm pr-20"
+              className="w-full px-4 py-3.5 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 text-sm"
               disabled={isImporting}
             />
-            <button
-              onClick={handleCopyInstructions}
-              type="button"
-              className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-            >
-              {copied ? (
-                <span className="flex items-center gap-1">
-                  <Check className="w-3 h-3" /> Copied
-                </span>
-              ) : (
-                <span className="flex items-center gap-1">
-                  <Copy className="w-3 h-3" /> Steps
-                </span>
-              )}
-            </button>
           </div>
 
           <button
@@ -122,7 +147,7 @@ export function ImportFromInstagram({ onBack, onImport }: ImportFromInstagramPro
             )}
           </button>
           {isImporting && (
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-2">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span>{message || "ChefGPT is doing its magic..."}</span>
@@ -139,24 +164,9 @@ export function ImportFromInstagram({ onBack, onImport }: ImportFromInstagramPro
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
 
-        <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4 space-y-3">
-          <p className="text-xs uppercase tracking-[0.3em] text-gray-500">How to get the link</p>
-          <ol className="space-y-2 text-sm text-gray-700">
-            {[
-              "Open Instagram and find the recipe reel/post.",
-              "Tap the Share icon → Copy Link.",
-              "Paste above and tap Import.",
-            ].map((text, index) => (
-              <li key={text} className="flex gap-3">
-                <span className="w-6 h-6 rounded-full bg-black text-white text-xs flex items-center justify-center">
-                  {index + 1}
-                </span>
-                <span className="flex-1">{text}</span>
-              </li>
-            ))}
-          </ol>
-          <p className="text-xs text-gray-500">
-            Works with reels and feed videos. Private profiles aren’t supported yet.
+        <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+          <p className="text-xs text-gray-600 leading-relaxed">
+            <strong className="text-gray-900">Tip:</strong> Works with reels and feed videos. Private profiles aren&apos;t supported yet.
           </p>
         </div>
       </div>

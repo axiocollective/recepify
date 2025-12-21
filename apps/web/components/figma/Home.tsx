@@ -9,7 +9,6 @@ import {
   Sparkles,
   Send,
   X,
-  Flame,
   Zap,
   Salad,
   Coffee,
@@ -420,47 +419,51 @@ export function Home({
 
   return (
     <div className="min-h-screen bg-white pb-32">
-      <div className="px-6 pt-8 pb-6">
-        <h1 className="text-4xl mb-1.5">
-          {greeting()}, {firstName}.
+      <div className="px-5 pt-12 pb-8">
+        <h1 className="text-[34px] leading-[41px] font-bold tracking-tight mb-2">
+          {greeting()}, {firstName}
         </h1>
-        <p className="text-lg text-gray-500">What would you like to cook today?</p>
+        <p className="text-[17px] leading-[22px] text-gray-500">
+          What would you like to cook today?
+        </p>
       </div>
 
-      <div className="px-6 mb-4">
+      <div className="px-5 mb-10">
         <button
           onClick={() => setIsAIAssistantOpen(true)}
-          className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-2xl p-5 flex items-center justify-between hover:from-purple-600 hover:to-purple-700 transition-all group shadow-sm"
+          className="w-full bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-2xl p-6 flex items-center justify-between active:scale-[0.98] transition-transform min-h-[88px] shadow-lg shadow-purple-500/20"
         >
           <div className="flex items-center gap-4">
-            <div className="w-11 h-11 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div className="text-left">
-              <p className="text-base font-medium flex items-center gap-2">
-                ChefGPT <span className="text-xs uppercase tracking-wide text-white/70">BETA</span>
+              <p className="text-[17px] leading-[22px] font-semibold">ChefGPT</p>
+              <p className="text-[15px] leading-[20px] text-white/80 mt-0.5">
+                Ask me anything about your recipes
               </p>
-              <p className="text-sm text-white/80">I&apos;m your AI-powered sous chef</p>
             </div>
           </div>
-          <ArrowRight className="w-5 h-5 text-white/70 group-hover:translate-x-1 transition-transform" />
+          <ArrowRight className="w-5 h-5 text-white/60 flex-shrink-0" />
         </button>
       </div>
 
-      <div className="mb-10">
-        <div className="px-6 mb-3">
-          <h2 className="text-sm font-semibold text-gray-800">Quick filters</h2>
+      <div className="mb-12">
+        <div className="px-5 mb-4">
+          <h2 className="text-[22px] leading-[28px] font-bold tracking-tight">
+            Quick Filters
+          </h2>
         </div>
-        <div className="flex gap-3 px-6 overflow-x-auto no-scrollbar pb-1">
+        <div className="flex gap-3 px-5 overflow-x-auto no-scrollbar pb-2">
           {quickTags.map((tag) => {
             const Icon = getTagIcon(tag);
             return (
               <button
                 key={tag}
                 onClick={() => onQuickFilter(tag)}
-                className="flex-shrink-0 inline-flex items-center gap-2 rounded-[18px] border border-gray-200 bg-[#f7f8fc] px-4 py-2.5 text-sm font-medium text-[#1f2533] hover:border-gray-300 hover:bg-white transition-all"
+                className="flex-shrink-0 inline-flex items-center gap-2.5 rounded-full bg-gray-100 px-5 py-3 text-[15px] leading-[20px] font-medium text-gray-900 active:bg-gray-200 transition-colors min-h-[44px]"
               >
-                <Icon className="h-4 w-4 text-[#1f2937]" />
+                <Icon className="h-[18px] w-[18px] text-gray-600" />
                 {tag}
               </button>
             );
@@ -468,7 +471,7 @@ export function Home({
         </div>
       </div>
 
-      <div className="mb-8">
+      <div className="mb-12">
         <ImportQuickActions
           onNavigate={(screen) => onNavigate(screen)}
           onAddManually={onAddManual}
@@ -476,34 +479,40 @@ export function Home({
         />
       </div>
       {importQueueCount > 0 && (
-        <p className="px-6 -mt-6 mb-8 text-sm text-gray-500">
+        <p className="px-5 -mt-6 mb-8 text-sm text-gray-500">
           {importQueueCount} {importQueueCount === 1 ? "import" : "imports"} in progress
         </p>
       )}
 
-      <div className="px-6 mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Flame className="w-5 h-5 text-orange-500" />
-            <h2 className="text-xl font-medium">Today&apos;s Picks</h2>
-          </div>
+      <div className="px-5 mb-12">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-[22px] leading-[28px] font-bold tracking-tight">
+            Today&apos;s Picks
+          </h2>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          {picksOfTheDay.map((recipe, index) => (
-            <PickCard key={recipe.id} recipe={recipe} onClick={() => onRecipeSelect(recipe)} index={index} />
+        {allRecipes.length === 0 && (
+          <p className="text-[13px] leading-[18px] text-gray-500 mb-4">
+            No recipes yet — import your first one to see picks here.
+          </p>
+        )}
+        <div className="grid grid-cols-2 gap-4">
+          {picksOfTheDay.map((recipe) => (
+            <PickCard key={recipe.id} recipe={recipe} onClick={() => onRecipeSelect(recipe)} />
           ))}
         </div>
       </div>
 
       {favoriteRecipes.length > 0 && (
-        <div className="px-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Heart className="w-5 h-5 text-red-500 fill-red-500" />
-              <h2 className="text-xl font-medium">Your Favorites</h2>
-            </div>
-            <button onClick={() => onNavigate("myRecipes")} className="text-sm text-gray-500 hover:text-black transition-colors">
-              View all
+        <div className="px-5 mb-12">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-[22px] leading-[28px] font-bold tracking-tight">
+              Favorites
+            </h2>
+            <button
+              onClick={() => onNavigate("myRecipes")}
+              className="text-[17px] leading-[22px] text-gray-500 active:text-gray-900 transition-colors min-h-[44px] px-2"
+            >
+              See All
             </button>
           </div>
           <div className="space-y-3">
@@ -515,11 +524,16 @@ export function Home({
       )}
 
       {recentRecipes.length > 0 && (
-        <div className="px-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-medium">Recently added</h2>
-            <button onClick={() => onNavigate("myRecipes")} className="text-sm text-gray-500 hover:text-black transition-colors">
-              View all
+        <div className="px-5 mb-12">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-[22px] leading-[28px] font-bold tracking-tight">
+              Recently Added
+            </h2>
+            <button
+              onClick={() => onNavigate("myRecipes")}
+              className="text-[17px] leading-[22px] text-gray-500 active:text-gray-900 transition-colors min-h-[44px] px-2"
+            >
+              See All
             </button>
           </div>
           <div className="space-y-3">
@@ -531,41 +545,39 @@ export function Home({
       )}
 
       {isAIAssistantOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end" onClick={() => setIsAIAssistantOpen(false)}>
-          <div className="w-full max-w-md mx-auto bg-white rounded-t-3xl shadow-2xl flex flex-col" style={{ height: "85vh" }} onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end" onClick={() => setIsAIAssistantOpen(false)}>
+          <div className="w-full max-w-md mx-auto bg-white rounded-t-[20px] flex flex-col" style={{ height: "85vh" }} onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center">
+                <div className="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center">
                   <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-base font-medium flex items-center gap-2">
-                    ChefGPT <span className="text-[10px] uppercase tracking-wide text-gray-400">BETA</span>
-                  </h3>
-                  <p className="text-xs text-gray-500">I&apos;m your AI-powered sous chef</p>
+                  <h3 className="text-[17px] leading-[22px] font-semibold">ChefGPT</h3>
+                  <p className="text-[13px] leading-[18px] text-gray-500 mt-0.5">AI-powered sous chef</p>
                 </div>
               </div>
-              <button onClick={() => setIsAIAssistantOpen(false)} className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors">
-                <X className="w-4 h-4" />
+              <button onClick={() => setIsAIAssistantOpen(false)} className="w-11 h-11 rounded-full active:bg-gray-100 flex items-center justify-center transition-colors">
+                <X className="w-5 h-5 text-gray-600" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
               {messages.length === 0 && (
-                <div className="text-center py-12">
-                  <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-purple-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Sparkles className="w-10 h-10 text-purple-600" />
+                <div className="text-center py-16">
+                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Sparkles className="w-10 h-10 text-gray-900" />
                   </div>
-                  <h4 className="text-base font-medium mb-2">How can I help you today?</h4>
-                  <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto">
-                    Ask me anything about your recipes—from prep and substitutions to serving tweaks. I&apos;m still in beta, so treat my answers as helpful guidance, not absolute truth.
+                  <h4 className="text-[22px] leading-[28px] font-semibold mb-3">How can I help?</h4>
+                  <p className="text-[15px] leading-[20px] text-gray-500 mb-8 max-w-xs mx-auto">
+                    Ask me anything about your recipes—from prep and substitutions to serving ideas.
                   </p>
                   <div className="flex flex-wrap gap-2 justify-center px-4">
                     {["Quick dinner ideas", "Healthy recipes", "What&apos;s for breakfast?", "Italian favorites", "Easy desserts"].map((suggestion) => (
                       <button
                         key={suggestion}
                         onClick={() => handleSendMessage(suggestion)}
-                        className="px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-full text-xs transition-colors border border-gray-200"
+                        className="px-4 py-2.5 bg-gray-100 active:bg-gray-200 rounded-full text-[15px] leading-[20px] transition-colors min-h-[44px]"
                       >
                         {suggestion}
                       </button>
@@ -577,7 +589,13 @@ export function Home({
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`}>
                   <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm whitespace-pre-line ${message.role === "user" ? "bg-black text-white" : "bg-gray-100 text-gray-800"}`}>
+                    <div
+                      className={`max-w-[80%] rounded-[20px] px-4 py-3 text-[15px] leading-[20px] ${
+                        message.role === "user"
+                          ? "bg-gray-900 text-white"
+                          : "bg-gray-100 text-gray-900"
+                      }`}
+                    >
                       {message.text}
                     </div>
                   </div>
@@ -590,19 +608,19 @@ export function Home({
                             onRecipeSelect(recipe);
                             setIsAIAssistantOpen(false);
                           }}
-                          className="w-full flex gap-3 bg-white border border-gray-200 rounded-xl p-3 hover:border-gray-300 hover:shadow-sm transition-all text-left"
+                          className="w-full flex gap-3 bg-white border border-gray-200 rounded-2xl p-3 active:bg-gray-50 transition-colors text-left min-h-[76px]"
                         >
-                          <RecipeThumbnail imageUrl={recipe.thumbnail} title={recipe.title} className="w-14 h-14 rounded-lg flex-shrink-0" />
+                          <RecipeThumbnail imageUrl={recipe.thumbnail} title={recipe.title} className="w-14 h-14 rounded-xl flex-shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-medium mb-1 line-clamp-1">{recipe.title}</h3>
+                            <h3 className="text-[15px] leading-[20px] font-medium mb-1 line-clamp-1">{recipe.title}</h3>
                             {recipe.totalTime && (
-                              <div className="flex items-center gap-1 text-xs text-gray-500">
-                                <Clock className="w-3 h-3" />
+                              <div className="flex items-center gap-2 text-[13px] leading-[18px] text-gray-500">
+                                <Clock className="w-3.5 h-3.5" />
                                 <span>{recipe.totalTime}</span>
                               </div>
                             )}
                           </div>
-                          <ArrowRight className="w-4 h-4 text-gray-400 self-center" />
+                          <ArrowRight className="w-5 h-5 text-gray-400 self-center flex-shrink-0" />
                         </button>
                       ))}
                     </div>
@@ -619,8 +637,8 @@ export function Home({
               )}
             </div>
 
-            <div className="p-5 border-t border-gray-100 bg-white">
-              <div className="flex gap-2">
+            <div className="p-5 border-t border-gray-200 bg-white">
+              <div className="flex gap-3">
                 <input
                   type="text"
                   value={inputText}
@@ -632,14 +650,14 @@ export function Home({
                     }
                   }}
                   placeholder="Ask me anything..."
-                  className="flex-1 px-4 py-3 bg-gray-50 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all"
+                  className="flex-1 px-4 py-3 bg-gray-100 rounded-full text-[17px] leading-[22px] focus:outline-none focus:bg-gray-200 transition-colors min-h-[44px]"
                 />
                 <button
                   onClick={() => handleSendMessage()}
                   disabled={isSendDisabled}
-                  className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                  className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors flex-shrink-0 ${
                     !isSendDisabled
-                      ? "bg-gradient-to-br from-purple-500 to-purple-600 text-white hover:shadow-lg"
+                      ? "bg-gray-900 text-white active:bg-gray-800"
                       : "bg-gray-200 text-gray-400 cursor-not-allowed"
                   }`}
                 >
@@ -835,18 +853,21 @@ interface RecipeCardProps {
 
 function RecipeCard({ recipe, onClick }: RecipeCardProps) {
   return (
-    <button onClick={onClick} className="w-full flex gap-3 bg-white border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-all text-left">
-      <RecipeThumbnail imageUrl={recipe.thumbnail} title={recipe.title} className="w-16 h-16 rounded-lg flex-shrink-0" />
+    <button
+      onClick={onClick}
+      className="w-full flex gap-3 bg-white border border-gray-200 rounded-2xl p-4 active:bg-gray-50 transition-colors text-left min-h-[88px]"
+    >
+      <RecipeThumbnail imageUrl={recipe.thumbnail} title={recipe.title} className="w-16 h-16 rounded-xl flex-shrink-0" />
       <div className="flex-1 min-w-0">
-        <h3 className="text-sm mb-1 line-clamp-2">{recipe.title}</h3>
-        <div className="flex items-center gap-3 text-xs text-gray-500">
+        <h3 className="text-[17px] leading-[22px] font-medium mb-1.5 line-clamp-2">{recipe.title}</h3>
+        <div className="flex items-center gap-3 text-[15px] leading-[20px] text-gray-500">
           {(recipe.totalTime || recipe.duration) && (
-            <div className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-4 h-4" />
               <span>{recipe.totalTime ?? recipe.duration}</span>
             </div>
           )}
-          {recipe.isFavorite && <Heart className="w-3 h-3 fill-black text-black" />}
+          {recipe.isFavorite && <Heart className="w-4 h-4 fill-gray-900 text-gray-900" />}
         </div>
       </div>
     </button>
@@ -856,33 +877,29 @@ function RecipeCard({ recipe, onClick }: RecipeCardProps) {
 interface PickCardProps {
   recipe: Recipe;
   onClick: () => void;
-  index: number;
 }
 
-function PickCard({ recipe, onClick, index }: PickCardProps) {
-  const gradients = ["from-orange-500/10 to-red-500/10", "from-purple-500/10 to-pink-500/10", "from-blue-500/10 to-cyan-500/10", "from-green-500/10 to-emerald-500/10"];
-  const gradient = gradients[index % gradients.length];
-
+function PickCard({ recipe, onClick }: PickCardProps) {
   return (
     <button onClick={onClick} className="w-full text-left group">
-      <div className={`relative aspect-square rounded-2xl overflow-hidden mb-2 shadow-sm group-hover:shadow-md transition-all bg-gradient-to-br ${gradient}`}>
+      <div className="relative aspect-square rounded-2xl overflow-hidden mb-3 bg-gray-100">
         <RecipeThumbnail imageUrl={recipe.thumbnail} title={recipe.title} className="w-full h-full" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
         {recipe.isFavorite && (
-          <div className="absolute top-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center">
-            <Heart className="w-3.5 h-3.5 fill-red-500 text-red-500" />
+          <div className="absolute top-3 right-3 w-8 h-8 bg-white/95 rounded-full flex items-center justify-center">
+            <Heart className="w-4 h-4 fill-gray-900 text-gray-900" />
           </div>
         )}
-        <div className="absolute bottom-2 left-2 right-2">
-          {(recipe.totalTime || recipe.duration) && (
-            <div className="inline-flex items-center gap-1 px-2 py-1 bg-black/50 backdrop-blur-sm rounded-lg text-white text-xs">
-              <Clock className="w-3 h-3" />
-              <span>{recipe.totalTime ?? recipe.duration}</span>
+        {recipe.totalTime && (
+          <div className="absolute bottom-3 left-3 right-3">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/70 rounded-full text-white text-[13px] leading-[18px] font-medium">
+              <Clock className="w-3.5 h-3.5" />
+              <span>{recipe.totalTime}</span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-      <h3 className="text-sm font-medium line-clamp-2 group-hover:text-gray-600 transition-colors">{recipe.title}</h3>
+      <h3 className="text-[15px] leading-[20px] font-medium line-clamp-2">{recipe.title}</h3>
     </button>
   );
 }

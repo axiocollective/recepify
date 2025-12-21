@@ -16,7 +16,7 @@ interface QuickAction {
 }
 
 const ACTIONS: QuickAction[] = [
-  { id: "importFromLink", label: "From Link", icon: Link2 },
+  { id: "importFromLink", label: "Link", icon: Link2 },
   { id: "scanRecipe", label: "Scan", icon: Camera },
   { id: "manual", label: "Manual", icon: Plus },
   { id: "inbox", label: "Inbox", icon: Inbox },
@@ -40,25 +40,25 @@ export function ImportQuickActions({
   };
 
   return (
-    <div className="px-6">
-      <div className="rounded-[26px] border border-gray-200 bg-white/90 p-5 shadow-sm">
-        <p className="mb-4 text-sm font-medium text-gray-800">Add Recipe</p>
+    <div className="px-5">
+      <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm">
+        <p className="mb-5 text-[15px] leading-[20px] font-medium text-gray-900">Add Recipe</p>
         <div className="flex items-center justify-between gap-3">
           {ACTIONS.map((action) => (
             <button
               key={action.id}
               onClick={() => handleAction(action.id)}
-              className="flex flex-col items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              className="flex flex-col items-center gap-2.5 text-[13px] leading-[18px] text-gray-600 active:opacity-70 transition-opacity"
             >
-              <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-black text-white shadow-sm">
-                <action.icon className="h-5 w-5" />
+              <div className="relative flex h-[60px] w-[60px] items-center justify-center rounded-full bg-gray-900 shadow-sm">
+                <action.icon className="h-5 w-5 text-white" strokeWidth={2} />
                 {action.id === "inbox" && inboxCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[11px] font-medium text-white">
+                  <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-purple-600 text-[11px] leading-[14px] font-semibold text-white">
                     {inboxCount}
                   </span>
                 )}
               </div>
-              <span>{action.label}</span>
+              <span className="font-medium">{action.label}</span>
             </button>
           ))}
         </div>

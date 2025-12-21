@@ -13,7 +13,7 @@ interface CookModeProps {
 export function CookMode({ recipe, onExit }: CookModeProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [showTimer, setShowTimer] = useState(false);
-  const [timerMinutes, setTimerMinutes] = useState(15);
+  const [timerMinutes, setTimerMinutes] = useState(0);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerFinished, setTimerFinished] = useState(false);
@@ -89,17 +89,33 @@ export function CookMode({ recipe, onExit }: CookModeProps) {
       const context = new AudioContextClass();
       const oscillator = context.createOscillator();
       const gain = context.createGain();
+      const now = context.currentTime;
 
       oscillator.type = "sine";
-      oscillator.frequency.value = 880;
-      gain.gain.value = 0.25;
+      oscillator.frequency.setValueAtTime(880, now);
+      gain.gain.setValueAtTime(0, now);
 
       oscillator.connect(gain);
       gain.connect(context.destination);
 
-      oscillator.start();
-      oscillator.stop(context.currentTime + 1);
+      // Three longer pulses for a more noticeable alarm.
+      const pulseGap = 1.2;
+      for (let i = 0; i < 3; i += 1) {
+        const start = now + i * pulseGap;
+        gain.gain.linearRampToValueAtTime(0.28, start + 0.05);
+        gain.gain.setValueAtTime(0.28, start + 0.35);
+        gain.gain.linearRampToValueAtTime(0, start + 0.5);
+        oscillator.frequency.setValueAtTime(i % 2 === 0 ? 880 : 740, start);
+      }
+
+      const stopAt = now + 3.8;
+      oscillator.start(now);
+      oscillator.stop(stopAt);
       oscillator.onended = () => context.close();
+
+      if ("vibrate" in navigator) {
+        navigator.vibrate([200, 120, 200, 120, 200, 600, 200]);
+      }
     } catch {
       // ignore if AudioContext not available
     }

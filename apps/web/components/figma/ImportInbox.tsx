@@ -23,35 +23,35 @@ export function ImportInbox({ items, onBack, onAction }: ImportInboxProps) {
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 z-10">
+    <div className="min-h-screen bg-white pb-24">
+      <div className="sticky top-0 bg-white border-b border-gray-200 px-5 py-4 z-10">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 transition"
+            className="w-11 h-11 rounded-full active:bg-gray-100 flex items-center justify-center transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-xl font-semibold">Shared Recipes</h1>
-            <p className="text-sm text-gray-500">Your import inbox</p>
+            <h1 className="text-[17px] leading-[22px] font-semibold">Shared Recipes</h1>
+            <p className="text-[13px] leading-[18px] text-gray-500">Your import inbox</p>
           </div>
         </div>
       </div>
 
-      <div className="px-6 py-6 space-y-4">
+      <div className="px-5 py-6 space-y-4">
         {items.length === 0 ? (
           <div className="text-center py-20">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Link2 className="w-7 h-7 text-gray-400" />
+            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-5">
+              <Link2 className="w-9 h-9 text-gray-400" />
             </div>
-            <h2 className="text-xl font-semibold mb-2">No shared recipes yet</h2>
-            <p className="text-gray-500 text-sm max-w-sm mx-auto mb-6">
+            <h2 className="text-[22px] leading-[28px] font-bold mb-3">No shared recipes yet</h2>
+            <p className="text-[15px] leading-[20px] text-gray-500 max-w-sm mx-auto mb-8">
               Share any TikTok, Instagram, Pinterest or web recipe from your phone and it will show up here instantly.
             </p>
             <button
               onClick={onBack}
-              className="px-5 py-2.5 bg-black text-white rounded-xl hover:bg-gray-800 transition text-sm font-medium"
+              className="px-6 py-3 bg-gray-900 text-white rounded-full active:bg-gray-800 transition-colors text-[15px] leading-[20px] font-medium min-h-[44px]"
             >
               Start importing
             </button>
@@ -92,44 +92,44 @@ function ImportItemCard({ item, timeAgo, onAction }: ImportItemCardProps) {
 
   return (
     <div className="rounded-3xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <div className="p-4 flex gap-4">
-        <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gray-100 flex-shrink-0">
+      <div className="p-5 flex gap-4">
+        <div className="w-[72px] h-[72px] rounded-2xl overflow-hidden bg-gray-100 flex-shrink-0">
           {item.thumbnail ? (
             <NextImage
               fill
-              sizes="64px"
+              sizes="72px"
               src={item.thumbnail}
               alt={item.title}
               className="object-cover"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-400">
-              <Link2 className="w-6 h-6" />
+              <Link2 className="w-7 h-7" />
             </div>
           )}
         </div>
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0 space-y-2.5">
+          <div className="flex items-start gap-2">
             {getPlatformIcon(item.platform)}
-            <h3 className="text-base font-semibold text-gray-900 line-clamp-2">{item.title}</h3>
+            <h3 className="text-[17px] leading-[22px] font-semibold text-gray-900 line-clamp-2">{item.title}</h3>
           </div>
-          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${statusMeta.pillClass}`}>
+          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] leading-[18px] font-medium ${statusMeta.pillClass}`}>
             {statusMeta.icon}
             {statusMeta.label}
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-[13px] leading-[18px] text-gray-500">
             <span>{statusMeta.description}</span>
             <span>•</span>
             <span>{timeAgo}</span>
           </div>
         </div>
       </div>
-      <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 flex items-center gap-2">
+      <div className="border-t border-gray-100 bg-gray-50 px-5 py-4 flex items-center gap-2">
         <button
           onClick={handlePrimary}
           disabled={isProcessing}
-          className={`inline-flex flex-1 items-center justify-center gap-2 rounded-2xl px-4 py-2 text-sm font-medium transition ${
-            isProcessing ? "bg-gray-200 text-gray-500 cursor-not-allowed" : "bg-black text-white hover:bg-gray-900"
+          className={`inline-flex flex-1 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[15px] leading-[20px] font-medium transition min-h-[44px] ${
+            isProcessing ? "bg-gray-200 text-gray-500 cursor-not-allowed" : "bg-gray-900 text-white active:bg-gray-800"
           }`}
         >
           <Download className="w-4 h-4" />
@@ -137,7 +137,7 @@ function ImportItemCard({ item, timeAgo, onAction }: ImportItemCardProps) {
         </button>
         <button
           onClick={() => onAction("delete")}
-          className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-white"
+          className="w-11 h-11 flex items-center justify-center rounded-full border border-gray-200 text-gray-600 active:bg-white transition-colors"
           aria-label="Delete import"
         >
           <Trash2 className="w-4 h-4" />
@@ -152,7 +152,7 @@ function getStatusMeta(item: ImportItem) {
     case "ready":
       return {
         pillClass: "bg-green-50 text-green-700",
-        icon: <CheckCircle className="w-3.5 h-3.5" />,
+        icon: <CheckCircle className="w-4 h-4" />,
         label: "Ready",
         description: "Ready to import",
         primaryLabel: "Import",
@@ -160,7 +160,7 @@ function getStatusMeta(item: ImportItem) {
     case "processing":
       return {
         pillClass: "bg-blue-50 text-blue-600",
-        icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />,
+        icon: <Loader2 className="w-4 h-4 animate-spin" />,
         label: "Processing",
         description: "Extracting ingredients and steps...",
         primaryLabel: "Processing...",
@@ -168,7 +168,7 @@ function getStatusMeta(item: ImportItem) {
     case "needsConnection":
       return {
         pillClass: "bg-amber-50 text-amber-700",
-        icon: <AlertCircle className="w-3.5 h-3.5" />,
+        icon: <AlertCircle className="w-4 h-4" />,
         label: "Needs connection",
         description: `Connect your ${item.platform} account to import`,
         primaryLabel: "Import",
@@ -177,7 +177,7 @@ function getStatusMeta(item: ImportItem) {
     default:
       return {
         pillClass: "bg-red-50 text-red-600",
-        icon: <AlertCircle className="w-3.5 h-3.5" />,
+        icon: <AlertCircle className="w-4 h-4" />,
         label: "Failed",
         description: "Could not extract recipe",
         primaryLabel: "Try again",
@@ -193,7 +193,7 @@ const platformColors: Record<SocialPlatform | "web", string> = {
 };
 
 function getPlatformIcon(platform: SocialPlatform | "web") {
-  const common = "w-4 h-4";
+  const common = "w-4 h-4 flex-shrink-0 mt-1";
   switch (platform) {
     case "tiktok":
       return (

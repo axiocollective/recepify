@@ -77,45 +77,46 @@ export function ImportFromWebsite({ onBack, onImport }: ImportFromWebsiteProps) 
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center gap-4 z-10">
-        <button
-          onClick={onBack}
-          className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 rounded-full transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-xl font-semibold">Import from Platform</h1>
+      <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            className="p-1 -ml-1 active:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-xl">Import from Website</h1>
+        </div>
       </div>
 
       {/* Content */}
-      <div className="px-6 py-8 space-y-8">
-        {/* Icon & Description */}
-        <div className="text-center mb-2">
-          <div className="w-20 h-20 bg-black rounded-full flex items-center justify-center mx-auto mb-4">
-            <Link2 className="w-9 h-9 text-white" />
+      <div className="px-6 py-8">
+        <div className="flex justify-center mb-6">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+            <Link2 className="w-7 h-7 text-gray-600" />
           </div>
-          <h2 className="text-xl font-medium mb-2">Paste any recipe link</h2>
-          <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
-            We&apos;ll automatically detect if it&apos;s from TikTok, Instagram, Pinterest, or any recipe website.
+        </div>
+
+        <div className="text-center mb-8">
+          <h2 className="text-2xl mb-2">Paste Recipe URL</h2>
+          <p className="text-sm text-gray-600">
+            Import recipes from any website or social media platform
           </p>
         </div>
 
         {/* URL Input */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Recipe URL
-          </label>
+        <div className="space-y-4">
           <div className="relative">
             <input
-              type="text"
+              type="url"
               value={url}
               onChange={(e) => handleUrlChange(e.target.value)}
-              placeholder="https://..."
-              className="w-full px-4 py-3.5 pr-20 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent text-sm"
+              placeholder="https://example.com/recipe"
+              className="w-full px-4 py-3.5 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 pr-20 text-sm"
             />
             <button
               onClick={handlePaste}
-              className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 text-sm text-gray-600 hover:text-black transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
             >
               Paste
             </button>
@@ -128,88 +129,44 @@ export function ImportFromWebsite({ onBack, onImport }: ImportFromWebsiteProps) 
               </span>
             </div>
           )}
-        </div>
-
-        {/* Import Button */}
-        <button
-          onClick={handleImport}
-          disabled={!isValidUrl || isImporting}
-          className={`w-full py-3.5 rounded-xl font-medium transition-all ${
-            isValidUrl && !isImporting
-              ? "bg-black text-white hover:bg-gray-800"
-              : "bg-gray-100 text-gray-400 cursor-not-allowed"
-          }`}
-        >
-          {isImporting ? (
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Importing...
-            </span>
-          ) : (
-            "Import Recipe"
+          {/* Import Button */}
+          <button
+            onClick={handleImport}
+            disabled={!isValidUrl || isImporting}
+            className="w-full py-3.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+          >
+            {isImporting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Importing...</span>
+              </>
+            ) : (
+              <span>Import Recipe</span>
+            )}
+          </button>
+          {isImporting && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>{message || "ChefGPT is doing its magic..."}</span>
+              </div>
+              <div className="h-1.5 bg-white rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-black transition-[width] duration-500 ease-out"
+                  style={{ width: `${Math.min(95, Math.max(progress || 10, 8))}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500">Hang tight while we import that recipe.</p>
+            </div>
           )}
-        </button>
-        {isImporting && (
-          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>{message || "ChefGPT is doing its magic..."}</span>
-            </div>
-            <div className="h-1.5 bg-white rounded-full overflow-hidden">
-              <div
-                className="h-full bg-black transition-[width] duration-500 ease-out"
-                style={{ width: `${Math.min(95, Math.max(progress || 10, 8))}%` }}
-              />
-            </div>
-            <p className="text-xs text-gray-500">Hang tight while we import that recipe.</p>
-          </div>
-        )}
-
-        {/* Help Section */}
-        <div className="bg-gray-50 rounded-xl p-5">
-          <h3 className="font-medium text-gray-900 mb-3">How to get the link</h3>
-          <div className="space-y-3 text-sm text-gray-600">
-            <div className="flex gap-3">
-              <span className="w-6 h-6 bg-black text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium">1</span>
-              <div className="pt-0.5">
-                <p className="font-medium text-gray-900">Find a recipe</p>
-                <p className="text-gray-500 mt-0.5">On TikTok, Instagram, Pinterest, or any recipe blog.</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <span className="w-6 h-6 bg-black text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium">2</span>
-              <div className="pt-0.5">
-                <p className="font-medium text-gray-900">Copy the link</p>
-                <p className="text-gray-500 mt-0.5">Tap Share → Copy Link in the app or copy from the address bar.</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <span className="w-6 h-6 bg-black text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium">3</span>
-              <div className="pt-0.5">
-                <p className="font-medium text-gray-900">Paste above</p>
-                <p className="text-gray-500 mt-0.5">We&apos;ll extract the recipe and let you edit it before saving.</p>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Supported Platforms */}
-        <div>
-          <p className="text-xs text-gray-400 text-center mb-3">Supported platforms</p>
-          <div className="flex justify-center gap-4 flex-wrap">
-            {[
-              { name: "TikTok", icon: "🎵" },
-              { name: "Instagram", icon: "📷" },
-              { name: "Pinterest", icon: "📌" },
-              { name: "Any Website", icon: "🌐" },
-            ].map((platform) => (
-              <div key={platform.name} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
-                <span className="text-sm">{platform.icon}</span>
-                <span className="text-xs text-gray-600">{platform.name}</span>
-              </div>
-            ))}
-          </div>
+        <div className="mt-8 p-4 bg-blue-50 rounded-lg">
+          <p className="text-xs text-gray-600 leading-relaxed">
+            <strong className="text-gray-900">How it works:</strong> Paste any recipe URL and we&apos;ll automatically extract the ingredients, instructions, and cooking details.
+          </p>
         </div>
+        <div className="mt-6" />
       </div>
     </div>
   );

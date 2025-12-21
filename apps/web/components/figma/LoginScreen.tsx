@@ -31,39 +31,39 @@ export function LoginScreen({ onSubmit }: LoginScreenProps) {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-100 flex items-center justify-center px-6 py-10">
-      <div className="w-full max-w-md rounded-3xl bg-white shadow-xl p-8 space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center">
-            <ChefHat className="w-6 h-6" />
+    <div className="min-h-[calc(100vh-72px)] bg-gray-50 flex items-center justify-center px-5 py-10">
+      <div className="w-full max-w-md rounded-[32px] bg-white shadow-xl p-8 space-y-8">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-gray-900 text-white flex items-center justify-center">
+            <ChefHat className="w-8 h-8" />
           </div>
           <div>
-            <p className="text-sm text-gray-500">Welcome to Recepify</p>
-            <h1 className="text-2xl font-semibold text-gray-900">Sign in to continue</h1>
+            <p className="text-[13px] leading-[18px] text-gray-500 mb-1">Welcome to Recipefy</p>
+            <h1 className="text-[28px] leading-[34px] font-bold text-gray-900">Sign in to continue</h1>
           </div>
         </div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form className="space-y-5" onSubmit={handleSubmit}>
           <div>
-            <label className="text-sm font-medium text-gray-700">
-              Full name
+            <label className="text-[15px] leading-[20px] text-gray-700 font-medium">
+              Name
               <input
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 transition focus:border-black focus:outline-none focus:ring-2 focus:ring-black/10"
-                placeholder="e.g. Andi Schmidt"
+                className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3.5 text-[15px] leading-[20px] text-gray-900 transition focus:border-gray-400 focus:outline-none"
+                placeholder="Your name"
               />
             </label>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700">
-              Email address
+            <label className="text-[15px] leading-[20px] text-gray-700 font-medium">
+              Email
               <input
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 transition focus:border-black focus:outline-none focus:ring-2 focus:ring-black/10"
+                className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3.5 text-[15px] leading-[20px] text-gray-900 transition focus:border-gray-400 focus:outline-none"
                 placeholder="you@example.com"
               />
             </label>
@@ -72,14 +72,13 @@ export function LoginScreen({ onSubmit }: LoginScreenProps) {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-2xl bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-70"
+            className="w-full py-3.5 bg-gray-900 text-white rounded-2xl text-[15px] leading-[20px] font-semibold hover:bg-gray-800 transition-colors disabled:bg-gray-300"
           >
-            {isSubmitting ? "Checking..." : "Continue"}
+            {isSubmitting ? "Signing in..." : "Continue"}
           </button>
         </form>
         <p className="text-xs text-gray-500 text-center leading-relaxed">
-          This lightweight login stores your name and email locally so you can test Recepify without a
-          full authentication setup.
+          By continuing, you agree to our Terms and Privacy Policy.
         </p>
       </div>
     </div>

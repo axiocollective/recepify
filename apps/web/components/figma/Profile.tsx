@@ -16,7 +16,7 @@ type StatusMessage = {
 };
 
 const inputClasses =
-  "w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 transition focus:border-black focus:outline-none focus:ring-2 focus:ring-black/10";
+  "w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[17px] leading-[22px] text-gray-900 transition focus:border-gray-400 focus:outline-none min-h-[44px]";
 
 interface ProfileProps {
   name: string;
@@ -79,17 +79,17 @@ export function Profile({ name, email, onNameChange, onEmailChange, onLogout }: 
   };
 
   return (
-    <div className="min-h-screen bg-neutral-100">
-      <div className="px-6 pt-16 pb-6">
-        <p className="text-sm text-gray-500">Settings</p>
-        <h1 className="text-3xl font-semibold mt-1 mb-1 text-gray-900">Manage your account</h1>
-        <p className="text-sm text-gray-500">Update your details and stay secure.</p>
+    <div className="min-h-screen bg-white pb-24">
+      <div className="px-5 pt-16 pb-6">
+        <p className="text-[13px] leading-[18px] text-gray-500 mb-1">Settings</p>
+        <h1 className="text-[34px] leading-[41px] font-bold mb-2 text-gray-900">Manage your account</h1>
+        <p className="text-[15px] leading-[20px] text-gray-500">Update your details and stay secure.</p>
       </div>
 
-      <div className="px-6 pb-24 space-y-8">
+      <div className="px-5 pb-16 space-y-10">
         {statusMessage && (
           <div
-            className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
+            className={`rounded-2xl px-5 py-4 text-[15px] leading-[20px] shadow-sm ${
               statusMessage.type === "success"
                 ? "bg-emerald-50 text-emerald-700"
                 : "bg-red-50 text-red-600"
@@ -99,8 +99,8 @@ export function Profile({ name, email, onNameChange, onEmailChange, onLogout }: 
           </div>
         )}
 
-        <section className="space-y-4">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Profile</p>
+        <section className="space-y-3">
+          <p className="text-[11px] leading-[14px] uppercase tracking-wider text-gray-400 font-semibold">Profile</p>
           <EditableCard
             label="Name"
             value={pendingName}
@@ -150,7 +150,7 @@ export function Profile({ name, email, onNameChange, onEmailChange, onLogout }: 
         </section>
 
         <section className="space-y-3">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Security</p>
+          <p className="text-[11px] leading-[14px] uppercase tracking-wider text-gray-400 font-semibold">Security</p>
           <MenuAction
             icon={Lock}
             title="Change password"
@@ -160,7 +160,7 @@ export function Profile({ name, email, onNameChange, onEmailChange, onLogout }: 
         </section>
 
         <section className="space-y-3">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Support</p>
+          <p className="text-[11px] leading-[14px] uppercase tracking-wider text-gray-400 font-semibold">Support</p>
           <MenuAction
             icon={HelpCircle}
             title="Help & Support"
@@ -171,54 +171,54 @@ export function Profile({ name, email, onNameChange, onEmailChange, onLogout }: 
 
         <button
           onClick={handleLogout}
-          className="w-full rounded-2xl border border-red-200 bg-red-50/70 p-4 flex items-center justify-between text-left shadow-sm transition hover:bg-red-50"
+          className="w-full rounded-2xl border border-red-200 bg-red-50/70 p-5 flex items-center justify-between text-left shadow-sm transition active:bg-red-50 min-h-[80px]"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center text-red-500">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-red-500">
               <LogOut className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm font-medium text-red-600">Log out</p>
-              <p className="text-xs text-red-500">Sign out of your account</p>
+              <p className="text-[17px] leading-[22px] font-semibold text-red-600">Log out</p>
+              <p className="text-[13px] leading-[18px] text-red-500">Sign out of your account</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-red-400" />
+          <ChevronRight className="w-5 h-5 text-red-400" />
         </button>
       </div>
 
       {isPasswordModalOpen && (
         <Overlay title="Change password" onClose={() => setIsPasswordModalOpen(false)}>
           <form className="space-y-4" onSubmit={handlePasswordSubmit}>
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-[15px] leading-[20px] font-medium text-gray-700">
               Current password
               <input
                 type="password"
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.target.value)}
-                className={`${inputClasses} mt-1`}
+                className={`${inputClasses} mt-2`}
               />
             </label>
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-[15px] leading-[20px] font-medium text-gray-700">
               New password
               <input
                 type="password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
-                className={`${inputClasses} mt-1`}
+                className={`${inputClasses} mt-2`}
               />
             </label>
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-[15px] leading-[20px] font-medium text-gray-700">
               Confirm new password
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                className={`${inputClasses} mt-1`}
+                className={`${inputClasses} mt-2`}
               />
             </label>
             <button
               type="submit"
-              className="w-full rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-900"
+              className="w-full rounded-full bg-gray-900 px-6 py-3 text-[17px] leading-[22px] font-semibold text-white transition active:bg-gray-800 min-h-[44px]"
             >
               Update password
             </button>
@@ -228,7 +228,7 @@ export function Profile({ name, email, onNameChange, onEmailChange, onLogout }: 
 
       {isSupportModalOpen && (
         <Overlay title="Help & Support" onClose={() => setIsSupportModalOpen(false)}>
-          <div className="space-y-4 text-sm text-gray-600">
+          <div className="space-y-4 text-[15px] leading-[20px] text-gray-600">
             <p>Need help with Recipefy? Reach out to our team anytime.</p>
             <div className="rounded-2xl border border-gray-200 px-4 py-3">
               <p className="font-medium text-gray-900">Email</p>
@@ -243,7 +243,7 @@ export function Profile({ name, email, onNameChange, onEmailChange, onLogout }: 
                 setIsSupportModalOpen(false);
                 setStatusMessage({ type: "success", text: "Support request sent." });
               }}
-              className="w-full rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-900"
+              className="w-full rounded-full bg-gray-900 px-6 py-3 text-[17px] leading-[22px] font-semibold text-white transition active:bg-gray-800 min-h-[44px]"
             >
               Send message
             </button>
@@ -279,12 +279,12 @@ function EditableCard({
     <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
-          {!isEditing && <p className="text-base font-medium text-gray-900 mt-1">{value}</p>}
+          <p className="text-[11px] leading-[14px] uppercase tracking-wider text-gray-400 font-semibold">{label}</p>
+          {!isEditing && <p className="text-[17px] leading-[22px] font-medium text-gray-900 mt-1">{value}</p>}
         </div>
         <button
           onClick={onEditToggle}
-          className="w-9 h-9 rounded-full border border-gray-200 text-gray-500 flex items-center justify-center hover:bg-gray-50"
+          className="w-9 h-9 rounded-full border border-gray-200 text-gray-500 flex items-center justify-center active:bg-gray-50"
         >
           <MoreHorizontal className="w-4 h-4" />
         </button>
@@ -300,13 +300,13 @@ function EditableCard({
           <div className="flex gap-2">
             <button
               onClick={onSave}
-              className="flex-1 rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-900"
+              className="flex-1 rounded-full bg-gray-900 px-4 py-2.5 text-[15px] leading-[20px] font-semibold text-white active:bg-gray-800"
             >
               Save
             </button>
             <button
               onClick={onCancel}
-              className="flex-1 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              className="flex-1 rounded-full border border-gray-200 px-4 py-2.5 text-[15px] leading-[20px] font-medium text-gray-600 active:bg-gray-50"
             >
               Cancel
             </button>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { BottomNav } from "@/components/figma/BottomNav";
+import { BrandHeader } from "@/components/figma/BrandHeader";
 import { CookMode } from "@/components/figma/CookMode";
 import { Home } from "@/components/figma/Home";
 import { ImportFromPinterest } from "@/components/figma/ImportFromPinterest";
@@ -1039,12 +1040,20 @@ export function FigmaExperience() {
   };
 
   if (!isAuthenticated) {
-    return <LoginScreen onSubmit={handleLogin} />;
+    return (
+      <div className="min-h-screen bg-neutral-100">
+        <div className="mx-auto min-h-screen max-w-md bg-white shadow-lg">
+          <BrandHeader />
+          <LoginScreen onSubmit={handleLogin} />
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-neutral-100">
       <div className="mx-auto min-h-screen max-w-md bg-white shadow-lg">
+        <BrandHeader />
         {isLoadingRecipes && (
           <div className="px-4 py-2 text-center text-xs text-muted-foreground">Loading recipes…</div>
         )}

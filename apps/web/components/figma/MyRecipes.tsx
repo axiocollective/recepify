@@ -382,11 +382,10 @@ function RecipeGridCard({ recipe, onClick, onEdit, onDelete, onFavoriteToggle }:
                 event.stopPropagation();
                 onEdit();
               }}
-              className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 shadow"
+              className="pointer-events-auto inline-flex items-center justify-center rounded-full bg-white/90 w-8 h-8 text-gray-900 shadow"
               aria-label="Edit recipe"
             >
               <Edit3 className="w-3.5 h-3.5" />
-              Edit
             </button>
             <button
               type="button"
@@ -394,11 +393,10 @@ function RecipeGridCard({ recipe, onClick, onEdit, onDelete, onFavoriteToggle }:
                 event.stopPropagation();
                 onDelete();
               }}
-              className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-red-600/90 px-3 py-1.5 text-xs font-medium text-white shadow"
+              className="pointer-events-auto inline-flex items-center justify-center rounded-full bg-red-600/90 w-8 h-8 text-white shadow"
               aria-label="Delete recipe"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              Delete
             </button>
           </div>
           <div className="flex justify-end">

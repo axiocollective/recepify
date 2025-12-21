@@ -4,7 +4,6 @@ import NextImage from "next/image";
 import {
   ArrowLeft,
   Heart,
-  Share,
   Clock,
   Users,
   Plus,
@@ -602,7 +601,6 @@ export function RecipeDetail({
   const [nutritionStatus, setNutritionStatus] = useState<AiStatus>(null);
   const [shoppingStatus, setShoppingStatus] = useState<AiStatus>(null);
   const [isAssistantThinking, setIsAssistantThinking] = useState(false);
-  const [shareStatus, setShareStatus] = useState<AiStatus>(null);
   const [isTagPickerOpen, setIsTagPickerOpen] = useState(false);
   const [customTagValue, setCustomTagValue] = useState("");
   const [isUpdatingTags, setIsUpdatingTags] = useState(false);
@@ -636,7 +634,6 @@ export function RecipeDetail({
     setIsSuggestingTags(false);
     setTagSuggestionStatus(null);
     setIsUpdatingTags(false);
-    setShareStatus(null);
   }, [recipe.id, recipe.servings]);
 
   useEffect(() => {
@@ -649,15 +646,6 @@ export function RecipeDetail({
     return undefined;
   }, [shoppingStatus]);
 
-  useEffect(() => {
-    if (shareStatus) {
-      const timeout = window.setTimeout(() => {
-        setShareStatus(null);
-      }, 2500);
-      return () => window.clearTimeout(timeout);
-    }
-    return undefined;
-  }, [shareStatus]);
   useEffect(() => {
     if (showReviewPrompt && isAssistantOpen) {
       setIsAssistantOpen(false);
@@ -1053,35 +1041,6 @@ export function RecipeDetail({
     }
   };
 
-  const handleShareRecipe = async () => {
-    const baseUrl =
-      typeof window !== "undefined"
-        ? window.location.origin
-        : process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const url = `${baseUrl.replace(/\/$/, "")}/share/${recipe.id}`;
-    try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({
-          title: recipe.title,
-          text: recipe.description ?? "Check out this recipe.",
-          url,
-        });
-        setShareStatus({ type: "success", message: "Shared via system sheet." });
-        return;
-      }
-      if (typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
-        setShareStatus({ type: "success", message: "Link copied to clipboard." });
-        return;
-      }
-      setShareStatus({ type: "error", message: url });
-    } catch (error) {
-      setShareStatus({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to share right now.",
-      });
-    }
-  };
 
   return (
     <>
@@ -1122,16 +1081,6 @@ export function RecipeDetail({
               <Heart className={`w-5 h-5 ${recipe.isFavorite ? "fill-black text-black" : ""}`} />
             </button>
             <button
-              onClick={handleShareRecipe}
-              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-lg ${
-                shareStatus?.type === "success"
-                  ? "bg-black/90 text-white hover:bg-black"
-                  : "bg-white/95 backdrop-blur-sm hover:bg-white"
-              }`}
-            >
-              <Share className="w-4 h-4" />
-            </button>
-            <button
               onClick={() => onDelete(recipe.id)}
               className="w-11 h-11 bg-red-500/95 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-red-600 transition-all shadow-lg"
             >
@@ -1140,19 +1089,6 @@ export function RecipeDetail({
           </div>
         </div>
 
-        {shareStatus && (
-          <div className="absolute top-20 right-4">
-            <span
-              className={`px-3 py-1.5 rounded-full text-xs font-medium shadow-lg ${
-                shareStatus.type === "error"
-                  ? "bg-red-600/95 text-white"
-                  : "bg-white/95 text-gray-900"
-              }`}
-            >
-              {shareStatus.message}
-            </span>
-          </div>
-        )}
 
         <div className="absolute bottom-0 left-0 right-0 p-6">
           {recipe.source && (
@@ -1229,140 +1165,6 @@ export function RecipeDetail({
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               <span>{recipe.servings} servings</span>
-            </div>
-          )}
-        </div>
-
-        <div className="border border-gray-100 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Tag className="w-4 h-4 text-gray-600" />
-            <span className="text-sm font-medium text-gray-600">Tags</span>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {existingTags.length > 0 ? (
-              existingTags.map((tag) => (
-                <span
-                  key={tag}
-                  className="px-3 py-1.5 bg-gray-50 text-gray-700 rounded-full text-xs capitalize"
-                >
-                  {tag}
-                </span>
-              ))
-            ) : (
-              <p className="text-xs text-gray-500">No tags yet. Add one to organize this recipe.</p>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2 mt-4">
-            {canInlineEditTags && (
-              <button
-                onClick={() => setIsTagPickerOpen((prev) => !prev)}
-                disabled={isUpdatingTags}
-                className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
-                  isUpdatingTags
-                    ? "bg-gray-100 text-gray-400 cursor-wait"
-                    : "bg-white border-gray-200 hover:border-gray-400"
-                }`}
-              >
-                {isTagPickerOpen ? "Close tag picker" : "+ Add tag"}
-              </button>
-            )}
-            {!canInlineEditTags && (
-              <button
-                onClick={onEdit}
-                className="px-3 py-1.5 rounded-full text-xs border border-gray-200 bg-white hover:border-gray-400"
-              >
-                + Add tag
-              </button>
-            )}
-            {canInlineEditTags && (
-              <button
-                onClick={onEdit}
-                className="px-3 py-1.5 rounded-full text-xs border border-gray-200 bg-white hover:border-gray-400"
-              >
-                Edit tags
-              </button>
-            )}
-          </div>
-          {tagUpdateError && (
-            <p className="text-xs text-red-500 mt-2">{tagUpdateError}</p>
-          )}
-          {canInlineEditTags && isTagPickerOpen && (
-            <div className="mt-4 border border-dashed border-gray-200 rounded-lg p-4 space-y-4">
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-2">Quick picks</p>
-                <div className="flex flex-wrap gap-2">
-                  {QUICK_TAG_LIBRARY.map((tag) => {
-                    const disabled = normalizedTagSet.has(tag.toLowerCase()) || isUpdatingTags;
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => handleAddTagInline(tag)}
-                        className={`px-3 py-1.5 rounded-full text-xs border transition-colors capitalize ${
-                          disabled
-                            ? "bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed"
-                            : "bg-white border-gray-200 hover:border-gray-400"
-                        }`}
-                      >
-                        {tag}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="pt-2 border-t border-dashed border-gray-200 space-y-2">
-                <button
-                  type="button"
-                  onClick={handleSuggestTagsWithAI}
-                  disabled={isSuggestingTags || !canSuggestTagsWithAI}
-                  className={`w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${
-                    isSuggestingTags || !canSuggestTagsWithAI
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm hover:from-purple-600 hover:to-purple-700"
-                  }`}
-                >
-                  <Sparkles className="w-4 h-4" />
-                  {isSuggestingTags ? "Finding tags..." : "Suggest tags with AI"}
-                </button>
-                {tagSuggestionStatus && (
-                  <p
-                    className={`text-xs ${
-                      tagSuggestionStatus.type === "success" ? "text-green-600" : "text-red-500"
-                    }`}
-                  >
-                    {tagSuggestionStatus.message}
-                  </p>
-                )}
-                {!canSuggestTagsWithAI && (
-                  <p className="text-xs text-gray-400">
-                    Add a description or at least one step to enable AI tag suggestions.
-                  </p>
-                )}
-              </div>
-              <form
-                className="flex flex-col gap-2 sm:flex-row"
-                onSubmit={(event) => handleCustomTagSubmit(event)}
-              >
-                <input
-                  type="text"
-                  value={customTagValue}
-                  onChange={(event) => setCustomTagValue(event.target.value.toLowerCase())}
-                  placeholder="Custom tag"
-                  className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
-                />
-                <button
-                  type="submit"
-                  disabled={isUpdatingTags || !customTagValue.trim()}
-                  className={`px-3 py-2 rounded-lg text-xs font-medium ${
-                    customTagValue.trim() && !isUpdatingTags
-                      ? "bg-black text-white hover:bg-gray-900"
-                      : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  }`}
-                >
-                  {isUpdatingTags ? "Saving…" : "Add custom tag"}
-                </button>
-              </form>
             </div>
           )}
         </div>
@@ -1677,6 +1479,140 @@ export function RecipeDetail({
             )}
           </div>
         )}
+
+        <div className="border border-gray-100 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Tag className="w-4 h-4 text-gray-600" />
+            <span className="text-sm font-medium text-gray-600">Tags</span>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {existingTags.length > 0 ? (
+              existingTags.map((tag) => (
+                <span
+                  key={tag}
+                  className="px-3 py-1.5 bg-gray-50 text-gray-700 rounded-full text-xs capitalize"
+                >
+                  {tag}
+                </span>
+              ))
+            ) : (
+              <p className="text-xs text-gray-500">No tags yet. Add one to organize this recipe.</p>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2 mt-4">
+            {canInlineEditTags && (
+              <button
+                onClick={() => setIsTagPickerOpen((prev) => !prev)}
+                disabled={isUpdatingTags}
+                className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                  isUpdatingTags
+                    ? "bg-gray-100 text-gray-400 cursor-wait"
+                    : "bg-white border-gray-200 hover:border-gray-400"
+                }`}
+              >
+                {isTagPickerOpen ? "Close tag picker" : "+ Add tag"}
+              </button>
+            )}
+            {!canInlineEditTags && (
+              <button
+                onClick={onEdit}
+                className="px-3 py-1.5 rounded-full text-xs border border-gray-200 bg-white hover:border-gray-400"
+              >
+                + Add tag
+              </button>
+            )}
+            {canInlineEditTags && (
+              <button
+                onClick={onEdit}
+                className="px-3 py-1.5 rounded-full text-xs border border-gray-200 bg-white hover:border-gray-400"
+              >
+                Edit tags
+              </button>
+            )}
+          </div>
+          {tagUpdateError && (
+            <p className="text-xs text-red-500 mt-2">{tagUpdateError}</p>
+          )}
+          {canInlineEditTags && isTagPickerOpen && (
+            <div className="mt-4 border border-dashed border-gray-200 rounded-lg p-4 space-y-4">
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">Quick picks</p>
+                <div className="flex flex-wrap gap-2">
+                  {QUICK_TAG_LIBRARY.map((tag) => {
+                    const disabled = normalizedTagSet.has(tag.toLowerCase()) || isUpdatingTags;
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => handleAddTagInline(tag)}
+                        className={`px-3 py-1.5 rounded-full text-xs border transition-colors capitalize ${
+                          disabled
+                            ? "bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed"
+                            : "bg-white border-gray-200 hover:border-gray-400"
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="pt-2 border-t border-dashed border-gray-200 space-y-2">
+                <button
+                  type="button"
+                  onClick={handleSuggestTagsWithAI}
+                  disabled={isSuggestingTags || !canSuggestTagsWithAI}
+                  className={`w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${
+                    isSuggestingTags || !canSuggestTagsWithAI
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm hover:from-purple-600 hover:to-purple-700"
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  {isSuggestingTags ? "Finding tags..." : "Suggest tags with AI"}
+                </button>
+                {tagSuggestionStatus && (
+                  <p
+                    className={`text-xs ${
+                      tagSuggestionStatus.type === "success" ? "text-green-600" : "text-red-500"
+                    }`}
+                  >
+                    {tagSuggestionStatus.message}
+                  </p>
+                )}
+                {!canSuggestTagsWithAI && (
+                  <p className="text-xs text-gray-400">
+                    Add a description or at least one step to enable AI tag suggestions.
+                  </p>
+                )}
+              </div>
+              <form
+                className="flex flex-col gap-2 sm:flex-row"
+                onSubmit={(event) => handleCustomTagSubmit(event)}
+              >
+                <input
+                  type="text"
+                  value={customTagValue}
+                  onChange={(event) => setCustomTagValue(event.target.value.toLowerCase())}
+                  placeholder="Custom tag"
+                  className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
+                />
+                <button
+                  type="submit"
+                  disabled={isUpdatingTags || !customTagValue.trim()}
+                  className={`px-3 py-2 rounded-lg text-xs font-medium ${
+                    customTagValue.trim() && !isUpdatingTags
+                      ? "bg-black text-white hover:bg-gray-900"
+                      : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  {isUpdatingTags ? "Saving…" : "Add custom tag"}
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
 
         <div className="pt-2 pb-4">
           <button
