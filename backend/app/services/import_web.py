@@ -372,6 +372,7 @@ def import_web(url: str) -> Dict[str, Any]:
     _attach_video_asset(recipe)
     sync_recipe_media_to_supabase(recipe)
 
+    recipe.tags = []
     data = recipe.model_dump_recipe()
     data.setdefault("tags", [])
     return data

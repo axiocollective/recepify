@@ -194,7 +194,7 @@ def _convert_recipe(recipe: _ScannedRecipe, image_path: Path) -> ImportedRecipe:
         media_image_url=str(image_path),
         ingredients=ingredients,
         instructions=instructions_from_strings(recipe.steps),
-        tags=recipe.tags,
+        tags=[],
         metadata={
             "missingFields": recipe.missing_fields,
             "confidence": recipe.confidence,

@@ -954,6 +954,7 @@ def import_pinterest(url: str) -> Dict[str, Any]:
     recipe.metadata["pinterestUrl"] = url
 
     sync_recipe_media_to_supabase(recipe)
+    recipe.tags = []
     data = recipe.model_dump_recipe()
     data.setdefault("tags", [])
     return data

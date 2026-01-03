@@ -254,7 +254,7 @@ def _convert_recipe(recipe: _TikTokRecipe, video_path: Path, thumbnail_path: Pat
         media_image_url=str(thumbnail_path),
         ingredients=ingredients,
         instructions=instructions_from_strings(recipe.steps),
-        tags=recipe.tags,
+        tags=[],
         metadata={
             "missingFields": recipe.missing_fields,
             "confidence": recipe.confidence,

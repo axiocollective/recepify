@@ -395,7 +395,7 @@ def _convert_recipe(recipe: _InstagramRecipe, thumbnail_url: Optional[str]) -> I
         media_image_url=thumbnail_url,
         ingredients=ingredients,
         instructions=instructions_from_strings(recipe.steps),
-        tags=recipe.tags,
+        tags=[],
         metadata={
             "missingFields": recipe.missing_fields,
             "confidence": recipe.confidence,
