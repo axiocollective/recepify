@@ -88,6 +88,30 @@ export const AppNavigator: React.FC = () => {
   const [onboardingStep, setOnboardingStep] = React.useState<"language" | "plan" | "loading">("language");
   const readyImportCount = importItems.filter((item) => item.status === "ready").length;
 
+  const normalizeImportUrl = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return trimmed;
+    try {
+      const parsed = new URL(trimmed);
+      const pathname = parsed.pathname.replace(/\/$/, "");
+      return `${parsed.origin}${pathname}${parsed.search}`;
+    } catch {
+      return trimmed.replace(/\/$/, "");
+    }
+  };
+
+  const shouldImportAgain = (url: string) =>
+    new Promise<boolean>((resolve) => {
+      Alert.alert(
+        "Already imported",
+        "This link was imported before. Do you want to import it again?",
+        [
+          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+          { text: "Import again", onPress: () => resolve(true) },
+        ]
+      );
+    });
+
   const handleAddManualRecipe = () => {
     const blankRecipe = {
       id: `recipe-${Date.now()}`,
@@ -243,6 +267,14 @@ export const AppNavigator: React.FC = () => {
             onBack={() => navigateTo("import")}
             onImport={async (url) => {
               try {
+                const normalizedUrl = normalizeImportUrl(url);
+                const duplicate = recipes.find(
+                  (recipe) => recipe.sourceUrl && normalizeImportUrl(recipe.sourceUrl) === normalizedUrl
+                );
+                if (duplicate) {
+                  const shouldProceed = await shouldImportAgain(url);
+                  if (!shouldProceed) return;
+                }
                 const imported = await importFromUrl(url);
                 const saved = await addRecipe(imported);
                 const nextRecipe = saved ?? imported;
@@ -263,6 +295,14 @@ export const AppNavigator: React.FC = () => {
             onBack={() => navigateTo("import")}
             onImport={async (url) => {
               try {
+                const normalizedUrl = normalizeImportUrl(url);
+                const duplicate = recipes.find(
+                  (recipe) => recipe.sourceUrl && normalizeImportUrl(recipe.sourceUrl) === normalizedUrl
+                );
+                if (duplicate) {
+                  const shouldProceed = await shouldImportAgain(url);
+                  if (!shouldProceed) return;
+                }
                 const imported = await importFromTikTok(url);
                 const saved = await addRecipe(imported);
                 const nextRecipe = saved ?? imported;
@@ -282,6 +322,14 @@ export const AppNavigator: React.FC = () => {
             onBack={() => navigateTo("import")}
             onImport={async (url) => {
               try {
+                const normalizedUrl = normalizeImportUrl(url);
+                const duplicate = recipes.find(
+                  (recipe) => recipe.sourceUrl && normalizeImportUrl(recipe.sourceUrl) === normalizedUrl
+                );
+                if (duplicate) {
+                  const shouldProceed = await shouldImportAgain(url);
+                  if (!shouldProceed) return;
+                }
                 const imported = await importFromPinterest(url);
                 const saved = await addRecipe(imported);
                 const nextRecipe = saved ?? imported;
