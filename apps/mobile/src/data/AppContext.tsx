@@ -74,7 +74,7 @@ interface AppContextValue {
   toggleRecipeInCollection: (recipeId: string, collectionId: string) => void;
   deleteCollection: (collectionId: string) => void;
   updateRecipe: (recipe: Recipe) => void;
-  addRecipe: (recipe: Recipe) => void;
+  addRecipe: (recipe: Recipe) => Promise<Recipe | null>;
   deleteRecipe: (recipeId: string) => void;
   updateAccountConnection: (platform: string, connected: boolean) => void;
   refreshUsageSummary: () => void;
@@ -628,8 +628,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           )
         );
         void importFromUrl(item.url)
-          .then((imported) => {
-            setSelectedRecipe(imported);
+          .then(async (imported) => {
+            const saved = await addRecipe(imported);
+            const nextRecipe = saved ?? imported;
+            setSelectedRecipe(nextRecipe);
             setCurrentScreen("recipeEdit");
             refreshUsageSummary();
             setImportItems((prev) => prev.filter((importItem) => importItem.id !== itemId));
@@ -752,15 +754,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
   }, []);
 
-  const addRecipe = useCallback((newRecipe: Recipe) => {
-    void saveRecipe(newRecipe)
-      .then((savedRecipe) => {
-        setRecipes((prev) => [savedRecipe, ...prev]);
-        setSelectedRecipe(savedRecipe);
-      })
-      .catch((error) => {
-        console.warn("Failed to add recipe", error);
-      });
+  const addRecipe = useCallback(async (newRecipe: Recipe) => {
+    try {
+      const savedRecipe = await saveRecipe(newRecipe);
+      setRecipes((prev) => [savedRecipe, ...prev]);
+      setSelectedRecipe(savedRecipe);
+      return savedRecipe;
+    } catch (error) {
+      console.warn("Failed to add recipe", error);
+      return null;
+    }
   }, []);
 
   const deleteRecipe = useCallback((recipeId: string) => {

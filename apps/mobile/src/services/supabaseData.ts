@@ -173,6 +173,8 @@ export const saveRecipe = async (recipe: Recipe): Promise<Recipe> => {
   if (!currentUserId) {
     throw new Error("User is not authenticated.");
   }
+  // Ensure profile exists to satisfy FK constraints.
+  await ensureProfile({});
   const recipeId = isUuid(recipe.id) ? recipe.id : createUuid();
   const imageUrl = recipe.thumbnail
     ? await uploadToBucket(recipe.thumbnail, "recipe-images", recipeId, "image")

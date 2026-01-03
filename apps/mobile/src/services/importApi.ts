@@ -165,6 +165,14 @@ const mapImportedRecipe = (payload: ImportResponse): Recipe => {
   const videoUrl =
     resolveMediaUrl(recipe.mediaVideoUrl) || resolveMediaUrl(payload.videoPath);
   const servingsNumber = toNumber(recipe.servings);
+  const ingredients = toIngredients(recipe.ingredients);
+  const steps = toSteps(recipe.instructions);
+
+  if (ingredients.length === 0 && steps.length === 0) {
+    throw new Error(
+      "We couldn't find meaningful recipe data for this link, so we didn't use any credits. Please try another source or add it manually."
+    );
+  }
 
   return {
     id: `recipe-${Date.now()}`,
@@ -176,8 +184,8 @@ const mapImportedRecipe = (payload: ImportResponse): Recipe => {
     totalTime: recipe.totalTime || undefined,
     servings: servingsNumber,
     difficulty: recipe.difficulty as Recipe["difficulty"] | undefined,
-    ingredients: toIngredients(recipe.ingredients),
-    steps: toSteps(recipe.instructions),
+    ingredients,
+    steps,
     source: normalizePlatform(recipe.sourcePlatform),
     sourceUrl: recipe.sourceUrl || undefined,
     thumbnail,

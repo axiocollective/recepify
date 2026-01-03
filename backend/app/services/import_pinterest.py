@@ -16,6 +16,8 @@ from .import_utils import (
     extract_og_image,
     fetch_html,
     find_recipe_nodes,
+    ingredients_from_strings,
+    instructions_from_strings,
     pick_best_recipe,
     resolve_schema_image,
     sync_recipe_media_to_supabase,
@@ -35,6 +37,19 @@ VISIT_SITE_PATTERNS = [
 ]
 
 logger = logging.getLogger(__name__)
+
+URL_KEYS = {
+    "link",
+    "url",
+    "destination",
+    "destination_url",
+    "destinationurl",
+    "canonical_url",
+    "canonicalurl",
+    "href",
+    "redirect_url",
+    "redirecturl",
+}
 
 
 def _clean_ws(text: str) -> str:
@@ -67,6 +82,22 @@ def _extract_og_url(html: str) -> Optional[str]:
     og = soup.find("meta", attrs={"property": "og:url"})
     if og and og.get("content"):
         return og["content"].strip()
+    return None
+
+
+def _extract_og_title(html: str) -> Optional[str]:
+    soup = BeautifulSoup(html, "html.parser")
+    og = soup.find("meta", attrs={"property": "og:title"})
+    if og and og.get("content"):
+        return _clean_ws(og["content"])
+    return None
+
+
+def _extract_og_description(html: str) -> Optional[str]:
+    soup = BeautifulSoup(html, "html.parser")
+    og = soup.find("meta", attrs={"property": "og:description"})
+    if og and og.get("content"):
+        return _clean_ws(og["content"])
     return None
 
 
@@ -223,6 +254,298 @@ def _collect_external_urls(value: Any) -> List[str]:
             urls.append(candidate)
         return urls
     return urls
+
+
+def _deep_find_external_url(value: Any) -> Optional[str]:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            key_lower = str(key).lower()
+            if key_lower in URL_KEYS and isinstance(item, str):
+                candidate = _decode_escaped_url(item)
+                candidate = _normalize_url(candidate)
+                outgoing = _extract_outgoing_url(candidate)
+                if outgoing:
+                    candidate = outgoing
+                if _is_http_url(candidate) and _is_external_non_pinterest(candidate):
+                    return candidate
+            found = _deep_find_external_url(item)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = _deep_find_external_url(item)
+            if found:
+                return found
+    return None
+
+
+def _sniff_pin_destination_with_playwright(pin_url: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:
+        logger.info("Playwright is not available; skipping Pinterest sniff.")
+        return None, None, None
+
+    dest_candidates: List[str] = []
+    rendered_html: Optional[str] = None
+    og_image: Optional[str] = None
+
+    def add_candidate(candidate: str) -> None:
+        normalized = _normalize_url(candidate)
+        outgoing = _extract_outgoing_url(normalized)
+        if outgoing:
+            normalized = outgoing
+        if _is_http_url(normalized) and _is_external_non_pinterest(normalized):
+            if normalized not in dest_candidates:
+                dest_candidates.append(normalized)
+
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                ),
+                locale="de-DE",
+                viewport={"width": 1280, "height": 800},
+            )
+            page = context.new_page()
+
+            def handle_response(response) -> None:
+                try:
+                    content_type = (response.headers.get("content-type") or "").lower()
+                    if "application/json" not in content_type and "text/json" not in content_type:
+                        return
+                    if response.request.resource_type not in ("xhr", "fetch"):
+                        return
+                    data = response.json()
+                    found = _deep_find_external_url(data)
+                    if found:
+                        add_candidate(found)
+                except Exception:
+                    return
+
+            page.on("response", handle_response)
+            page.goto(pin_url, wait_until="domcontentloaded", timeout=45000)
+            page.wait_for_timeout(2500)
+
+            for selector in (
+                "button:has-text('Alle akzeptieren')",
+                "button:has-text('Akzeptieren')",
+                "button:has-text('Ich stimme zu')",
+                "button:has-text('Accept all')",
+                "button:has-text('Accept')",
+            ):
+                try:
+                    locator = page.locator(selector).first
+                    if locator.is_visible(timeout=1200):
+                        locator.click(timeout=1200)
+                        page.wait_for_timeout(1500)
+                        break
+                except Exception:
+                    continue
+
+            page.wait_for_timeout(4000)
+            rendered_html = page.content()
+            if rendered_html:
+                og_image = extract_og_image(rendered_html)
+
+            context.close()
+            browser.close()
+    except Exception as exc:
+        logger.warning("Pinterest Playwright sniff failed: %s", exc)
+        return None, None, None
+
+    if dest_candidates:
+        return rendered_html, dest_candidates[0], og_image
+    return rendered_html, None, og_image
+
+
+def _try_json_load(raw: str) -> Optional[Any]:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        match = re.search(r"(\\{.*\\}|\\[.*\\])", raw, flags=re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except Exception:
+                return None
+    return None
+
+
+def _collect_json_blobs_from_html(html: str) -> List[Any]:
+    soup = BeautifulSoup(html, "html.parser")
+    blobs: List[Any] = []
+    pws = soup.find("script", attrs={"id": "__PWS_DATA__"})
+    if pws:
+        data = _try_json_load(pws.string or pws.get_text())
+        if data is not None:
+            blobs.append(data)
+    return blobs
+
+
+def _find_recipe_like_nodes(value: Any) -> List[dict[str, Any]]:
+    nodes: List[dict[str, Any]] = []
+
+    def walk(item: Any) -> None:
+        if isinstance(item, dict):
+            node_type = item.get("@type")
+            if isinstance(node_type, str) and node_type.lower() == "recipe":
+                nodes.append(item)
+            elif isinstance(node_type, list) and any(
+                isinstance(entry, str) and entry.lower() == "recipe" for entry in node_type
+            ):
+                nodes.append(item)
+
+            has_ingredients = "recipeIngredient" in item or "ingredients" in item
+            has_instructions = "recipeInstructions" in item or "instructions" in item
+            has_title = "name" in item or "title" in item
+            if (has_ingredients or has_instructions) and has_title:
+                nodes.append(item)
+
+            for child in item.values():
+                walk(child)
+        elif isinstance(item, list):
+            for child in item:
+                walk(child)
+
+    walk(value)
+    return nodes
+
+
+def _pinterest_node_score(node: dict[str, Any]) -> int:
+    score = 0
+    if node.get("name") or node.get("title"):
+        score += 3
+    if node.get("description"):
+        score += 1
+    if node.get("recipeIngredient") or node.get("ingredients"):
+        score += 4
+    if node.get("recipeInstructions") or node.get("instructions"):
+        score += 4
+    if node.get("prepTime") or node.get("cookTime") or node.get("totalTime"):
+        score += 1
+    if node.get("recipeYield") or node.get("yield"):
+        score += 1
+    return score
+
+
+def _extract_instructions_from_any(value: Any) -> List[str]:
+    items: List[str] = []
+    for entry in value if isinstance(value, list) else [value]:
+        if isinstance(entry, str):
+            cleaned = _clean_ws(entry)
+            if cleaned:
+                items.append(cleaned)
+        elif isinstance(entry, dict):
+            if entry.get("text"):
+                cleaned = _clean_ws(str(entry["text"]))
+                if cleaned:
+                    items.append(cleaned)
+            elif entry.get("itemListElement"):
+                for item in entry.get("itemListElement") or []:
+                    if isinstance(item, dict) and item.get("text"):
+                        cleaned = _clean_ws(str(item["text"]))
+                        if cleaned:
+                            items.append(cleaned)
+                    elif isinstance(item, str):
+                        cleaned = _clean_ws(item)
+                        if cleaned:
+                            items.append(cleaned)
+    return items
+
+
+def _pinterest_extract_recipe(pin_html: str, pin_url: str, pin_image: Optional[str]) -> ImportedRecipe:
+    title = _extract_og_title(pin_html) or "Imported Recipe"
+    description = _extract_og_description(pin_html)
+
+    recipe = ImportedRecipe(
+        title=title,
+        description=description,
+        sourcePlatform="pinterest",
+        sourceUrl=pin_url,
+        sourceDomain=ensure_domain(pin_url),
+        extractedVia="pinterest_og_only",
+        mediaImageUrl=pin_image,
+        ingredients=[],
+        instructions=[],
+    )
+
+    best_node: Optional[dict[str, Any]] = None
+    for blob in _collect_json_blobs_from_html(pin_html):
+        nodes = _find_recipe_like_nodes(blob)
+        if nodes:
+            best_node = sorted(nodes, key=_pinterest_node_score, reverse=True)[0]
+            break
+
+    if not best_node:
+        recipe.extracted_via = "pinterest_dom_fallback"
+        return recipe
+
+    raw_title = best_node.get("name") or best_node.get("title")
+    raw_description = best_node.get("description")
+    recipe.title = _clean_ws(str(raw_title)) if raw_title else recipe.title
+    recipe.description = _clean_ws(str(raw_description)) if raw_description else recipe.description
+    recipe.prep_time = _clean_ws(str(best_node.get("prepTime"))) if best_node.get("prepTime") else recipe.prep_time
+    recipe.cook_time = _clean_ws(str(best_node.get("cookTime"))) if best_node.get("cookTime") else recipe.cook_time
+    recipe.total_time = _clean_ws(str(best_node.get("totalTime"))) if best_node.get("totalTime") else recipe.total_time
+
+    servings = best_node.get("recipeYield") or best_node.get("yield")
+    if isinstance(servings, list) and servings:
+        servings = servings[0]
+    recipe.servings = _clean_ws(str(servings)) if servings else recipe.servings
+
+    ingredients = best_node.get("recipeIngredient") or best_node.get("ingredients")
+    if ingredients:
+        recipe.ingredients = ingredients_from_strings(ingredients)
+
+    instructions = best_node.get("recipeInstructions") or best_node.get("instructions")
+    if instructions:
+        recipe.instructions = instructions_from_strings(_extract_instructions_from_any(instructions))
+
+    recipe.extracted_via = "pinterest_pin_json"
+    return recipe
+
+
+def _enrich_pinterest_with_openai_if_needed(
+    base_recipe: ImportedRecipe,
+    pin_url: str,
+    pin_html: str,
+    pin_image: Optional[str],
+) -> ImportedRecipe:
+    thin = len(base_recipe.instructions) == 0 and len(base_recipe.ingredients) < 5
+    if not thin:
+        return base_recipe
+
+    ai_recipe = _openai_from_page(
+        url=pin_url,
+        html=pin_html,
+        image_url=pin_image,
+        platform="pinterest",
+        extracted_via_label="openai_from_pinterest_pin",
+    )
+
+    merged = base_recipe.model_copy(deep=True)
+    for field in ("title", "description", "prep_time", "cook_time", "total_time", "servings"):
+        if not getattr(merged, field) and getattr(ai_recipe, field):
+            setattr(merged, field, getattr(ai_recipe, field))
+
+    if not merged.ingredients and ai_recipe.ingredients:
+        merged.ingredients = ai_recipe.ingredients
+    if not merged.instructions and ai_recipe.instructions:
+        merged.instructions = ai_recipe.instructions
+
+    merged.extracted_via = f"{merged.extracted_via}+openai_enrich"
+    merged.media_image_url = merged.media_image_url or ai_recipe.media_image_url or pin_image
+    return merged
 
 
 def _extract_destination_url_from_json(pin_html: str) -> Optional[str]:
@@ -514,10 +837,16 @@ def _scrape_recipe_page(
 
 
 def import_pinterest(url: str) -> Dict[str, Any]:
-    pin_html = fetch_html(url)
-    pin_image = extract_og_image(pin_html)
+    pin_html, destination_url, pin_image = _sniff_pin_destination_with_playwright(url)
+    if not pin_html:
+        pin_html = fetch_html(url)
+    if not pin_image and pin_html:
+        pin_image = extract_og_image(pin_html)
     pin_id = _extract_pin_id(url)
-    destination_url = _extract_destination_url(pin_html, pin_id=pin_id)
+    if not destination_url:
+        destination_url = _extract_destination_url(pin_html, pin_id=pin_id)
+    pin_recipe = _pinterest_extract_recipe(pin_html, url, pin_image)
+    pin_recipe = _enrich_pinterest_with_openai_if_needed(pin_recipe, url, pin_html, pin_image)
     if not destination_url and pin_id:
         destination_url = _fetch_pin_resource_url(pin_id)
         if destination_url:
@@ -529,13 +858,7 @@ def import_pinterest(url: str) -> Dict[str, Any]:
 
     recipe: ImportedRecipe
     if not destination_url:
-        recipe = _openai_from_page(
-            url=url,
-            html=pin_html,
-            image_url=pin_image,
-            platform="pinterest",
-            extracted_via_label="openai_from_pinterest_pin",
-        )
+        recipe = pin_recipe
     else:
         destination_url = _normalize_url(destination_url)
         dest_html = fetch_html(destination_url)
@@ -568,6 +891,8 @@ def import_pinterest(url: str) -> Dict[str, Any]:
                 candidates.append((visit_url, visit_recipe, visit_html, visit_img))
             except Exception:
                 visit_url = None
+
+        candidates.append((url, pin_recipe, pin_html, pin_image))
 
         best_url, best_recipe, best_html, best_img = sorted(
             candidates, key=lambda item: _recipe_quality_score(item[1]), reverse=True
@@ -602,16 +927,21 @@ def import_pinterest(url: str) -> Dict[str, Any]:
         )
 
         recipe = best_recipe
-        recipe.extracted_via = extracted_label
+        if best_url == url:
+            recipe.extracted_via = recipe.extracted_via or "pinterest_pin"
+        else:
+            recipe.extracted_via = extracted_label
         recipe.media_image_url = best_img or pin_image or recipe.media_image_url
-        recipe.source_url = url
-        recipe.source_domain = ensure_domain(url)
+        recipe.source_url = best_url
+        recipe.source_domain = ensure_domain(best_url)
         recipe.source_platform = "pinterest"
         recipe.metadata["destinationUrl"] = destination_url
         recipe.metadata["destinationDomain"] = ensure_domain(destination_url)
         if visit_url:
             recipe.metadata["websiteUrl"] = visit_url
             recipe.metadata["websiteDomain"] = ensure_domain(visit_url)
+    recipe.source_platform = "pinterest"
+    recipe.metadata["pinterestUrl"] = url
 
     sync_recipe_media_to_supabase(recipe)
     data = recipe.model_dump_recipe()

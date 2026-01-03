@@ -234,9 +234,11 @@ export const AppNavigator: React.FC = () => {
             onImport={async (url) => {
               try {
                 const imported = await importFromUrl(url);
-                setSelectedRecipe(imported);
+                const saved = await addRecipe(imported);
+                const nextRecipe = saved ?? imported;
+                setSelectedRecipe(nextRecipe);
                 refreshUsageSummary();
-                setNewlyImportedRecipeId(imported.id);
+                setNewlyImportedRecipeId(nextRecipe.id);
                 navigateTo("recipeDetail");
               } catch (error) {
                 handleImportError(error);
@@ -251,9 +253,11 @@ export const AppNavigator: React.FC = () => {
             onImport={async (url) => {
               try {
                 const imported = await importFromTikTok(url);
-                setSelectedRecipe(imported);
+                const saved = await addRecipe(imported);
+                const nextRecipe = saved ?? imported;
+                setSelectedRecipe(nextRecipe);
                 refreshUsageSummary();
-                setNewlyImportedRecipeId(imported.id);
+                setNewlyImportedRecipeId(nextRecipe.id);
                 navigateTo("recipeDetail");
               } catch (error) {
                 handleImportError(error);
@@ -267,9 +271,11 @@ export const AppNavigator: React.FC = () => {
             onImport={async (url) => {
               try {
                 const imported = await importFromPinterest(url);
-                setSelectedRecipe(imported);
+                const saved = await addRecipe(imported);
+                const nextRecipe = saved ?? imported;
+                setSelectedRecipe(nextRecipe);
                 refreshUsageSummary();
-                setNewlyImportedRecipeId(imported.id);
+                setNewlyImportedRecipeId(nextRecipe.id);
                 navigateTo("recipeDetail");
               } catch (error) {
                 handleImportError(error);
@@ -283,9 +289,11 @@ export const AppNavigator: React.FC = () => {
             onScan={async (imageData) => {
               try {
                 const imported = await importFromScan(imageData);
-                setSelectedRecipe(imported);
+                const saved = await addRecipe(imported);
+                const nextRecipe = saved ?? imported;
+                setSelectedRecipe(nextRecipe);
                 refreshUsageSummary();
-                setNewlyImportedRecipeId(imported.id);
+                setNewlyImportedRecipeId(nextRecipe.id);
                 navigateTo("recipeDetail");
               } catch (error) {
                 handleImportError(error);

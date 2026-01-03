@@ -262,10 +262,13 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   const cleanJsonText = (reply: string): string => stripCodeFences(reply);
 
   const triggerDisclaimer = (detail?: string | null) => {
+    const extra = detail ? `\n\n${detail}` : "";
+    Alert.alert(
+      "Please review changes",
+      `AI suggestions may not be perfect. Please double-check and adjust the content as needed.${extra}`
+    );
     setDisclaimerDetail(detail ?? null);
-    setShowDisclaimer(true);
-    if (disclaimerTimeoutRef.current) clearTimeout(disclaimerTimeoutRef.current);
-    disclaimerTimeoutRef.current = setTimeout(() => setShowDisclaimer(false), 8000);
+    setShowDisclaimer(false);
   };
 
   const showCreditsTooltipNow = () => {
@@ -1337,7 +1340,15 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
                   </LinearGradient>
                 </Pressable>
               </View>
-              <Pressable style={[styles.saveButton, shadow.md]} onPress={() => onSave(formData)}>
+              <Pressable
+                style={[styles.saveButton, shadow.md]}
+                onPress={() => {
+                  const shouldApprove = formData.isImported && !formData.isImportApproved;
+                  const next = shouldApprove ? { ...formData, isImportApproved: true } : formData;
+                  setFormData(next);
+                  onSave(next);
+                }}
+              >
                 <Ionicons name="save-outline" size={16} color={colors.white} />
                 <Text style={styles.saveText}>Save</Text>
               </Pressable>
@@ -2118,9 +2129,9 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
           ]}
           pointerEvents="box-none"
         >
-          <View style={styles.disclaimerCard}>
+          <View style={[styles.disclaimerCard, shadow.md]}>
             <View style={styles.disclaimerIcon}>
-              <Ionicons name="information-circle-outline" size={16} color={colors.white} />
+              <Ionicons name="information-circle-outline" size={16} color={colors.gray700} />
             </View>
             <View style={styles.disclaimerContent}>
               <Text style={styles.disclaimerTitle}>Please Review Changes</Text>
@@ -2135,7 +2146,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               onPress={() => setShowDisclaimer(false)}
               style={styles.disclaimerClose}
             >
-              <Ionicons name="close" size={16} color={colors.white} />
+              <Ionicons name="close" size={16} color={colors.gray600} />
             </Pressable>
           </View>
         </Animated.View>
@@ -2963,23 +2974,21 @@ const styles = StyleSheet.create({
     zIndex: 50,
   },
   disclaimerCard: {
-    backgroundColor: colors.purple600,
-    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
     paddingHorizontal: 16,
     paddingVertical: 16,
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
-    shadowColor: colors.purple500,
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
+    borderWidth: 2,
+    borderColor: colors.gray200,
   },
   disclaimerIcon: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 2,
@@ -2992,22 +3001,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
     fontWeight: "600",
-    color: colors.white,
+    color: colors.gray900,
   },
   disclaimerText: {
     fontSize: 13,
     lineHeight: 18,
-    color: "rgba(255,255,255,0.9)",
+    color: colors.gray600,
   },
   disclaimerDetailText: {
     fontSize: 12,
     lineHeight: 16,
-    color: "rgba(255,255,255,0.85)",
+    color: colors.gray600,
   },
   disclaimerClose: {
     width: 32,
     height: 32,
     borderRadius: 16,
+    backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
   },
