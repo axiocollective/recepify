@@ -972,8 +972,13 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     const descriptionValue = (snapshot.description ?? "").trim();
     const hasStepsValue = snapshot.steps.some((step) => step.trim().length > 0);
     if ((!descriptionValue && !hasStepsValue) || isSuggestingTags) return;
+    const current = formData.tags || [];
+    if (current.length === 0) {
+      Alert.alert("No tags yet", "Add tags first so ChefGPT can verify which ones still fit.");
+      return;
+    }
     setIsSuggestingTags(true);
-    const allowedTags = RECIPE_TAGS.map((tag) => tag.toLowerCase());
+    const currentLower = current.map((tag) => tag.toLowerCase());
     try {
       const response = await askRecipeAssistant({
         recipe: buildRecipePayload(snapshot),
@@ -981,9 +986,9 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
           {
             role: "user",
             content:
-              `Select the most relevant tags for this recipe using ONLY the following list: ${allowedTags.join(
+              `From the existing tags ${current.join(
                 ", "
-              )}. Respond strictly in JSON like {"tags":["tag1","tag2"]} using the exact casing provided.`,
+              )}, return ONLY the tags that still fit this recipe. Do not add new tags. Respond strictly in JSON like {"tags":["tag1","tag2"]} using the exact casing provided.`,
           },
         ],
       });
@@ -991,8 +996,8 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
       if (!tags.length) {
         throw new Error("ChefGPT could not determine relevant tags for this recipe.");
       }
-      const current = formData.tags || [];
-      updateField("tags", Array.from(new Set([...current, ...tags])));
+      const next = current.filter((tag) => tags.includes(tag.toLowerCase()));
+      updateField("tags", next);
       refreshUsageSummary();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to suggest tags right now.";
@@ -1010,7 +1015,6 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
       notes: payload.notes ?? prev.notes,
       ingredients: payload.ingredients ?? prev.ingredients,
       steps: payload.steps ?? prev.steps,
-      tags: payload.tags ?? prev.tags,
     }));
   };
 
@@ -1021,7 +1025,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
         messages: [
           {
             role: "user",
-            content: `Translate this entire recipe from ${sourceLanguage === "de" ? "German" : "English"} into ${targetLanguage === "de" ? "German" : "English"}. Return valid JSON with the same structure (title, description, notes, ingredients (amount/name/line), steps, tags). Do not add commentary.`,
+            content: `Translate this entire recipe from ${sourceLanguage === "de" ? "German" : "English"} into ${targetLanguage === "de" ? "German" : "English"}. Return valid JSON with the same structure (title, description, notes, ingredients (amount/name/line), steps). Do not add commentary or tags.`,
           },
         ],
       });
@@ -1039,9 +1043,6 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     const translatedSteps = Array.isArray((parsed as Record<string, unknown>).steps)
       ? ((parsed as Record<string, unknown>).steps as unknown[]).map((step) => String(step ?? ""))
       : snapshot.steps;
-    const translatedTags = Array.isArray((parsed as Record<string, unknown>).tags)
-      ? ((parsed as Record<string, unknown>).tags as unknown[]).map((tag) => String(tag ?? "").toLowerCase())
-      : snapshot.tags;
     applyTranslatedRecipe({
       title: String((parsed as Record<string, unknown>).title ?? snapshot.title ?? ""),
       description: String((parsed as Record<string, unknown>).description ?? snapshot.description ?? ""),
@@ -1051,7 +1052,6 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
           : snapshot.notes,
       ingredients: translatedIngredients,
       steps: translatedSteps,
-      tags: translatedTags,
     });
     refreshUsageSummary();
   };
