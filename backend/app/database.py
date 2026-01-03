@@ -20,6 +20,7 @@ def _build_connect_args(database_url: str) -> Dict[str, Any]:
             "sslmode": "require",
             "prepare_threshold": 0,
             "prepared_statement_cache_size": 0,
+            "statement_cache_size": 0,
         }
     return {}
 
@@ -32,7 +33,6 @@ _engine_kwargs: Dict[str, Any] = {
 if settings.database_url.startswith("postgresql"):
     # PgBouncer + psycopg: avoid statement/prepare caching.
     _engine_kwargs["poolclass"] = NullPool
-    _engine_kwargs["statement_cache_size"] = 0
 
 engine = create_engine(settings.database_url, **_engine_kwargs)
 
