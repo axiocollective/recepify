@@ -9,7 +9,7 @@ import { RecipeThumbnail } from "./RecipeThumbnail";
 import { RecipeAssistantChat } from "./RecipeAssistantChat";
 import { AddToCollectionModal } from "./AddToCollectionModal";
 import { useApp } from "../data/AppContext";
-import { isAiLimitReached } from "../data/usageLimits";
+import { getAiLimitMessage, isAiLimitReached } from "../data/usageLimits";
 
 interface RecipeDetailProps {
   recipe: Recipe;
@@ -48,8 +48,8 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
 }) => {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const { plan, usageSummary } = useApp();
-  const aiLimitReached = isAiLimitReached(plan, usageSummary);
+  const { plan, usageSummary, bonusTokens } = useApp();
+  const aiLimitReached = isAiLimitReached(plan, usageSummary, bonusTokens);
   const isPremium = plan === "paid" || plan === "premium";
   const creditsExhausted = aiLimitReached;
   const aiUsageBlocked = aiDisabled || !isPremium || creditsExhausted;
@@ -57,7 +57,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
     ? "AI features are disabled on your plan. Upgrade to re-enable ChefGPT."
     : !isPremium
     ? "ChefGPT is a Premium feature. Upgrade to unlock AI tools."
-    : "You’ve used all monthly credits. Wait for the reset or upgrade your plan.";
+    : getAiLimitMessage(plan);
   const showPremiumBadge = !isPremium;
   const showCreditsBadge = isPremium && creditsExhausted;
   const [currentServings, setCurrentServings] = useState((recipe.servingsOverride ?? recipe.servings) || 1);
@@ -695,9 +695,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
             if (!isPremium) {
             Alert.alert(
               aiDisabled ? "AI disabled" : "Monthly limit reached",
-              aiDisabled
-                ? "AI features are disabled on your plan. Upgrade to re-enable ChefGPT."
-                : "You’ve used all monthly credits. Wait for the reset or upgrade your plan."
+              aiLimitMessage
             );
               return;
             }

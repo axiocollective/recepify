@@ -16,7 +16,7 @@ import { Recipe } from "../data/types";
 import { askRecipeAssistant } from "../services/assistantApi";
 import { colors, radius, spacing, shadow } from "../theme/theme";
 import { useApp } from "../data/AppContext";
-import { isAiLimitReached } from "../data/usageLimits";
+import { getAiLimitMessage, isAiLimitReached } from "../data/usageLimits";
 
 interface RecipeAssistantChatProps {
   isOpen: boolean;
@@ -342,12 +342,12 @@ export const RecipeAssistantChat: React.FC<RecipeAssistantChatProps> = ({ isOpen
   const { height: windowHeight } = useWindowDimensions();
   const sheetHeight = Math.round(windowHeight * 0.75);
   const scrollRef = useRef<ScrollView | null>(null);
-  const { plan, usageSummary, aiDisabled, refreshUsageSummary } = useApp();
-  const aiLimitReached = isAiLimitReached(plan, usageSummary);
+  const { plan, usageSummary, bonusTokens, aiDisabled, refreshUsageSummary } = useApp();
+  const aiLimitReached = isAiLimitReached(plan, usageSummary, bonusTokens);
   const aiUsageBlocked = aiDisabled || aiLimitReached;
   const aiLimitMessage = aiDisabled
     ? "AI features are disabled on your plan. Upgrade to re-enable ChefGPT."
-    : "You’ve used all monthly credits. Wait for the reset or upgrade your plan.";
+    : getAiLimitMessage(plan);
 
   const suggestions = useMemo(
     () => [

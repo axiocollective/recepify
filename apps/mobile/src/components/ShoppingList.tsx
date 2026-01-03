@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Swipeable } from "react-native-gesture-handler";
 import { ShoppingListItem } from "../data/types";
 import { colors, radius, shadow, spacing, typography } from "../theme/theme";
 
@@ -33,6 +32,11 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
   const [newItemName, setNewItemName] = useState("");
   const [newItemAmount, setNewItemAmount] = useState("");
   const [viewMode, setViewMode] = useState<"recipe" | "ingredient">("ingredient");
+  const detectDefaultUnit = () => {
+    const text = items.map((item) => item.amount ?? "").join(" ").toLowerCase();
+    return /(g|kg|ml|l|°c)\b/.test(text) ? "metric" : "us";
+  };
+  const [unitSystem, setUnitSystem] = useState<"metric" | "us">(detectDefaultUnit());
 
   const checkedCount = useMemo(() => items.filter((item) => item.isChecked).length, [items]);
 
@@ -51,32 +55,120 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
     }));
   }, [items]);
 
-  const ingredientItems = useMemo<IngredientGroupItem[]>(() => {
-    const parseQuantity = (value: string): number | null => {
-      const normalized = value.trim();
-      if (!normalized) return null;
-      if (normalized.includes("-")) return null;
-      const fractionMatch = normalized.match(/^(\d+)\s+(\d+)\/(\d+)$/);
-      if (fractionMatch) {
-        const whole = Number(fractionMatch[1]);
-        const numerator = Number(fractionMatch[2]);
-        const denominator = Number(fractionMatch[3]);
-        if (denominator) {
-          return whole + numerator / denominator;
-        }
+  const parseQuantity = (value: string): number | null => {
+    const normalized = value.trim();
+    if (!normalized) return null;
+    if (normalized.includes("-")) return null;
+    const fractionMatch = normalized.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+    if (fractionMatch) {
+      const whole = Number(fractionMatch[1]);
+      const numerator = Number(fractionMatch[2]);
+      const denominator = Number(fractionMatch[3]);
+      if (denominator) {
+        return whole + numerator / denominator;
       }
-      const simpleFraction = normalized.match(/^(\d+)\/(\d+)$/);
-      if (simpleFraction) {
-        const numerator = Number(simpleFraction[1]);
-        const denominator = Number(simpleFraction[2]);
-        if (denominator) {
-          return numerator / denominator;
-        }
+    }
+    const simpleFraction = normalized.match(/^(\d+)\/(\d+)$/);
+    if (simpleFraction) {
+      const numerator = Number(simpleFraction[1]);
+      const denominator = Number(simpleFraction[2]);
+      if (denominator) {
+        return numerator / denominator;
       }
-      const numeric = Number(normalized.replace(",", "."));
-      return Number.isFinite(numeric) ? numeric : null;
-    };
+    }
+    const numeric = Number(normalized.replace(",", "."));
+    return Number.isFinite(numeric) ? numeric : null;
+  };
 
+  const parseAmountParts = (amount: string) => {
+    const match = amount.trim().match(
+      /^(\d+(?:[.,]\d+)?(?:\s+\d+\/\d+)?|\d+\/\d+)\s*([a-zA-Z]+)?$/i
+    );
+    if (!match) return null;
+    const quantity = parseQuantity(match[1]);
+    if (quantity === null) return null;
+    const unitRaw = (match[2] || "").trim().toLowerCase();
+    return { quantity, unitRaw };
+  };
+
+  const normalizeUnit = (unitRaw: string): string | null => {
+    const map: Record<string, string> = {
+      g: "g",
+      gram: "g",
+      grams: "g",
+      kg: "kg",
+      kilogram: "kg",
+      kilograms: "kg",
+      ml: "ml",
+      milliliter: "ml",
+      millilitre: "ml",
+      l: "l",
+      liter: "l",
+      litre: "l",
+      oz: "oz",
+      ounce: "oz",
+      ounces: "oz",
+      lb: "lb",
+      lbs: "lb",
+      pound: "lb",
+      pounds: "lb",
+      cup: "cup",
+      cups: "cup",
+      tbsp: "tbsp",
+      tbs: "tbsp",
+      tablespoon: "tbsp",
+      tablespoons: "tbsp",
+      tsp: "tsp",
+      teaspoon: "tsp",
+      teaspoons: "tsp",
+      "fl oz": "fl oz",
+      floz: "fl oz",
+      "fluid ounce": "fl oz",
+      "fluid ounces": "fl oz",
+    };
+    return map[unitRaw] || null;
+  };
+
+  const formatQuantity = (value: number) => {
+    const rounded = value >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
+    return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+  };
+
+  const convertAmount = (amount: string, nextUnitSystem: "metric" | "us") => {
+    const parts = parseAmountParts(amount);
+    if (!parts) return amount;
+    const unit = normalizeUnit(parts.unitRaw || "");
+    if (!unit) return amount;
+    const value = parts.quantity;
+    if (nextUnitSystem === "us") {
+      if (["g", "kg", "ml", "l"].includes(unit)) {
+        const grams = unit === "g" ? value : unit === "kg" ? value * 1000 : unit === "ml" ? value : value * 1000;
+        return `${formatQuantity(grams / 28.3495)} oz`;
+      }
+      if (unit === "oz") return `${formatQuantity(value)} oz`;
+      if (unit === "lb") return `${formatQuantity(value)} lb`;
+      if (unit === "cup") return `${formatQuantity(value)} cup`;
+      if (unit === "tbsp") return `${formatQuantity(value)} tbsp`;
+      if (unit === "tsp") return `${formatQuantity(value)} tsp`;
+      if (unit === "fl oz") return `${formatQuantity(value)} fl oz`;
+    } else {
+      if (["oz", "lb", "cup", "tbsp", "tsp", "fl oz"].includes(unit)) {
+        if (unit === "oz") return `${formatQuantity(value * 28.3495)} g`;
+        if (unit === "lb") return `${formatQuantity(value * 453.592)} g`;
+        if (unit === "cup") return `${formatQuantity(value * 240)} ml`;
+        if (unit === "tbsp") return `${formatQuantity(value * 15)} ml`;
+        if (unit === "tsp") return `${formatQuantity(value * 5)} ml`;
+        if (unit === "fl oz") return `${formatQuantity(value * 29.5735)} ml`;
+      }
+      if (unit === "g") return `${formatQuantity(value)} g`;
+      if (unit === "kg") return `${formatQuantity(value)} kg`;
+      if (unit === "ml") return `${formatQuantity(value)} ml`;
+      if (unit === "l") return `${formatQuantity(value)} l`;
+    }
+    return amount;
+  };
+
+  const ingredientItems = useMemo<IngredientGroupItem[]>(() => {
     const parseAmount = (amount?: string) => {
       if (!amount) return null;
       const match = amount.trim().match(/^(\d+(?:[.,]\d+)?(?:\s+\d+\/\d+)?|\d+\/\d+)\s*([a-zA-Z]+)?$/i);
@@ -85,11 +177,6 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
       if (quantity === null) return null;
       const unit = (match[2] || "").trim();
       return { quantity, unit };
-    };
-
-    const formatQuantity = (value: number) => {
-      const rounded = value >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
-      return Number.isInteger(rounded) ? String(rounded) : String(rounded);
     };
 
     const grouped = new Map<string, IngredientGroupItem & { total?: number; unit?: string; mismatch?: boolean; fallbackAmount?: string }>();
@@ -154,13 +241,15 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
     );
   };
 
-  const handleRemoveItem = (itemIds: string[]) => {
-    const idSet = new Set(itemIds);
-    onUpdateItems(items.filter((item) => !idSet.has(item.id)));
+  const handleDeleteChecked = () => {
+    onUpdateItems(items.filter((item) => !item.isChecked));
   };
 
-  const handleClearChecked = () => {
-    onUpdateItems(items.filter((item) => !item.isChecked));
+  const openEditModal = (targetId: string, name?: string, amount?: string) => {
+    setEditingItemId(targetId);
+    setNewItemName(name ?? "");
+    setNewItemAmount(amount ?? "");
+    setIsAddModalOpen(true);
   };
 
   const handleAddOrEditItem = () => {
@@ -188,120 +277,34 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
     setIsAddModalOpen(false);
   };
 
-  const renderSwipeDelete = (onDelete: () => void) => (
-    <Pressable onPress={onDelete} style={styles.swipeDelete}>
-      <Ionicons name="trash-outline" size={18} color={colors.white} />
-      <Text style={styles.swipeDeleteText}>Delete</Text>
-    </Pressable>
-  );
-
-  const renderItemRow = (
-    item: ShoppingListItem | IngredientGroupItem,
-    showRecipeSource: boolean
-  ) => (
-    <Swipeable
-      renderRightActions={() =>
-        renderSwipeDelete(() =>
-          "sourceIds" in item ? handleRemoveItem(item.sourceIds) : handleRemoveItem([item.id])
-        )
-      }
-      overshootRight={false}
-    >
-      <View key={item.id} style={styles.itemRow}>
-        <Pressable
-          onPress={() =>
-            "sourceIds" in item ? handleToggleItem(item.sourceIds) : handleToggleItem([item.id])
-          }
-          style={[styles.checkbox, item.isChecked ? styles.checkboxChecked : null]}
-        >
-          {item.isChecked && <Ionicons name="checkmark" size={16} color={colors.white} />}
-        </Pressable>
-        <View style={styles.itemContent}>
-          <View style={styles.itemHeaderRow}>
-            <Text style={[styles.itemName, item.isChecked ? styles.itemNameChecked : null]}>
-              {item.name}
-            </Text>
-            {item.amount ? (
-              <Text style={[styles.itemAmount, item.isChecked ? styles.itemAmountChecked : null]}>
-                {item.amount}
-              </Text>
-            ) : null}
-          </View>
-          {showRecipeSource && "recipeName" in item && item.recipeName ? (
-            <Text style={styles.itemSource}>From {item.recipeName}</Text>
-          ) : null}
-        </View>
-        <View style={styles.itemActions}>
-          <Pressable
-            onPress={() => {
-              const targetId = "sourceIds" in item ? item.sourceIds[0] : item.id;
-              setEditingItemId(targetId);
-              setNewItemName(item.name ?? "");
-              setNewItemAmount(item.amount ?? "");
-              setIsAddModalOpen(true);
-            }}
-            style={styles.actionButton}
-          >
-            <Ionicons name="pencil" size={18} color={colors.gray400} />
-          </Pressable>
-          <Pressable
-            onPress={() =>
-              "sourceIds" in item ? handleRemoveItem(item.sourceIds) : handleRemoveItem([item.id])
-            }
-            style={styles.actionButton}
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.gray400} />
-          </Pressable>
-        </View>
-      </View>
-    </Swipeable>
-  );
-
   const renderIngredientRow = (item: IngredientGroupItem) => (
-    <Swipeable
-      renderRightActions={() => renderSwipeDelete(() => handleRemoveItem(item.sourceIds))}
-      overshootRight={false}
-    >
-      <View key={item.id} style={styles.simpleRow}>
-        <Pressable
-          onPress={() => handleToggleItem(item.sourceIds)}
-          style={[styles.checkbox, item.isChecked ? styles.checkboxChecked : null]}
-        >
-          {item.isChecked && <Ionicons name="checkmark" size={16} color={colors.white} />}
-        </Pressable>
-        <View style={styles.simpleContent}>
-          <Text style={[styles.simpleName, item.isChecked ? styles.itemNameChecked : null]}>
+    <View key={item.id} style={styles.simpleRow}>
+      <Pressable
+        onPress={() => handleToggleItem(item.sourceIds)}
+        style={[styles.checkbox, item.isChecked ? styles.checkboxChecked : null]}
+      >
+        {item.isChecked && <Ionicons name="checkmark" size={16} color={colors.white} />}
+      </Pressable>
+      <Pressable
+        onLongPress={() => {
+          const targetId = item.sourceIds[0];
+          const original = items.find((listItem) => listItem.id === targetId);
+          openEditModal(targetId, original?.name ?? item.name, original?.amount ?? item.amount);
+        }}
+        style={styles.simpleContent}
+      >
+        <Text style={[styles.ingredientText, item.isChecked ? styles.ingredientTextChecked : null]}>
+          {item.amount ? (
+            <Text style={[styles.ingredientAmountText, item.isChecked ? styles.ingredientAmountTextChecked : null]}>
+              {convertAmount(item.amount, unitSystem)}{" "}
+            </Text>
+          ) : null}
+          <Text style={[styles.ingredientNameText, item.isChecked ? styles.ingredientNameTextChecked : null]}>
             {item.name}
           </Text>
-          {item.amount ? (
-            <View style={styles.simpleAmountChip}>
-              <Text style={styles.simpleAmountText}>{item.amount}</Text>
-            </View>
-          ) : null}
-        </View>
-        <View style={styles.simpleActions}>
-          <Pressable
-            onPress={() => {
-              const targetId = item.sourceIds[0];
-              const original = items.find((listItem) => listItem.id === targetId);
-              setEditingItemId(targetId);
-              setNewItemName(original?.name ?? item.name);
-              setNewItemAmount(original?.amount ?? item.amount ?? "");
-              setIsAddModalOpen(true);
-            }}
-            style={styles.actionButton}
-          >
-            <Ionicons name="pencil" size={18} color={colors.gray400} />
-          </Pressable>
-          <Pressable
-            onPress={() => handleRemoveItem(item.sourceIds)}
-            style={styles.actionButton}
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.gray400} />
-          </Pressable>
-        </View>
-      </View>
-    </Swipeable>
+        </Text>
+      </Pressable>
+    </View>
   );
 
   return (
@@ -311,18 +314,27 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
           <Ionicons name="arrow-back" size={20} color={colors.gray900} />
         </Pressable>
         <Text style={styles.headerTitle}>Shopping List</Text>
-        <Pressable
-          onPress={() => {
-            setEditingItemId(null);
-            setNewItemName("");
-            setNewItemAmount("");
-            setIsAddModalOpen(true);
-          }}
-          style={styles.addButton}
-        >
-          <Ionicons name="add" size={16} color={colors.white} />
-          <Text style={styles.addButtonText}>Add Item</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={handleDeleteChecked}
+            disabled={checkedCount === 0}
+            style={[styles.deleteButton, checkedCount === 0 ? styles.deleteButtonDisabled : null]}
+          >
+            <Ionicons name="trash-outline" size={16} color={checkedCount === 0 ? colors.gray400 : colors.white} />
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setEditingItemId(null);
+              setNewItemName("");
+              setNewItemAmount("");
+              setIsAddModalOpen(true);
+            }}
+            style={styles.addButton}
+          >
+            <Ionicons name="add" size={16} color={colors.white} />
+            <Text style={styles.addButtonText}>Add Item</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.body}>
@@ -331,34 +343,46 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
             <Text style={styles.summaryText}>
               {items.length} item{items.length === 1 ? "" : "s"}
             </Text>
-            {checkedCount > 0 && (
-              <Pressable onPress={handleClearChecked} style={styles.clearButton}>
-                <Ionicons name="trash-outline" size={14} color={colors.gray600} />
-                <Text style={styles.clearText}>Clear checked ({checkedCount})</Text>
-              </Pressable>
-            )}
           </View>
 
           {items.length > 0 && (
             <View style={styles.viewToggleRow}>
-              <Text style={styles.viewLabel}>View</Text>
-              <View style={styles.toggleGroup}>
-                <Pressable
-                  onPress={() => setViewMode("ingredient")}
-                  style={[styles.toggleItem, viewMode === "ingredient" ? styles.toggleActive : null]}
-                >
-                  <Text style={[styles.toggleText, viewMode === "ingredient" ? styles.toggleTextActive : null]}>
-                    All ingredients
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setViewMode("recipe")}
-                  style={[styles.toggleItem, viewMode === "recipe" ? styles.toggleActive : null]}
-                >
-                  <Text style={[styles.toggleText, viewMode === "recipe" ? styles.toggleTextActive : null]}>
-                    By recipe
-                  </Text>
-                </Pressable>
+              <View style={styles.viewGroup}>
+                <Text style={styles.viewLabel}>View</Text>
+                <View style={styles.toggleGroup}>
+                  <Pressable
+                    onPress={() => setViewMode("ingredient")}
+                    style={[styles.toggleItem, viewMode === "ingredient" ? styles.toggleActive : null]}
+                  >
+                    <Text style={[styles.toggleText, viewMode === "ingredient" ? styles.toggleTextActive : null]}>
+                      All ingredients
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setViewMode("recipe")}
+                    style={[styles.toggleItem, viewMode === "recipe" ? styles.toggleActive : null]}
+                  >
+                    <Text style={[styles.toggleText, viewMode === "recipe" ? styles.toggleTextActive : null]}>
+                      By recipe
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+              <View style={styles.unitToggleRow}>
+                <Text style={styles.viewLabel}>Units</Text>
+                <View style={styles.unitToggle}>
+                  {(["metric", "us"] as const).map((unit) => (
+                    <Pressable
+                      key={unit}
+                      style={[styles.unitChip, unitSystem === unit && styles.unitChipActive]}
+                      onPress={() => setUnitSystem(unit)}
+                    >
+                      <Text style={[styles.unitChipText, unitSystem === unit && styles.unitChipTextActive]}>
+                        {unit === "metric" ? "Metric" : "US"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
             </View>
           )}
@@ -399,35 +423,21 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
                       >
                         {item.isChecked && <Ionicons name="checkmark" size={16} color={colors.white} />}
                       </Pressable>
-                      <View style={styles.simpleContent}>
-                        <Text style={[styles.simpleName, item.isChecked ? styles.itemNameChecked : null]}>
-                          {item.name}
+                      <Pressable
+                        onLongPress={() => openEditModal(item.id, item.name, item.amount)}
+                        style={styles.simpleContent}
+                      >
+                        <Text style={[styles.ingredientText, item.isChecked ? styles.ingredientTextChecked : null]}>
+                          {item.amount ? (
+                            <Text style={[styles.ingredientAmountText, item.isChecked ? styles.ingredientAmountTextChecked : null]}>
+                              {convertAmount(item.amount, unitSystem)}{" "}
+                            </Text>
+                          ) : null}
+                          <Text style={[styles.ingredientNameText, item.isChecked ? styles.ingredientNameTextChecked : null]}>
+                            {item.name}
+                          </Text>
                         </Text>
-                        {item.amount ? (
-                          <View style={styles.simpleAmountChip}>
-                            <Text style={styles.simpleAmountText}>{item.amount}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <View style={styles.simpleActions}>
-                        <Pressable
-                          onPress={() => {
-                            setEditingItemId(item.id);
-                            setNewItemName(item.name ?? "");
-                            setNewItemAmount(item.amount ?? "");
-                            setIsAddModalOpen(true);
-                          }}
-                          style={styles.actionButton}
-                        >
-                          <Ionicons name="pencil" size={18} color={colors.gray400} />
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handleRemoveItem([item.id])}
-                          style={styles.actionButton}
-                        >
-                          <Ionicons name="trash-outline" size={18} color={colors.gray400} />
-                        </Pressable>
-                      </View>
+                      </Pressable>
                     </View>
                   ))}
                 </View>
@@ -522,6 +532,11 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.gray900,
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
   addButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -535,6 +550,17 @@ const styles = StyleSheet.create({
   addButtonText: {
     ...typography.bodySmall,
     color: colors.white,
+  },
+  deleteButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.red500,
+  },
+  deleteButtonDisabled: {
+    backgroundColor: colors.red100,
   },
   body: {
     paddingHorizontal: spacing.xl,
@@ -557,24 +583,43 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.gray900,
   },
-  clearButton: {
+  unitToggle: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: radius.full,
     backgroundColor: colors.gray100,
+    borderRadius: radius.full,
+    padding: 4,
   },
-  clearText: {
-    ...typography.caption,
-    color: colors.gray700,
+  unitChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+  },
+  unitChipActive: {
+    backgroundColor: colors.white,
+    ...shadow.md,
+  },
+  unitChipText: {
+    ...typography.bodySmall,
+    color: colors.gray500,
+  },
+  unitChipTextActive: {
+    color: colors.gray900,
+    fontWeight: "600",
   },
   viewToggleRow: {
+    gap: spacing.sm,
+  },
+  viewGroup: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    justifyContent: "space-between",
+    flexWrap: "wrap",
+  },
+  unitToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    flexWrap: "wrap",
   },
   viewLabel: {
     ...typography.caption,
@@ -673,19 +718,6 @@ const styles = StyleSheet.create({
   groupItems: {
     gap: spacing.md,
   },
-  itemRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.md,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.gray100,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    minHeight: 64,
-    ...shadow.md,
-  },
   simpleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -705,99 +737,41 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     flex: 1,
   },
-  simpleName: {
-    ...typography.bodySmall,
-    color: colors.gray900,
-    fontWeight: "600",
-    flex: 1,
-  },
-  simpleAmountChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-    backgroundColor: colors.gray50,
-    borderWidth: 1,
-    borderColor: colors.gray100,
-  },
-  simpleAmountText: {
-    ...typography.caption,
-    color: colors.gray800,
-  },
-  simpleActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
   checkbox: {
     width: 24,
     height: 24,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: colors.gray300,
+    borderColor: colors.gray400,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.white,
-    marginTop: 2,
   },
   checkboxChecked: {
     backgroundColor: colors.gray900,
     borderColor: colors.gray900,
   },
-  itemContent: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  itemHeaderRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-  },
-  itemName: {
-    ...typography.bodySmall,
+  ingredientText: {
+    ...typography.body,
     color: colors.gray900,
-    fontWeight: "600",
     flex: 1,
   },
-  itemNameChecked: {
-    color: colors.gray400,
+  ingredientTextChecked: {
+    color: colors.gray500,
     textDecorationLine: "line-through",
   },
-  itemAmount: {
-    ...typography.caption,
-    color: colors.gray600,
+  ingredientAmountText: {
+    fontWeight: "700",
+    color: colors.gray700,
   },
-  itemAmountChecked: {
-    color: colors.gray400,
-  },
-  itemSource: {
-    ...typography.caption,
+  ingredientAmountTextChecked: {
     color: colors.gray500,
   },
-  itemActions: {
-    flexDirection: "row",
-    gap: spacing.xs,
+  ingredientNameText: {
+    color: colors.gray900,
   },
-  actionButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  swipeDelete: {
-    justifyContent: "center",
-    alignItems: "center",
-    width: 86,
-    backgroundColor: colors.red500,
-    borderRadius: radius.lg,
-    marginVertical: spacing.xs,
-    marginRight: spacing.sm,
-    gap: 2,
-  },
-  swipeDeleteText: {
-    ...typography.caption,
-    color: colors.white,
-    fontWeight: "600",
+  ingredientNameTextChecked: {
+    color: colors.gray500,
   },
   modalBackdrop: {
     flex: 1,

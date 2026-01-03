@@ -427,12 +427,17 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
           <View style={styles.emptyStateSimple}>
             <View style={styles.emptyCard}>
               <Text style={styles.emptyCardTitle}>Add Recipe</Text>
-              <View style={styles.emptyQuickActions}>
+              <View
+                style={[
+                  styles.emptyQuickActions,
+                  visibleActions.length < 4 ? styles.emptyQuickActionsTight : null,
+                ]}
+              >
                 {visibleActions.map((actionId) => {
                   const labelMap = {
-                    importFromLink: "From Link",
+                    importFromLink: "Share Link",
                     scanRecipe: "Scan",
-                    manual: "Manual",
+                    manual: "Manually",
                     inbox: "Inbox",
                   } as const;
                   const iconMap = {
@@ -1464,14 +1469,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: spacing.md,
   },
+  emptyQuickActionsTight: {
+    justifyContent: "center",
+    gap: spacing.xl,
+  },
   emptyAction: {
     alignItems: "center",
     gap: spacing.sm,
-    flex: 1,
   },
   emptyActionIcon: {
-    width: 56,
-    height: 56,
+    width: 60,
+    height: 60,
     borderRadius: radius.full,
     backgroundColor: colors.gray900,
     alignItems: "center",
@@ -1483,6 +1491,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: colors.gray600,
     textAlign: "center",
+    maxWidth: 80,
   },
   emptyBadge: {
     position: "absolute",

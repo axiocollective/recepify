@@ -86,7 +86,7 @@ const mapRecipeRow = (
   };
 };
 
-export const ensureProfile = async (payload: { name?: string; language?: string; country?: string; aiDisabled?: boolean; plan?: PlanTier }) => {
+export const ensureProfile = async (payload: { name?: string; language?: string; country?: string; aiDisabled?: boolean; plan?: PlanTier; subscriptionPeriod?: "monthly" | "yearly" }) => {
   if (!currentUserId) return;
   const updatePayload: Record<string, string | boolean | PlanTier | null> = { id: currentUserId };
   if (payload.name !== undefined) updatePayload.name = payload.name ?? null;
@@ -94,6 +94,7 @@ export const ensureProfile = async (payload: { name?: string; language?: string;
   if (payload.country !== undefined) updatePayload.country = payload.country ?? null;
   if (payload.aiDisabled !== undefined) updatePayload.ai_disabled = payload.aiDisabled ?? null;
   if (payload.plan !== undefined) updatePayload.plan = payload.plan ?? null;
+  if (payload.subscriptionPeriod !== undefined) updatePayload.subscription_period = payload.subscriptionPeriod ?? null;
 
   const { error } = await supabase.from("profiles").upsert(updatePayload);
   if (error) throw error;
@@ -104,6 +105,27 @@ export const fetchProfile = async () => {
   const { data, error } = await supabase.from("profiles").select("*").eq("id", currentUserId).single();
   if (error && error.code !== "PGRST116") throw error;
   return data ?? null;
+};
+
+export const addPayPerUseCredits = async (payload: { imports: number; tokens: number }) => {
+  if (!currentUserId) return { bonusImports: 0, bonusTokens: 0 };
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("bonus_imports, bonus_tokens")
+    .eq("id", currentUserId)
+    .single();
+  if (error && error.code !== "PGRST116") throw error;
+  const currentImports = data?.bonus_imports ?? 0;
+  const currentTokens = data?.bonus_tokens ?? 0;
+  const nextImports = currentImports + payload.imports;
+  const nextTokens = currentTokens + payload.tokens;
+  const { error: updateError } = await supabase.from("profiles").upsert({
+    id: currentUserId,
+    bonus_imports: nextImports,
+    bonus_tokens: nextTokens,
+  });
+  if (updateError) throw updateError;
+  return { bonusImports: nextImports, bonusTokens: nextTokens };
 };
 
 export const fetchUsageSummary = async (): Promise<UsageSummary | null> => {

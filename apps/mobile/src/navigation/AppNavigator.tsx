@@ -52,6 +52,9 @@ export const AppNavigator: React.FC = () => {
     aiDisabled,
     plan,
     usageSummary,
+    bonusImports,
+    bonusTokens,
+    subscriptionPeriod,
     simulateEmptyState,
     setSimulateEmptyState,
     isImportOverlayOpen,
@@ -75,6 +78,7 @@ export const AppNavigator: React.FC = () => {
     setSelectedRecipe,
     setCurrentScreen,
     refreshUsageSummary,
+    purchasePayPerUseCredits,
   } = useApp();
   const [myRecipesInitialTag, setMyRecipesInitialTag] = React.useState<string | null>(null);
   const [newlyImportedRecipeId, setNewlyImportedRecipeId] = React.useState<string | null>(null);
@@ -140,7 +144,7 @@ export const AppNavigator: React.FC = () => {
     const timeout = setTimeout(() => {
       setOnboardingActive(false);
       handleLoadingComplete();
-    }, 800);
+    }, 3000);
     return () => clearTimeout(timeout);
   }, [handleLoadingComplete, onboardingActive, onboardingStep]);
 
@@ -162,8 +166,13 @@ export const AppNavigator: React.FC = () => {
         <PlanBilling
           plan={plan}
           usageSummary={usageSummary}
+          bonusImports={bonusImports}
+          bonusTokens={bonusTokens}
+          subscriptionPeriod={subscriptionPeriod}
           recipesCount={recipes.length}
           onPlanChange={(value) => updateProfile({ plan: value })}
+          onBuyCredits={purchasePayPerUseCredits}
+          onSubscriptionPeriodChange={(value) => updateProfile({ subscriptionPeriod: value })}
           onBack={() => setOnboardingStep("language")}
           onContinue={() => setOnboardingStep("loading")}
           continueLabel="Continue"
@@ -188,7 +197,7 @@ export const AppNavigator: React.FC = () => {
       <SafeAreaView style={styles.topSafe}>
         <StatusBar style="light" />
         <View style={styles.topBar}>
-          <Logo size="md" variant="white" />
+          <Logo size="lg" variant="white" />
         </View>
       </SafeAreaView>
       <View style={styles.content}>
@@ -325,8 +334,13 @@ export const AppNavigator: React.FC = () => {
           <PlanBilling
             plan={plan}
             usageSummary={usageSummary}
+            bonusImports={bonusImports}
+            bonusTokens={bonusTokens}
+            subscriptionPeriod={subscriptionPeriod}
             recipesCount={recipes.length}
             onPlanChange={(value) => updateProfile({ plan: value })}
+            onBuyCredits={purchasePayPerUseCredits}
+            onSubscriptionPeriodChange={(value) => updateProfile({ subscriptionPeriod: value })}
             onBack={() => navigateTo("profile")}
           />
         )}
@@ -454,8 +468,8 @@ const styles = StyleSheet.create({
   },
   topBar: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.gray800,
     backgroundColor: colors.gray900,

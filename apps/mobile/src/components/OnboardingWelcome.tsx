@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import {
+  Image,
   Modal,
   Pressable,
   SafeAreaView,
@@ -9,7 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useApp } from "../data/AppContext";
 import { colors, radius, shadow, spacing, typography } from "../theme/theme";
 
@@ -71,7 +72,9 @@ export const OnboardingWelcome: React.FC<OnboardingWelcomeProps> = ({ onContinue
     <SafeAreaView style={styles.container}>
       <View style={styles.card}>
         <View style={styles.logo}>
-          <MaterialCommunityIcons name="chef-hat" size={64} color={colors.white} />
+          <View style={styles.logoImageWrap}>
+            <Image source={require("../../assets/logo.png")} style={styles.logoImage} resizeMode="contain" />
+          </View>
         </View>
         <Text style={styles.title}>Welcome to Recipefy</Text>
         <Text style={styles.subtitle}>Let&apos;s personalize your experience</Text>
@@ -226,6 +229,16 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 12 },
   },
+  logoImageWrap: {
+    width: 132,
+    height: 132,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logoImage: {
+    width: "100%",
+    height: "100%",
+  },
   title: {
     ...typography.h1,
     color: colors.gray900,
@@ -241,9 +254,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   label: {
-    ...typography.caption,
+    ...typography.bodySmall,
     color: colors.gray500,
-    fontWeight: "500",
+    fontWeight: "600",
     paddingHorizontal: 4,
   },
   inputWrap: {

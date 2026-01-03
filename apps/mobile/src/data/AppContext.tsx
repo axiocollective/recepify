@@ -5,6 +5,7 @@ import { sampleImportItems } from "./mockData";
 import { BottomTab, ImportItem, Ingredient, PlanTier, Recipe, RecipeCollection, Screen, ShoppingListItem, UsageSummary } from "./types";
 import {
   addShoppingListItems,
+  addPayPerUseCredits,
   deleteRecipe as deleteRecipeRemote,
   ensureProfile,
   fetchProfile,
@@ -43,6 +44,9 @@ interface AppContextValue {
   aiDisabled: boolean;
   plan: PlanTier;
   usageSummary: UsageSummary | null;
+  bonusImports: number;
+  bonusTokens: number;
+  subscriptionPeriod: "monthly" | "yearly";
   simulateEmptyState: boolean;
   setIsImportOverlayOpen: (open: boolean) => void;
   setSelectedRecipe: (recipe: Recipe | null) => void;
@@ -56,6 +60,7 @@ interface AppContextValue {
     country?: string;
     aiDisabled?: boolean;
     plan?: PlanTier;
+    subscriptionPeriod?: "monthly" | "yearly";
   }) => void;
   deleteAccount: () => Promise<void>;
   logout: () => void;
@@ -73,6 +78,7 @@ interface AppContextValue {
   deleteRecipe: (recipeId: string) => void;
   updateAccountConnection: (platform: string, connected: boolean) => void;
   refreshUsageSummary: () => void;
+  purchasePayPerUseCredits: () => Promise<void>;
   setSimulateEmptyState: (value: boolean) => void;
 }
 
@@ -102,6 +108,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [aiDisabled, setAiDisabled] = useState(false);
   const [plan, setPlan] = useState<PlanTier>("free");
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
+  const [bonusImports, setBonusImports] = useState(0);
+  const [bonusTokens, setBonusTokens] = useState(0);
+  const [subscriptionPeriod, setSubscriptionPeriod] = useState<"monthly" | "yearly">("yearly");
   const [userId, setUserId] = useState<string | null>(null);
   const [simulateEmptyState, setSimulateEmptyState] = useState(false);
   const lastUserIdRef = useRef<string | null>(null);
@@ -280,6 +289,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const nextPlan = (profile.plan as PlanTier | null) ?? (nextAiDisabled ? "ai_disabled" : "free");
         setAiDisabled(nextPlan === "ai_disabled" ? true : nextAiDisabled);
         setPlan(nextPlan);
+        setBonusImports(profile.bonus_imports ?? 0);
+        setBonusTokens(profile.bonus_tokens ?? 0);
+        setSubscriptionPeriod(profile.subscription_period === "monthly" ? "monthly" : "yearly");
       } else {
         setNeedsOnboarding(true);
       }
@@ -300,6 +312,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .catch((error) => {
         console.warn("Failed to load usage summary", error);
       });
+  }, []);
+
+  const purchasePayPerUseCredits = useCallback(async () => {
+    try {
+      const next = await addPayPerUseCredits({ imports: 15, tokens: 75000 });
+      setBonusImports(next.bonusImports);
+      setBonusTokens(next.bonusTokens);
+      Alert.alert("Credits added", "15 recipe imports and 75k AI tokens were added to your account.");
+    } catch (error) {
+      console.warn("Failed to add pay per use credits", error);
+      Alert.alert("Purchase failed", "Please try again in a moment.");
+    }
   }, []);
 
   useEffect(() => {
@@ -472,15 +496,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         country: userCountry,
         aiDisabled,
         plan,
+        subscriptionPeriod,
       });
     }
-  }, [aiDisabled, plan, userCountry, userLanguage]);
+  }, [aiDisabled, plan, subscriptionPeriod, userCountry, userLanguage]);
 
-  const updateProfile = useCallback((payload: { name?: string; email?: string; language?: "English" | "German"; country?: string; aiDisabled?: boolean; plan?: PlanTier }) => {
+  const updateProfile = useCallback((payload: { name?: string; email?: string; language?: "English" | "German"; country?: string; aiDisabled?: boolean; plan?: PlanTier; subscriptionPeriod?: "monthly" | "yearly" }) => {
     const nextName = payload.name ?? userName;
     const nextLanguage = payload.language ?? userLanguage;
     const nextCountry = payload.country ?? userCountry;
     const nextPlan = payload.plan ?? plan;
+    const nextSubscriptionPeriod = payload.subscriptionPeriod ?? subscriptionPeriod;
     const nextAiDisabled =
       payload.plan !== undefined ? payload.plan === "ai_disabled" : payload.aiDisabled ?? aiDisabled;
 
@@ -506,6 +532,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setPlan(payload.plan);
       setAiDisabled(payload.plan === "ai_disabled");
     }
+    if (payload.subscriptionPeriod !== undefined) {
+      setSubscriptionPeriod(payload.subscriptionPeriod);
+    }
 
     void ensureProfile({
       name: nextName,
@@ -513,8 +542,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       country: nextCountry,
       aiDisabled: nextAiDisabled,
       plan: nextPlan,
+      subscriptionPeriod: nextSubscriptionPeriod,
     });
-  }, [aiDisabled, plan, userCountry, userLanguage, userName]);
+  }, [aiDisabled, plan, subscriptionPeriod, userCountry, userLanguage, userName]);
 
   const deleteAccount = useCallback(async () => {
     if (!userId) {
@@ -538,6 +568,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProfileReady(false);
     setAiDisabled(false);
     setPlan("free");
+    setBonusImports(0);
+    setBonusTokens(0);
     setUsageSummary(null);
   }, [userId]);
 
@@ -548,6 +580,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSelectedTab("home");
     setCollections([]);
     setProfileReady(false);
+    setBonusImports(0);
+    setBonusTokens(0);
   }, []);
 
   const navigateTo = useCallback((screen: Screen) => {
@@ -768,6 +802,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       aiDisabled,
       plan,
       usageSummary,
+      bonusImports,
+      bonusTokens,
+      subscriptionPeriod,
       simulateEmptyState,
       setIsImportOverlayOpen,
       setSelectedRecipe,
@@ -791,6 +828,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteRecipe,
       updateAccountConnection,
       refreshUsageSummary,
+      purchasePayPerUseCredits,
       setSimulateEmptyState,
     }),
     [
@@ -813,6 +851,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       aiDisabled,
       plan,
       usageSummary,
+      bonusImports,
+      bonusTokens,
+      subscriptionPeriod,
       simulateEmptyState,
       handleLoadingComplete,
       updateProfile,
@@ -832,6 +873,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteRecipe,
       updateAccountConnection,
       refreshUsageSummary,
+      purchasePayPerUseCredits,
       setSimulateEmptyState,
     ]
   );

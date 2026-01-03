@@ -1,6 +1,6 @@
 import React from "react";
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Image, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, shadow, spacing, typography } from "../theme/theme";
 
 interface WelcomeProps {
@@ -12,7 +12,9 @@ export const Welcome: React.FC<WelcomeProps> = ({ onLogin }) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.topSection}>
         <View style={styles.logo}>
-          <MaterialCommunityIcons name="chef-hat" size={64} color={colors.white} />
+          <View style={styles.logoImageWrap}>
+            <Image source={require("../../assets/logo.png")} style={styles.logoImage} resizeMode="contain" />
+          </View>
         </View>
         <Text style={styles.title}>Recipefy</Text>
         <Text style={styles.subtitle}>A home for all your recipes</Text>
@@ -64,6 +66,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 12 },
+  },
+  logoImageWrap: {
+    width: 132,
+    height: 132,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logoImage: {
+    width: "100%",
+    height: "100%",
   },
   title: {
     ...typography.h1,

@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { colors, radius, spacing, typography } from "../theme/theme";
 import { useApp } from "../data/AppContext";
-import { isImportLimitReached } from "../data/usageLimits";
+import { getImportLimitMessage, isImportLimitReached } from "../data/usageLimits";
 
 interface ScanRecipeProps {
   onBack: () => void;
@@ -15,15 +15,28 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
-  const { plan, usageSummary } = useApp();
-  const importLimitReached = isImportLimitReached(plan, usageSummary);
+  const { plan, usageSummary, bonusImports, navigateTo } = useApp();
+  const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports);
+  const limitMessage = getImportLimitMessage(plan);
+  const openPlans = () => navigateTo("planBilling");
+  const showLimitAlert = () => {
+    if (plan === "paid" || plan === "premium") {
+      Alert.alert("Monthly limit reached", limitMessage, [
+        { text: "Buy credits", onPress: openPlans },
+        { text: "Cancel", style: "cancel" },
+      ]);
+      return;
+    }
+    Alert.alert("Monthly limit reached", limitMessage, [
+      { text: "Upgrade plan", onPress: openPlans },
+      { text: "Buy credits", onPress: openPlans },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
 
   const startScanning = async (image: string) => {
     if (importLimitReached) {
-      Alert.alert(
-        "Monthly limit reached",
-        "You’ve used all monthly import credits. Wait for the reset or upgrade your plan."
-      );
+      showLimitAlert();
       return;
     }
     setPreviewImage(image);
@@ -54,10 +67,7 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
 
   const handleTakePhoto = async () => {
     if (importLimitReached) {
-      Alert.alert(
-        "Monthly limit reached",
-        "You’ve used all monthly import credits. Wait for the reset or upgrade your plan."
-      );
+      showLimitAlert();
       return;
     }
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -81,10 +91,7 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
 
   const handleChooseFromGallery = async () => {
     if (importLimitReached) {
-      Alert.alert(
-        "Monthly limit reached",
-        "You’ve used all monthly import credits. Wait for the reset or upgrade your plan."
-      );
+      showLimitAlert();
       return;
     }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -176,7 +183,7 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
         )}
         {importLimitReached && (
           <Text style={styles.limitNote}>
-            Monthly import credits used. Wait for the reset or upgrade your plan.
+            {limitMessage}
           </Text>
         )}
 

@@ -8,7 +8,7 @@ import { colors, radius, spacing, typography, shadow } from "../theme/theme";
 import { askRecipeAssistant } from "../services/assistantApi";
 import { POPULAR_RECIPE_TAG_COUNT, RECIPE_TAGS } from "../../../../packages/shared/constants/recipe-tags";
 import { useApp } from "../data/AppContext";
-import { isAiLimitReached } from "../data/usageLimits";
+import { getAiLimitMessage, isAiLimitReached } from "../data/usageLimits";
 
 interface RecipeEditProps {
   recipe: Recipe;
@@ -51,8 +51,8 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   const [newTagDraft, setNewTagDraft] = useState("");
   const [showTagInput, setShowTagInput] = useState(false);
   const formDataRef = useRef(formData);
-  const { plan, usageSummary, refreshUsageSummary, userLanguage } = useApp();
-  const aiLimitReached = isAiLimitReached(plan, usageSummary);
+  const { plan, usageSummary, bonusTokens, refreshUsageSummary, userLanguage } = useApp();
+  const aiLimitReached = isAiLimitReached(plan, usageSummary, bonusTokens);
   const isPremium = plan === "paid" || plan === "premium";
   const creditsExhausted = aiLimitReached;
   const isAIDisabled = aiDisabled || !isPremium || creditsExhausted;
@@ -1313,7 +1313,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
                     <Text style={styles.headerTooltipText}>
                       ⚠️ {showPremiumBadge
                         ? "AI is a Premium feature. Upgrade to unlock."
-                        : "Monthly credits exhausted. Upgrade or wait until next month."}
+                        : getAiLimitMessage(plan)}
                     </Text>
                   </View>
                 )}

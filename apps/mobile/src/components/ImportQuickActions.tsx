@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, spacing, typography, shadow } from "../theme/theme";
 import { Screen } from "../data/types";
 import { useApp } from "../data/AppContext";
-import { isImportLimitReached } from "../data/usageLimits";
+import { getImportLimitMessage, isImportLimitReached } from "../data/usageLimits";
 import { Alert } from "react-native";
 
 interface ImportQuickActionsProps {
@@ -16,8 +16,8 @@ interface ImportQuickActionsProps {
 
 const actions: Array<{ id: Screen | "manual" | "inbox"; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "importFromLink", label: "Share Link", icon: "link-outline" },
-  { id: "scanRecipe", label: "Scan from Web", icon: "camera-outline" },
-  { id: "manual", label: "Add Manually", icon: "add" },
+  { id: "scanRecipe", label: "Scan", icon: "camera-outline" },
+  { id: "manual", label: "Manually", icon: "add" },
   { id: "inbox", label: "Inbox", icon: "mail-outline" },
 ];
 
@@ -27,8 +27,10 @@ export const ImportQuickActions: React.FC<ImportQuickActionsProps> = ({
   inboxCount = 0,
   importReadyCount = 0,
 }) => {
-  const { plan, usageSummary } = useApp();
-  const importLimitReached = isImportLimitReached(plan, usageSummary);
+  const { plan, usageSummary, bonusImports, navigateTo } = useApp();
+  const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports);
+  const limitMessage = getImportLimitMessage(plan);
+  const openPlans = () => navigateTo("planBilling");
   const visibleActions = inboxCount > 0 ? actions : actions.filter((action) => action.id !== "inbox");
 
   const handleAction = (id: Screen | "manual" | "inbox") => {
@@ -41,10 +43,18 @@ export const ImportQuickActions: React.FC<ImportQuickActionsProps> = ({
       return;
     }
     if ((id === "importFromLink" || id === "scanRecipe") && importLimitReached) {
-      Alert.alert(
-        "Monthly limit reached",
-        "You’ve used all monthly import credits. Wait for the reset or upgrade your plan."
-      );
+      if (plan === "paid" || plan === "premium") {
+        Alert.alert("Monthly limit reached", limitMessage, [
+          { text: "Buy credits", onPress: openPlans },
+          { text: "Cancel", style: "cancel" },
+        ]);
+        return;
+      }
+      Alert.alert("Monthly limit reached", limitMessage, [
+        { text: "Upgrade plan", onPress: openPlans },
+        { text: "Buy credits", onPress: openPlans },
+        { text: "Cancel", style: "cancel" },
+      ]);
       return;
     }
     onNavigate(id);
@@ -54,7 +64,7 @@ export const ImportQuickActions: React.FC<ImportQuickActionsProps> = ({
     <View style={styles.container}>
       <View style={[styles.card, shadow.md]}>
         <Text style={styles.title}>Add Recipe</Text>
-        <View style={styles.row}>
+        <View style={[styles.row, visibleActions.length < actions.length ? styles.rowTight : null]}>
           {visibleActions.map((action) => (
             <Pressable
               key={action.id}
@@ -105,6 +115,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     gap: spacing.md,
+  },
+  rowTight: {
+    justifyContent: "center",
+    gap: spacing.xl,
   },
   action: {
     alignItems: "center",

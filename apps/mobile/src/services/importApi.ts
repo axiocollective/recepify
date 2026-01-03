@@ -48,12 +48,18 @@ const API_PREFIX = `${API_BASE_URL}/api`;
 let currentUserEmail: string | null = null;
 let currentUserId: string | null = null;
 
-const parseJsonResponse = async <T>(response: Response): Promise<T> => {
+const parseJsonResponse = async <T>(
+  response: Response
+): Promise<{ data: T | null; text: string }> => {
   const text = await response.text();
   if (!text) {
-    return {} as T;
+    return { data: null, text: "" };
   }
-  return JSON.parse(text) as T;
+  try {
+    return { data: JSON.parse(text) as T, text };
+  } catch {
+    return { data: null, text };
+  }
 };
 
 const resolveMediaUrl = (value?: string | null): string | undefined => {
@@ -201,9 +207,16 @@ const postImportUrl = async (path: string, url: string): Promise<Recipe> => {
     },
     body: JSON.stringify({ url }),
   });
-  const data = await parseJsonResponse<ImportResponse & { detail?: string }>(response);
+  const { data, text } = await parseJsonResponse<ImportResponse & { detail?: string }>(response);
   if (!response.ok) {
-    throw new Error(data.detail || "Import failed.");
+    const detail = data?.detail?.trim();
+    if (detail) {
+      throw new Error(detail);
+    }
+    throw new Error(`Import failed (${response.status}). Please try again.`);
+  }
+  if (!data) {
+    throw new Error("Import failed. Unexpected response from server.");
   }
   return mapImportedRecipe(data);
 };
@@ -245,9 +258,16 @@ export const importFromScan = async (imageUri: string): Promise<Recipe> => {
     },
     body: formData,
   });
-  const data = await parseJsonResponse<ImportResponse & { detail?: string }>(response);
+  const { data } = await parseJsonResponse<ImportResponse & { detail?: string }>(response);
   if (!response.ok) {
-    throw new Error(data.detail || "Scan failed.");
+    const detail = data?.detail?.trim();
+    if (detail) {
+      throw new Error(detail);
+    }
+    throw new Error(`Scan failed (${response.status}). Please try again.`);
+  }
+  if (!data) {
+    throw new Error("Scan failed. Unexpected response from server.");
   }
   return mapImportedRecipe(data);
 };

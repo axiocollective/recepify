@@ -9,8 +9,13 @@ import { colors, radius, shadow, spacing, typography } from "../theme/theme";
 interface PlanBillingProps {
   plan: PlanTier;
   usageSummary: UsageSummary | null;
+  bonusImports?: number;
+  bonusTokens?: number;
+  subscriptionPeriod: "monthly" | "yearly";
   recipesCount: number;
   onPlanChange: (plan: PlanTier) => void;
+  onBuyCredits: () => Promise<void>;
+  onSubscriptionPeriodChange: (period: "monthly" | "yearly") => void;
   onBack: () => void;
   onContinue?: () => void;
   continueLabel?: string;
@@ -19,34 +24,42 @@ interface PlanBillingProps {
   variant?: "manage" | "onboarding";
 }
 
-const PLAN_OPTIONS: Array<{
-  id: PlanTier;
-  name: string;
-  price: string;
-  subtitle: string;
-  includes: string[];
-}> = [
-  {
-    id: "free",
-    name: "Starter",
-    price: "Free",
-    subtitle: "Great for trying Recipefy.",
-    includes: ["3 recipe imports / month", "15k AI tokens / month", "Collections + favorites"],
-  },
-  {
-    id: "paid",
-    name: "Sous-Chef",
-    price: "CHF 7.90 / month",
-    subtitle: "CHF 79 / year billed annually.",
-    includes: ["40 recipe imports / month", "200k AI tokens / month", "Collections + favorites"],
-  },
-];
+const FREE_PLAN = {
+  id: "free" as const,
+  name: "Free Starter",
+  price: "Free",
+  subtitle: "Try Recepyfy",
+  includes: [
+    "5 recipe imports",
+    "50k AI tokens",
+    "All features included",
+    "No payment required",
+  ],
+};
+
+const getPaidPlanDetails = (billingPeriod: "yearly" | "monthly") => ({
+  id: "paid" as const,
+  name: "Subscription",
+  price: billingPeriod === "yearly" ? "CHF 69 / year" : "CHF 7.90 / month",
+  subtitle: billingPeriod === "yearly" ? "Best price overall" : "Best value for regular use",
+  includes: [
+    "40 recipe imports per month",
+    "200k AI tokens per month",
+    "All features included",
+  ],
+  note: billingPeriod === "yearly" ? "Save vs monthly" : "Lower cost per recipe",
+});
 
 export const PlanBilling: React.FC<PlanBillingProps> = ({
   plan,
   usageSummary,
+  bonusImports = 0,
+  bonusTokens = 0,
+  subscriptionPeriod,
   recipesCount,
   onPlanChange,
+  onBuyCredits,
+  onSubscriptionPeriodChange,
   onBack,
   onContinue,
   continueLabel,
@@ -58,26 +71,22 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
   const planLimits = useMemo(() => getPlanLimits(plan), [plan]);
   const usedImports = usageSummary?.importCount ?? 0;
   const usedTokens = usageSummary?.aiTokens ?? 0;
-  const importLimit = planLimits.imports;
-  const tokenLimit = planLimits.tokens;
+  const importLimit = planLimits.imports + bonusImports;
+  const tokenLimit = planLimits.tokens + bonusTokens;
+  const isSubscribed = plan === "paid" || plan === "premium";
   const importProgress = importLimit > 0 ? Math.min(1, usedImports / importLimit) : 0;
   const tokenProgress = tokenLimit > 0 ? Math.min(1, usedTokens / tokenLimit) : 0;
   const hasDevPlanSwitch = process.env.EXPO_PUBLIC_DEV_PLAN_SWITCH === "true";
   const [allowPlanSwitch, setAllowPlanSwitch] = useState(hasDevPlanSwitch);
   const canSwitchPlans = allowPlanSwitchOverride ?? allowPlanSwitch;
-  const [selectedPlan, setSelectedPlan] = useState<"paid" | "credit_pack">("paid");
+  const [selectedPlan, setSelectedPlan] = useState<"free" | "paid" | "credit_pack">("paid");
   const activeSelection = isOnboarding ? selectedPlan : plan;
+  const [billingPeriod, setBillingPeriod] = useState<"yearly" | "monthly">(subscriptionPeriod);
+  const paidPlan = getPaidPlanDetails(billingPeriod);
 
-  const activePlan =
-    plan === "ai_disabled"
-      ? {
-          id: "ai_disabled" as PlanTier,
-          name: "AI Disabled",
-          price: "Free",
-          subtitle: "AI features are turned off on this plan.",
-          includes: ["No AI usage", "Core recipe features only"],
-        }
-      : PLAN_OPTIONS.find((option) => option.id === plan) ?? PLAN_OPTIONS[0];
+  React.useEffect(() => {
+    setBillingPeriod(subscriptionPeriod);
+  }, [subscriptionPeriod]);
 
   const formatNumber = (value: number) => value.toLocaleString("en-US");
 
@@ -107,34 +116,39 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
 
   if (isOnboarding) {
     const onboardingPlans: Array<{
-      id: "paid" | "credit_pack";
+      id: "free" | "paid" | "credit_pack";
       name: string;
       price: string;
       period?: string;
       description: string;
       features: string[];
       popular?: boolean;
-      trial?: string;
       note?: string;
     }> = [
       {
+        id: "free",
+        name: FREE_PLAN.name,
+        price: FREE_PLAN.price,
+        description: FREE_PLAN.subtitle,
+        features: FREE_PLAN.includes,
+      },
+      {
         id: "paid",
-        name: "Sous-Chef",
-        price: "CHF 7.90",
-        period: "/ month",
-        description: "Serious cooking, bigger limits.",
-        features: ["40 recipe imports / month", "200k AI tokens / month", "Collections + favorites"],
+        name: paidPlan.name,
+        price: billingPeriod === "yearly" ? "CHF 69" : "CHF 7.90",
+        period: billingPeriod === "yearly" ? "/ year" : "/ month",
+        description: paidPlan.subtitle,
+        features: paidPlan.includes,
         popular: true,
-        trial: "7 days free",
-        note: "CHF 79 / year billed annually.",
+        note: paidPlan.note,
       },
       {
         id: "credit_pack",
-        name: "Credit Pack",
+        name: "Pay per Use",
         price: "CHF 6.90",
         period: "one-time",
-        description: "Buy credits, no expiry.",
-        features: ["20 recipe imports", "100k AI tokens", "Credits never expire"],
+        description: "No subscription",
+        features: ["15 recipe imports", "75k AI tokens", "All features included", "Credits never expire"],
       },
     ];
 
@@ -172,22 +186,36 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                     <Text style={styles.popularBadgeText}>Most Popular</Text>
                   </LinearGradient>
                 )}
-                {option.trial && (
-                  <View style={styles.trialBadge}>
-                    <Text style={styles.trialBadgeText}>{option.trial.toUpperCase()}</Text>
-                  </View>
-                )}
-
                 <View style={styles.onboardingHeaderRow}>
-                  <View>
+                  <View style={styles.planHeaderLeft}>
                     <Text style={styles.planName}>{option.name}</Text>
                     <View style={styles.priceRow}>
                       <Text style={styles.planPrice}>{option.price}</Text>
                       {option.period && <Text style={styles.planPeriod}>{option.period}</Text>}
                     </View>
                   </View>
-                  <View style={[styles.selectionCircle, isSelected && styles.selectionCircleSelected]}>
-                    {isSelected && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                  <View style={styles.planHeaderRight}>
+                    {option.id === "paid" && (
+                      <View style={styles.billingToggle}>
+                      {(["yearly", "monthly"] as const).map((period) => (
+                          <Pressable
+                            key={period}
+                            onPress={() => {
+                              setBillingPeriod(period);
+                              onSubscriptionPeriodChange(period);
+                            }}
+                            style={[styles.billingChip, billingPeriod === period && styles.billingChipActive]}
+                          >
+                            <Text style={[styles.billingChipText, billingPeriod === period && styles.billingChipTextActive]}>
+                              {period === "yearly" ? "Yearly" : "Monthly"}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
+                    <View style={[styles.selectionCircle, isSelected && styles.selectionCircleSelected]}>
+                      {isSelected && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                    </View>
                   </View>
                 </View>
 
@@ -221,17 +249,18 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
             onPress={async () => {
               if (activeSelection === "paid") {
                 await safePlanChange("paid");
+              } else if (activeSelection === "free") {
+                await safePlanChange("free");
+              } else if (activeSelection === "credit_pack") {
+                await onBuyCredits();
               }
               onContinue?.();
             }}
           >
             <Text style={styles.continueButtonText}>{continueLabel ?? "Continue"}</Text>
           </Pressable>
-          {activeSelection === "paid" && (
-            <Text style={styles.trialHelper}>Start your free 7-day trial. Cancel anytime.</Text>
-          )}
           <Text style={styles.footerHelper}>
-            All plans include Collections, Favorites & AI Import
+            All features included
           </Text>
         </View>
       </SafeAreaView>
@@ -264,7 +293,11 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                   <Ionicons name="download-outline" size={18} color={colors.purple600} />
                 </View>
                 <Text style={styles.statValue}>{formatNumber(usedImports)}</Text>
-                <Text style={styles.statLabel}>of {formatNumber(importLimit)} monthly imports</Text>
+                <Text style={styles.statLabel}>
+                  {isSubscribed
+                    ? `of ${formatNumber(planLimits.imports)} monthly recipes${bonusImports > 0 ? ` + ${formatNumber(bonusImports)} extra` : ""}`
+                    : `of ${formatNumber(importLimit)} total imports${bonusImports > 0 ? ` (includes ${formatNumber(bonusImports)} pay-per-use)` : ""}`}
+                </Text>
                 <View style={styles.statBarTrack}>
                   <View style={[styles.statBarFill, { width: `${importProgress * 100}%` }]} />
                 </View>
@@ -279,7 +312,9 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 <Text style={styles.statLabel}>
                   {plan === "ai_disabled"
                     ? "AI disabled on this plan"
-                    : `of ${formatNumber(tokenLimit)} monthly tokens`}
+                    : isSubscribed
+                      ? `of ${formatNumber(planLimits.tokens)} monthly tokens${bonusTokens > 0 ? ` + ${formatNumber(bonusTokens)} extra` : ""}`
+                      : `of ${formatNumber(tokenLimit)} total tokens${bonusTokens > 0 ? ` (includes ${formatNumber(bonusTokens)} pay-per-use)` : ""}`}
                 </Text>
                 <View style={styles.statBarTrack}>
                   <View style={[styles.statBarFill, { width: `${tokenProgress * 100}%` }]} />
@@ -289,44 +324,10 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
           </View>
         )}
 
-        {!isOnboarding && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Current plan</Text>
-            <View style={styles.currentPlanCard}>
-              <View style={styles.currentPlanHeader}>
-                <View>
-                  <Text style={styles.currentPlanLabel}>Active</Text>
-                  <Text style={styles.currentPlanName}>{activePlan.name}</Text>
-                </View>
-                <Text style={styles.currentPlanPrice}>{activePlan.price}</Text>
-              </View>
-              <Text style={styles.currentPlanSubtitle}>{activePlan.subtitle}</Text>
-              <View style={styles.currentPlanIncludes}>
-                {activePlan.includes.map((item) => (
-                  <View key={item} style={styles.currentPlanRow}>
-                    <Ionicons name="checkmark" size={14} color={colors.purple600} />
-                    <Text style={styles.currentPlanItem}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-              {(plan === "paid" || plan === "premium") && (
-                <View style={styles.currentPlanActions}>
-                  <Pressable style={[styles.planActionButton, styles.planActionSecondary]} onPress={openSubscriptionSettings}>
-                    <Text style={styles.planActionSecondaryText}>Manage</Text>
-                  </Pressable>
-                  <Pressable style={styles.planActionButton} onPress={openSubscriptionSettings}>
-                    <Text style={styles.planActionPrimaryText}>Cancel plan</Text>
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
-
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Subscription</Text>
           <View style={styles.planList}>
-            {PLAN_OPTIONS.map((option) => {
+            {[paidPlan].map((option) => {
               const isSelected = option.id === plan;
               const planRank = { ai_disabled: -1, free: 0, paid: 1, premium: 2 };
               const isDowngrade = planRank[option.id] < planRank[plan];
@@ -340,15 +341,38 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
               return (
                 <View key={option.id} style={[styles.planCard, isSelected && styles.planCardSelected]}>
                   <View style={styles.planCardHeader}>
-                    <View>
+                    <View style={styles.planHeaderLeft}>
                       <Text style={[styles.planTitle, isSelected && styles.planTitleSelected]}>
                         {option.name}
                       </Text>
                       <Text style={styles.planPrice}>{option.price}</Text>
                     </View>
-                    {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.purple600} />}
+                    <View style={styles.planHeaderRight}>
+                      {option.id === "paid" && (
+                        <View style={styles.billingToggle}>
+                          {(["yearly", "monthly"] as const).map((period) => (
+                            <Pressable
+                              key={period}
+                              onPress={() => {
+                                setBillingPeriod(period);
+                                onSubscriptionPeriodChange(period);
+                              }}
+                              style={[styles.billingChip, billingPeriod === period && styles.billingChipActive]}
+                            >
+                              <Text style={[styles.billingChipText, billingPeriod === period && styles.billingChipTextActive]}>
+                                {period === "yearly" ? "Yearly" : "Monthly"}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
+                      {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.purple600} />}
+                    </View>
                   </View>
                   <Text style={styles.planSubtitle}>{option.subtitle}</Text>
+                  {option.id === "paid" && option.note && (
+                    <Text style={styles.planNoteText}>{option.note}</Text>
+                  )}
                   <View style={styles.planIncludes}>
                     {option.includes.map((item) => (
                       <View key={item} style={styles.planIncludeRow}>
@@ -399,17 +423,17 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Pay as you go</Text>
+          <Text style={styles.sectionLabel}>Pay per Use</Text>
           <View style={styles.planCard}>
             <View style={styles.planCardHeader}>
               <View>
-                <Text style={styles.planTitle}>Credit Pack</Text>
-                <Text style={styles.planPrice}>CHF 6.90</Text>
+                <Text style={styles.planTitle}>Pay per Use</Text>
+                <Text style={styles.planPrice}>CHF 6.90 · one-time</Text>
               </View>
             </View>
-            <Text style={styles.planSubtitle}>One-time purchase. Credits never expire.</Text>
+            <Text style={styles.planSubtitle}>No subscription</Text>
             <View style={styles.planIncludes}>
-              {["20 recipe imports", "100k AI tokens"].map((item) => (
+              {["15 recipe imports", "75k AI tokens", "All features included", "Credits never expire"].map((item) => (
                 <View key={item} style={styles.planIncludeRow}>
                   <Ionicons name="checkmark" size={12} color={colors.gray500} />
                   <Text style={styles.planIncludeText}>{item}</Text>
@@ -418,12 +442,13 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
             </View>
             <Pressable
               style={styles.planUpgradeButton}
-              onPress={() =>
-                Alert.alert("Buy credits", "Purchases will be available once App Store billing is set up.")
-              }
+              onPress={onBuyCredits}
             >
               <Text style={styles.planUpgradeText}>Buy credits</Text>
             </Pressable>
+            <Text style={styles.planNote}>
+              Pay per Use credits never expire and stack on top of your monthly limits.
+            </Text>
           </View>
         </View>
 
@@ -635,9 +660,16 @@ const styles = StyleSheet.create({
   },
   planCardHeader: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     gap: spacing.md,
+  },
+  planHeaderLeft: {
+    flex: 1,
+  },
+  planHeaderRight: {
+    alignItems: "flex-end",
+    gap: spacing.xs,
   },
   planTitle: {
     fontSize: 15,
@@ -854,6 +886,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: colors.gray500,
+  },
+  billingToggle: {
+    flexDirection: "row",
+    backgroundColor: colors.gray100,
+    borderRadius: radius.full,
+    padding: 4,
+    alignSelf: "flex-start",
+    marginTop: spacing.xs,
+  },
+  billingChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  billingChipActive: {
+    backgroundColor: colors.white,
+    ...shadow.md,
+  },
+  billingChipText: {
+    ...typography.bodySmall,
+    color: colors.gray600,
+  },
+  billingChipTextActive: {
+    color: colors.gray900,
+    fontWeight: "600",
   },
   planFeatures: {
     gap: spacing.sm,
