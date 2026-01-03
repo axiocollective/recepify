@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Recipe } from "../data/types";
 import { colors, radius, spacing, typography } from "../theme/theme";
 import { RecipeThumbnail } from "./RecipeThumbnail";
+import { formatDuration } from "../utils/formatDuration";
 
 interface SearchProps {
   recipes: Recipe[];
@@ -232,12 +233,16 @@ export const Search: React.FC<SearchProps> = ({ recipes, onRecipeSelect }) => {
                       {recipe.title}
                     </Text>
                     <View style={styles.resultMeta}>
-                      {recipe.duration ? (
+                      {(() => {
+                        const duration = formatDuration(recipe.duration);
+                        if (!duration) return null;
+                        return (
                         <View style={styles.metaItem}>
                           <Ionicons name="time-outline" size={12} color={colors.gray500} />
-                          <Text style={styles.metaText}>{recipe.duration}</Text>
+                          <Text style={styles.metaText}>{duration}</Text>
                         </View>
-                      ) : null}
+                        );
+                      })()}
                       {recipe.isFavorite && <Ionicons name="heart" size={12} color={colors.gray900} />}
                     </View>
                     {recipe.tags && recipe.tags.length > 0 ? (

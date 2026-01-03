@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { colors, radius, spacing, typography, shadow } from "../theme/theme";
 import { Recipe, RecipeCollection, Screen } from "../data/types";
 import { RecipeThumbnail } from "./RecipeThumbnail";
+import { formatDuration } from "../utils/formatDuration";
 import { ImportQuickActions } from "./ImportQuickActions";
 
 interface HomeProps {
@@ -518,6 +519,7 @@ interface RecipeCardProps {
 }
 
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onPress }) => {
+  const duration = formatDuration(recipe.duration);
   return (
     <Pressable style={[styles.recipeCard, shadow.md]} onPress={onPress}>
       <View style={styles.recipeThumb}>
@@ -528,10 +530,10 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onPress }) => {
           {recipe.title}
         </Text>
         <View style={styles.recipeMetaRow}>
-          {recipe.duration && (
+          {duration && (
             <View style={styles.recipeMetaItem}>
               <Ionicons name="time-outline" size={16} color={colors.gray400} />
-              <Text style={styles.recipeMetaText}>{recipe.duration}</Text>
+              <Text style={styles.recipeMetaText}>{duration}</Text>
             </View>
           )}
           {recipe.isFavorite && <Ionicons name="heart" size={16} color={colors.purple600} />}

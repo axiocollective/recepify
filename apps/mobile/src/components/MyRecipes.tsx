@@ -6,6 +6,7 @@ import { colors, radius, shadow, spacing, typography } from "../theme/theme";
 import { RecipeThumbnail } from "./RecipeThumbnail";
 import { RECIPE_TAGS } from "../../../../packages/shared/constants/recipe-tags";
 import { AddToCollectionModal } from "./AddToCollectionModal";
+import { formatDuration } from "../utils/formatDuration";
 
 interface MyRecipesProps {
   recipes: Recipe[];
@@ -204,7 +205,7 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
       if (hours) return `${hours}h`;
       if (minutes) return `${minutes}m`;
     }
-    return time;
+    return formatDuration(time);
   };
 
   return (
