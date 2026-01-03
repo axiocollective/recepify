@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 import json
+import os
+import re
+import shutil
 import subprocess
+import sys
+import uuid
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
+import httpx
+from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field, field_validator
 
 from .import_utils import (
@@ -11,6 +20,7 @@ from .import_utils import (
     ImportedRecipe,
     clean_text,
     ensure_domain,
+    ensure_storage_path,
     get_openai_client,
     instructions_from_strings,
     sync_recipe_media_to_supabase,
@@ -55,62 +65,274 @@ class _InstagramRecipe(BaseModel):
     confidence: Optional[float] = None
 
 
-def _fetch_instagram_metadata(instagram_url: str) -> dict[str, Any]:
-    command = [
-        "yt-dlp",
-        "--dump-json",
-        "--skip-download",
+def _clean_ws(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "")).strip()
+
+
+def _fetch_instagram_oembed(instagram_url: str) -> dict[str, Any]:
+    endpoint = f"https://api.instagram.com/oembed/?url={quote(instagram_url, safe='')}"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "de,en;q=0.8",
+    }
+    try:
+        with httpx.Client(headers=headers, timeout=20.0, follow_redirects=True) as client:
+            response = client.get(endpoint)
+            response.raise_for_status()
+            return response.json()
+    except Exception as exc:
+        return {"_error": str(exc)}
+
+
+def _download_instagram_video(instagram_url: str) -> Optional[Path]:
+    target_dir = ensure_storage_path("instagram", is_file=False)
+    file_id = uuid.uuid4().hex[:8]
+    output_template = target_dir / f"instagram_{file_id}.%(ext)s"
+
+    yt_dlp_cmd = shutil.which("yt-dlp")
+    base_cmd = [yt_dlp_cmd] if yt_dlp_cmd else [sys.executable, "-m", "yt_dlp"]
+    command = base_cmd + [
+        "-f",
+        "bv*+ba/best",
+        "--no-playlist",
+        "--restrict-filenames",
+        "-o",
+        str(output_template),
         instagram_url,
     ]
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(
-            "Failed to fetch metadata from Instagram.\n"
-            f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}"
+        return None
+
+    candidates = sorted(
+        target_dir.glob(f"instagram_{file_id}.*"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+def _extract_audio(video_path: Path) -> Optional[Path]:
+    audio_dir = ensure_storage_path("instagram", "audio", is_file=False)
+    output_path = audio_dir / f"audio_{uuid.uuid4().hex[:8]}.mp3"
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(video_path),
+        "-vn",
+        "-acodec",
+        "libmp3lame",
+        "-ar",
+        "16000",
+        "-ac",
+        "1",
+        str(output_path),
+    ]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True)
+    except FileNotFoundError:
+        return None
+    if result.returncode != 0:
+        return None
+    return output_path
+
+
+def _transcribe_audio(audio_path: Path) -> str:
+    client = get_openai_client()
+    with audio_path.open("rb") as file_obj:
+        transcript = client.audio.transcriptions.create(model="whisper-1", file=file_obj)
+    text = getattr(transcript, "text", None)
+    if text:
+        return text
+    if isinstance(transcript, dict):
+        return transcript.get("text", "")
+    return ""
+
+
+def _html_meta(html: str) -> Dict[str, Optional[str]]:
+    soup = BeautifulSoup(html, "html.parser")
+
+    def meta(prop: Optional[str] = None, name: Optional[str] = None) -> Optional[str]:
+        if prop:
+            tag = soup.find("meta", attrs={"property": prop})
+            return _clean_ws(tag.get("content")) if tag and tag.get("content") else None
+        if name:
+            tag = soup.find("meta", attrs={"name": name})
+            return _clean_ws(tag.get("content")) if tag and tag.get("content") else None
+        return None
+
+    title_tag = soup.title.get_text(strip=True) if soup.title else None
+    return {
+        "title_tag": _clean_ws(title_tag) if title_tag else None,
+        "og_title": meta(prop="og:title"),
+        "og_description": meta(prop="og:description"),
+        "og_image": meta(prop="og:image"),
+        "og_url": meta(prop="og:url"),
+        "meta_description": meta(name="description"),
+    }
+
+
+def _playwright_rescue(instagram_url: str) -> Dict[str, Any]:
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:
+        return {"meta": {}, "caption_text": None, "screenshot_path": None}
+
+    screenshot_dir = ensure_storage_path("instagram", "screenshots", is_file=False)
+    screenshot_path = screenshot_dir / f"ig_{uuid.uuid4().hex[:8]}.png"
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            locale="de-DE",
+            viewport={"width": 1280, "height": 800},
+        )
+        page = context.new_page()
+        page.goto(instagram_url, wait_until="domcontentloaded", timeout=45000)
+        page.wait_for_timeout(2500)
 
-    metadata: Optional[dict[str, Any]] = None
-    for line in reversed(result.stdout.splitlines()):
-        line = line.strip()
-        if not line:
-            continue
-        if not line.startswith("{"):
-            continue
+        for selector in (
+            "button:has-text('Alle Cookies erlauben')",
+            "button:has-text('Alle akzeptieren')",
+            "button:has-text('Akzeptieren')",
+            "button:has-text('Allow all cookies')",
+            "button:has-text('Accept all')",
+            "button:has-text('Accept')",
+        ):
+            try:
+                locator = page.locator(selector).first
+                if locator.is_visible(timeout=1200):
+                    locator.click(timeout=1200)
+                    page.wait_for_timeout(1500)
+                    break
+            except Exception:
+                continue
+
+        page.wait_for_timeout(3500)
+
+        screenshot_file: Optional[Path] = None
         try:
-            metadata = json.loads(line)
-            break
-        except json.JSONDecodeError:
-            continue
+            page.screenshot(path=str(screenshot_path), full_page=False)
+            screenshot_file = screenshot_path
+        except Exception:
+            screenshot_file = None
 
-    return metadata or {}
+        rendered_html = page.content()
+        meta = _html_meta(rendered_html)
+
+        caption_texts: List[str] = []
+        try:
+            article = page.locator("article").first
+            if article.count() > 0:
+                text = _clean_ws(article.inner_text())
+                if text:
+                    caption_texts.append(text)
+        except Exception:
+            pass
+
+        if meta.get("og_description"):
+            caption_texts.append(meta["og_description"])
+        if meta.get("meta_description"):
+            caption_texts.append(meta["meta_description"])
+
+        best_caption = None
+        if caption_texts:
+            dedup: List[str] = []
+            seen = set()
+            for text in caption_texts:
+                cleaned = _clean_ws(text)
+                if cleaned and cleaned not in seen:
+                    seen.add(cleaned)
+                    dedup.append(cleaned)
+            dedup.sort(key=len, reverse=True)
+            best_caption = dedup[0][:8000] if dedup else None
+
+        context.close()
+        browser.close()
+
+    return {
+        "meta": meta,
+        "caption_text": best_caption,
+        "screenshot_path": str(screenshot_file) if screenshot_file else None,
+    }
+
+
+def _ocr_from_image(image_path: str) -> str:
+    try:
+        from PIL import Image
+        import pytesseract
+
+        if not shutil.which("tesseract"):
+            return ""
+
+        image = Image.open(image_path).convert("L")
+        text = pytesseract.image_to_string(image)
+        return _clean_ws(text)
+    except Exception:
+        return ""
 
 
 def _openai_recipe_from_signals(
     instagram_url: str,
-    metadata: dict[str, Any],
-    caption_text: str,
+    oembed: dict[str, Any],
+    rescue: dict[str, Any],
+    transcript: Optional[str],
+    ocr_text: Optional[str] = None,
 ) -> _InstagramRecipe:
     client = get_openai_client()
-    payload = {
-        "url": instagram_url,
-        "metadata": {
-            "title": metadata.get("title"),
-            "description": metadata.get("description"),
-            "uploader": metadata.get("uploader"),
-            "uploader_id": metadata.get("uploader_id"),
-            "uploader_url": metadata.get("uploader_url"),
-            "tags": metadata.get("tags"),
-            "duration": metadata.get("duration"),
-            "like_count": metadata.get("like_count"),
-        },
-        "caption_text": caption_text,
-    }
+
+    oembed_ok = "_error" not in (oembed or {})
+    meta = (rescue or {}).get("meta") or {}
+    caption_text = (rescue or {}).get("caption_text") or ""
+    ocr_text = ocr_text or ""
+
+    best_title = (
+        (oembed.get("title") if oembed_ok else None)
+        or meta.get("og_title")
+        or meta.get("title_tag")
+        or "Recipe from Instagram"
+    )
+    best_desc = (
+        (meta.get("og_description") or meta.get("meta_description"))
+        or (oembed.get("title") if oembed_ok else None)
+    )
+    thumb = (oembed.get("thumbnail_url") if oembed_ok else None) or meta.get("og_image")
+
     system_prompt = (
-        "You extract structured cooking recipes from Instagram reels/posts using metadata and captions. "
+        "You extract cooking recipes from Instagram signals. "
         "Return ONLY JSON that matches the provided schema. "
         "If any value is unknown, set it to null and list the field name inside missing_fields. "
-        "Do not invent ingredients or instructions beyond what the source clearly describes."
+        "Never use 0 as a placeholder for unknown ingredient amounts. "
+        "Do not invent ingredients or steps beyond what the signals clearly describe. "
+        "Transcript has highest priority, OCR is helpful but may contain noise."
     )
+
+    payload = {
+        "url": instagram_url,
+        "signals": {
+            "title_best_effort": best_title,
+            "description_best_effort": best_desc,
+            "thumbnail_url_best_effort": thumb,
+            "oembed_ok": oembed_ok,
+            "oembed": {k: v for k, v in (oembed or {}).items() if k != "html"},
+            "meta": meta,
+            "caption_text": caption_text,
+            "ocr_text": ocr_text,
+            "transcript": transcript or "",
+        },
+    }
 
     response = client.responses.parse(
         model="gpt-4o-mini",
@@ -124,8 +346,23 @@ def _openai_recipe_from_signals(
     recipe = response.output_parsed
     recipe.source_url = instagram_url
     recipe.source_domain = ensure_domain(instagram_url)
-    recipe.extracted_via = "yt-dlp+metadata+openai"
+    used: List[str] = []
+    if transcript and transcript.strip():
+        used.append("whisper")
+    if oembed_ok:
+        used.append("oembed")
+    if caption_text.strip():
+        used.append("playwright_caption")
+    if meta.get("og_title") or meta.get("og_description"):
+        used.append("og_meta")
+    if ocr_text.strip():
+        used.append("ocr")
+    recipe.extracted_via = "+".join(used) if used else "openai_no_signals"
     return recipe
+
+
+def _needs_ocr(recipe: _InstagramRecipe) -> bool:
+    return len(recipe.ingredients) == 0 or len(recipe.steps) == 0
 
 
 def _convert_recipe(recipe: _InstagramRecipe, thumbnail_url: Optional[str]) -> ImportedRecipe:
@@ -166,36 +403,46 @@ def _convert_recipe(recipe: _InstagramRecipe, thumbnail_url: Optional[str]) -> I
     )
 
 
-def _extract_thumbnail_url(metadata: dict[str, Any]) -> Optional[str]:
-    candidates: List[Optional[str]] = [
-        metadata.get("thumbnail"),
-        metadata.get("thumbnail_url"),
-        metadata.get("thumbnailUrl"),
-        metadata.get("thumbnail_large"),
-    ]
-    thumbnails = metadata.get("thumbnails") or metadata.get("thumbnail_list")
-    if isinstance(thumbnails, list):
-        for entry in thumbnails:
-            if isinstance(entry, str):
-                candidates.append(entry)
-            elif isinstance(entry, dict):
-                for key in ("url", "src"):
-                    value = entry.get(key)
-                    if isinstance(value, str):
-                        candidates.append(value)
-    for candidate in candidates:
-        if isinstance(candidate, str):
-            cleaned = candidate.strip()
-            if cleaned:
-                return cleaned
-    return None
-
-
 def import_instagram(url: str) -> Tuple[Dict[str, Any], Optional[str]]:
-    metadata = _fetch_instagram_metadata(url)
-    caption_text = metadata.get("description") or metadata.get("title") or ""
-    recipe = _openai_recipe_from_signals(url, metadata, caption_text)
-    thumbnail_url = _extract_thumbnail_url(metadata)
+    oembed = _fetch_instagram_oembed(url)
+
+    transcript: Optional[str] = None
+    video_path = _download_instagram_video(url)
+    if video_path:
+        audio_path = _extract_audio(video_path)
+        if audio_path:
+            transcript = _transcribe_audio(audio_path)
+
+    rescue = _playwright_rescue(url)
+    recipe = _openai_recipe_from_signals(
+        instagram_url=url,
+        oembed=oembed,
+        rescue=rescue,
+        transcript=transcript,
+        ocr_text=None,
+    )
+
+    screenshot_path = rescue.get("screenshot_path")
+    if _needs_ocr(recipe) and screenshot_path:
+        ocr_text = _ocr_from_image(screenshot_path)
+        if ocr_text:
+            recipe_ocr = _openai_recipe_from_signals(
+                instagram_url=url,
+                oembed=oembed,
+                rescue=rescue,
+                transcript=transcript,
+                ocr_text=ocr_text[:5000],
+            )
+            if (len(recipe_ocr.ingredients) + len(recipe_ocr.steps)) > (
+                len(recipe.ingredients) + len(recipe.steps)
+            ):
+                recipe = recipe_ocr
+
+    thumbnail_url = (
+        (oembed.get("thumbnail_url") if "_error" not in (oembed or {}) else None)
+        or (rescue.get("meta") or {}).get("og_image")
+    )
+
     converted = _convert_recipe(recipe, thumbnail_url)
     sync_recipe_media_to_supabase(converted)
     return converted.model_dump_recipe(), None
