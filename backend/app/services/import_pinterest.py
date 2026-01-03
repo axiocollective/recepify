@@ -861,85 +861,95 @@ def import_pinterest(url: str) -> Dict[str, Any]:
         recipe = pin_recipe
     else:
         destination_url = _normalize_url(destination_url)
-        dest_html = fetch_html(destination_url)
-        dest_image = extract_og_image(dest_html) or pin_image
-        visit_url = _extract_visit_website_url(dest_html, destination_url)
+        try:
+            dest_html = fetch_html(destination_url)
+        except httpx.HTTPError as exc:
+            logger.info("Pinterest destination fetch failed: %s", exc)
+            destination_url = None
+            dest_html = None
 
-        candidates: List[Tuple[str, ImportedRecipe, str, Optional[str]]] = []
-        dest_recipe = _scrape_recipe_page(
-            destination_url,
-            dest_html,
-            dest_image,
-            platform="pinterest",
-            extracted_via_schema="pinterest_destination_schema",
-            extracted_via_openai="pinterest_destination_openai",
-        )
-        candidates.append((destination_url, dest_recipe, dest_html, dest_image))
-
-        if visit_url and _normalize_url(visit_url) != _normalize_url(destination_url):
-            try:
-                visit_html = fetch_html(visit_url)
-                visit_img = extract_og_image(visit_html) or dest_image
-                visit_recipe = _scrape_recipe_page(
-                    visit_url,
-                    visit_html,
-                    visit_img,
-                    platform="pinterest",
-                    extracted_via_schema="pinterest_website_schema",
-                    extracted_via_openai="pinterest_website_openai",
-                )
-                candidates.append((visit_url, visit_recipe, visit_html, visit_img))
-            except Exception:
-                visit_url = None
-
-        candidates.append((url, pin_recipe, pin_html, pin_image))
-
-        best_url, best_recipe, best_html, best_img = sorted(
-            candidates, key=lambda item: _recipe_quality_score(item[1]), reverse=True
-        )[0]
-
-        if best_recipe.extracted_via and best_recipe.extracted_via.startswith("openai") and len(candidates) > 1:
-            primary, secondary = candidates[0], candidates[1]
-            if _recipe_quality_score(primary[1]) < _recipe_quality_score(secondary[1]):
-                primary, secondary = secondary, primary
-            combined = _openai_from_pages(
-                primary_url=primary[0],
-                primary_html=primary[2],
-                secondary_url=secondary[0],
-                secondary_html=secondary[2],
-                image_url=best_img,
-                platform="pinterest",
-                extracted_via_label="pinterest_openai_with_secondary_context",
-            )
-            if _recipe_quality_score(combined) > _recipe_quality_score(best_recipe):
-                best_recipe = combined
-                best_url = primary[0]
-                best_img = best_img or combined.media_image_url
-
-        extracted_label = (
-            "pinterest_destination_schema"
-            if best_recipe.extracted_via == "pinterest_destination_schema" and best_url == destination_url
-            else "pinterest_website_schema"
-            if best_recipe.extracted_via == "pinterest_website_schema" and visit_url and best_url != destination_url
-            else "pinterest_destination_openai"
-            if best_url == destination_url
-            else "pinterest_website_openai"
-        )
-
-        recipe = best_recipe
-        if best_url == url:
-            recipe.extracted_via = recipe.extracted_via or "pinterest_pin"
+        if not destination_url or not dest_html:
+            recipe = pin_recipe
         else:
-            recipe.extracted_via = extracted_label
-        recipe.media_image_url = best_img or pin_image or recipe.media_image_url
-        recipe.source_url = best_url
-        recipe.source_domain = ensure_domain(best_url)
-        recipe.source_platform = "pinterest"
-        recipe.metadata["destinationUrl"] = destination_url
-        recipe.metadata["destinationDomain"] = ensure_domain(destination_url)
-        if visit_url:
-            recipe.metadata["websiteUrl"] = visit_url
-            recipe.metadata["websiteDomain"] = ensure_domain(visit_url)
+            dest_image = extract_og_image(dest_html) or pin_image
+            visit_url = _extract_visit_website_url(dest_html, destination_url)
+
+            candidates: List[Tuple[str, ImportedRecipe, str, Optional[str]]] = []
+            dest_recipe = _scrape_recipe_page(
+                destination_url,
+                dest_html,
+                dest_image,
+                platform="pinterest",
+                extracted_via_schema="pinterest_destination_schema",
+                extracted_via_openai="pinterest_destination_openai",
+            )
+            candidates.append((destination_url, dest_recipe, dest_html, dest_image))
+
+            if visit_url and _normalize_url(visit_url) != _normalize_url(destination_url):
+                try:
+                    visit_html = fetch_html(visit_url)
+                    visit_img = extract_og_image(visit_html) or dest_image
+                    visit_recipe = _scrape_recipe_page(
+                        visit_url,
+                        visit_html,
+                        visit_img,
+                        platform="pinterest",
+                        extracted_via_schema="pinterest_website_schema",
+                        extracted_via_openai="pinterest_website_openai",
+                    )
+                    candidates.append((visit_url, visit_recipe, visit_html, visit_img))
+                except httpx.HTTPError as exc:
+                    logger.info("Pinterest website fetch failed: %s", exc)
+                    visit_url = None
+
+            candidates.append((url, pin_recipe, pin_html, pin_image))
+
+            best_url, best_recipe, best_html, best_img = sorted(
+                candidates, key=lambda item: _recipe_quality_score(item[1]), reverse=True
+            )[0]
+
+            if best_recipe.extracted_via and best_recipe.extracted_via.startswith("openai") and len(candidates) > 1:
+                primary, secondary = candidates[0], candidates[1]
+                if _recipe_quality_score(primary[1]) < _recipe_quality_score(secondary[1]):
+                    primary, secondary = secondary, primary
+                combined = _openai_from_pages(
+                    primary_url=primary[0],
+                    primary_html=primary[2],
+                    secondary_url=secondary[0],
+                    secondary_html=secondary[2],
+                    image_url=best_img,
+                    platform="pinterest",
+                    extracted_via_label="pinterest_openai_with_secondary_context",
+                )
+                if _recipe_quality_score(combined) > _recipe_quality_score(best_recipe):
+                    best_recipe = combined
+                    best_url = primary[0]
+                    best_img = best_img or combined.media_image_url
+
+            extracted_label = (
+                "pinterest_destination_schema"
+                if best_recipe.extracted_via == "pinterest_destination_schema" and best_url == destination_url
+                else "pinterest_website_schema"
+                if best_recipe.extracted_via == "pinterest_website_schema" and visit_url and best_url != destination_url
+                else "pinterest_destination_openai"
+                if best_url == destination_url
+                else "pinterest_website_openai"
+            )
+
+            recipe = best_recipe
+            if best_url == url:
+                recipe.extracted_via = recipe.extracted_via or "pinterest_pin"
+            else:
+                recipe.extracted_via = extracted_label
+            recipe.media_image_url = best_img or pin_image or recipe.media_image_url
+            recipe.source_url = best_url
+            recipe.source_domain = ensure_domain(best_url)
+            recipe.source_platform = "pinterest"
+            recipe.metadata["destinationUrl"] = destination_url
+            recipe.metadata["destinationDomain"] = ensure_domain(destination_url)
+            if visit_url:
+                recipe.metadata["websiteUrl"] = visit_url
+                recipe.metadata["websiteDomain"] = ensure_domain(visit_url)
     recipe.source_platform = "pinterest"
     recipe.metadata["pinterestUrl"] = url
 
