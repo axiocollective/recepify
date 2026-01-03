@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 # Install ffmpeg for TikTok imports and cleanup apt artifacts
 RUN apt-get update \
