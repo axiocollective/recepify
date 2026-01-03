@@ -1642,26 +1642,29 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
           </View>
         )}
         {(formData.tags || []).length > 0 && (
-          <View style={styles.tagsRow}>
-            {(formData.tags || []).map((tag, index) => (
-              <View key={`${tag}-${index}`} style={styles.tagChip}>
-                <TextInput
-                  value={tag}
-                  onChangeText={(value) => updateTag(index, value)}
-                  placeholder="New tag"
-                  placeholderTextColor={colors.gray500}
-                  autoCapitalize="none"
-                  style={styles.tagInput}
-                />
-                <Pressable onPress={() => removeTag(index)} style={styles.tagRemove}>
-                  <Ionicons name="close" size={14} color={colors.gray500} />
-                </Pressable>
-              </View>
-            ))}
-          </View>
+          <>
+            <Text style={styles.label}>Selected tags</Text>
+            <View style={styles.tagsRow}>
+              {(formData.tags || []).map((tag, index) => (
+                <View key={`${tag}-${index}`} style={styles.tagChip}>
+                  <TextInput
+                    value={tag}
+                    onChangeText={(value) => updateTag(index, value)}
+                    placeholder="New tag"
+                    placeholderTextColor={colors.gray500}
+                    autoCapitalize="none"
+                    style={styles.tagInput}
+                  />
+                  <Pressable onPress={() => removeTag(index)} style={styles.tagRemove}>
+                    <Ionicons name="close" size={14} color={colors.gray500} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          </>
         )}
         <View style={styles.field}>
-          <Text style={styles.label}>Suggestions</Text>
+          <Text style={styles.label}>All tags</Text>
           <View style={styles.suggestionsRow}>
             {visibleTags.map((tag) => {
               const selected = (formData.tags || []).includes(tag);
