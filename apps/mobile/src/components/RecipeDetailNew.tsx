@@ -63,6 +63,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
   const [currentServings, setCurrentServings] = useState((recipe.servingsOverride ?? recipe.servings) || 1);
   const [isVideoMuted, setIsVideoMuted] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [isVideoUnavailable, setIsVideoUnavailable] = useState(false);
   const [listAdded, setListAdded] = useState(false);
   const [isAddToCollectionOpen, setIsAddToCollectionOpen] = useState(false);
   const videoRef = useRef<Video>(null);
@@ -82,6 +83,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
   useEffect(() => {
     setIsVideoMuted(false);
     setIsVideoPlaying(false);
+    setIsVideoUnavailable(false);
     setListAdded(false);
     setCurrentServings((recipe.servingsOverride ?? recipe.servings) || 1);
     setUnitSystem(recipe.unitSystem ?? detectDefaultUnit());
@@ -548,6 +550,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
                 style={styles.videoPressable}
                 onPress={async () => {
                   if (!videoRef.current) return;
+                  if (isVideoUnavailable) return;
                   if (isVideoPlaying) {
                     await videoRef.current.pauseAsync();
                     setIsVideoPlaying(false);
@@ -565,19 +568,32 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
                   isMuted={isVideoMuted}
                   shouldPlay={isVideoPlaying}
                   isLooping
+                  onError={() => {
+                    setIsVideoUnavailable(true);
+                    setIsVideoPlaying(false);
+                  }}
                 />
-                {!isVideoPlaying && (
+                {!isVideoPlaying && !isVideoUnavailable && (
                   <View style={styles.videoPlayOverlay}>
                     <View style={styles.videoPlayButton}>
                       <Ionicons name="play" size={22} color={colors.white} />
                     </View>
                   </View>
                 )}
+                {isVideoUnavailable && (
+                  <View style={styles.videoUnavailableOverlay}>
+                    <Ionicons name="alert-circle-outline" size={20} color={colors.white} />
+                    <Text style={styles.videoUnavailableText}>Video unavailable</Text>
+                  </View>
+                )}
               </Pressable>
               <View style={styles.videoControls}>
                 <Pressable
                   style={styles.videoButton}
-                  onPress={() => setIsVideoMuted((prev) => !prev)}
+                  onPress={() => {
+                    if (isVideoUnavailable) return;
+                    setIsVideoMuted((prev) => !prev);
+                  }}
                 >
                   <Ionicons
                     name={isVideoMuted ? "volume-mute" : "volume-high"}
@@ -1099,6 +1115,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.2)",
+  },
+  videoUnavailableOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    backgroundColor: "rgba(15,23,42,0.75)",
+  },
+  videoUnavailableText: {
+    ...typography.bodySmall,
+    color: colors.white,
+    fontWeight: "600",
   },
   videoPlayButton: {
     width: 56,
