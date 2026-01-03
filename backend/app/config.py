@@ -37,6 +37,12 @@ def get_settings() -> Settings:
         settings.supabase_url = _normalize_supabase_url(settings.supabase_url)
     if settings.supabase_service_role_key:
         settings.supabase_service_role_key = settings.supabase_service_role_key.strip().strip('"').strip("'")
+    if settings.supabase_storage_bucket_images:
+        settings.supabase_storage_bucket_images = settings.supabase_storage_bucket_images.strip().strip('"').strip("'")
+    if settings.supabase_storage_bucket_videos:
+        settings.supabase_storage_bucket_videos = settings.supabase_storage_bucket_videos.strip().strip('"').strip("'")
+    if settings.supabase_storage_prefix:
+        settings.supabase_storage_prefix = settings.supabase_storage_prefix.strip().strip('"').strip("'")
     if settings.supabase_db_url:
         settings.supabase_db_url = _normalize_database_url(settings.supabase_db_url)
     if settings.supabase_db_url and settings.database_url == "sqlite:///./recipefy.db":
