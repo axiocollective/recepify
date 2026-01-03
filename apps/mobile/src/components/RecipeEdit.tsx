@@ -972,13 +972,9 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     const descriptionValue = (snapshot.description ?? "").trim();
     const hasStepsValue = snapshot.steps.some((step) => step.trim().length > 0);
     if ((!descriptionValue && !hasStepsValue) || isSuggestingTags) return;
-    const current = formData.tags || [];
-    if (current.length === 0) {
-      Alert.alert("No tags yet", "Add tags first so ChefGPT can verify which ones still fit.");
-      return;
-    }
     setIsSuggestingTags(true);
-    const currentLower = current.map((tag) => tag.toLowerCase());
+    const allowedTags = RECIPE_TAGS;
+    const allowedLower = new Map(allowedTags.map((tag) => [tag.toLowerCase(), tag]));
     try {
       const response = await askRecipeAssistant({
         recipe: buildRecipePayload(snapshot),
@@ -986,18 +982,20 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
           {
             role: "user",
             content:
-              `From the existing tags ${current.join(
+              `Select the most relevant tags for this recipe using ONLY the following list: ${allowedTags.join(
                 ", "
-              )}, return ONLY the tags that still fit this recipe. Do not add new tags. Respond strictly in JSON like {"tags":["tag1","tag2"]} using the exact casing provided.`,
+              )}. Respond strictly in JSON like {"tags":["tag1","tag2"]} using the exact casing provided.`,
           },
         ],
       });
-      const tags = parseTagsFromReply(response.reply ?? "").map((tag) => tag.toLowerCase());
+      const tags = parseTagsFromReply(response.reply ?? "")
+        .map((tag) => tag.toLowerCase())
+        .map((tag) => allowedLower.get(tag))
+        .filter((tag): tag is string => Boolean(tag));
       if (!tags.length) {
         throw new Error("ChefGPT could not determine relevant tags for this recipe.");
       }
-      const next = current.filter((tag) => tags.includes(tag.toLowerCase()));
-      updateField("tags", next);
+      updateField("tags", Array.from(new Set(tags)));
       refreshUsageSummary();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to suggest tags right now.";
