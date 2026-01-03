@@ -227,12 +227,17 @@ export const importFromWeb = (url: string) => postImportUrl("/import/web", url);
 
 export const importFromTikTok = (url: string) => postImportUrl("/import/tiktok", url);
 
+export const importFromInstagram = (url: string) => postImportUrl("/import/instagram", url);
+
 export const importFromPinterest = (url: string) => postImportUrl("/import/pinterest", url);
 
 export const importFromUrl = (url: string) => {
   const lower = url.toLowerCase();
   if (lower.includes("tiktok.com") || lower.includes("vm.tiktok.com")) {
     return importFromTikTok(url);
+  }
+  if (lower.includes("instagram.com") || lower.includes("instagr.am")) {
+    return importFromInstagram(url);
   }
   if (lower.includes("pinterest.com") || lower.includes("pin.it")) {
     return importFromPinterest(url);
