@@ -37,6 +37,7 @@ def on_startup() -> None:
         f"bucket_images={settings.supabase_storage_bucket_images}",
         f"bucket_videos={settings.supabase_storage_bucket_videos}",
         f"prefix={settings.supabase_storage_prefix}",
+        flush=True,
     )
 
 
