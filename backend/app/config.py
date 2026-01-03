@@ -33,6 +33,10 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
+    if settings.supabase_url:
+        settings.supabase_url = _normalize_supabase_url(settings.supabase_url)
+    if settings.supabase_service_role_key:
+        settings.supabase_service_role_key = settings.supabase_service_role_key.strip().strip('"').strip("'")
     if settings.supabase_db_url:
         settings.supabase_db_url = _normalize_database_url(settings.supabase_db_url)
     if settings.supabase_db_url and settings.database_url == "sqlite:///./recipefy.db":
@@ -48,3 +52,8 @@ def _normalize_database_url(database_url: str) -> str:
     if database_url.startswith("postgresql://"):
         return database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
     return database_url
+
+
+def _normalize_supabase_url(url: str) -> str:
+    normalized = url.strip().strip('"').strip("'")
+    return normalized.rstrip("/") + "/"
