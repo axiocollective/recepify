@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
+import mimetypes
 import re
+import uuid
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, List, Optional, Sequence
 from urllib.parse import urlparse
@@ -10,8 +14,11 @@ import httpx
 from bs4 import BeautifulSoup
 from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field
+from supabase import Client, create_client
 
 from ..config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def clean_text(value: Optional[str]) -> str:
@@ -269,3 +276,149 @@ def ensure_storage_path(*parts: str, is_file: bool = False) -> Path:
     else:
         target.mkdir(parents=True, exist_ok=True)
     return target
+
+
+@lru_cache
+def _get_supabase_client() -> Optional[Client]:
+    settings = get_settings()
+    if not settings.supabase_url or not settings.supabase_service_role_key:
+        return None
+    normalized_url = settings.supabase_url.rstrip("/") + "/"
+    return create_client(normalized_url, settings.supabase_service_role_key)
+
+
+def _is_http_url(value: str) -> bool:
+    return value.startswith("http://") or value.startswith("https://")
+
+
+def _is_supabase_public_url(url: str, bucket: str) -> bool:
+    settings = get_settings()
+    if not settings.supabase_url:
+        return False
+    base = settings.supabase_url.rstrip("/")
+    return f"{base}/storage/v1/object/public/{bucket}/" in url
+
+
+def _guess_extension(filename: str, content_type: Optional[str]) -> str:
+    if content_type:
+        ext = mimetypes.guess_extension(content_type.split(";")[0].strip().lower())
+        if ext:
+            return ext
+    suffix = Path(filename).suffix
+    return suffix if suffix else ""
+
+
+def _build_object_path(bucket_prefix: str, filename: str, content_type: Optional[str]) -> str:
+    ext = _guess_extension(filename, content_type)
+    file_id = uuid.uuid4().hex
+    return f"{bucket_prefix}/{file_id}{ext}"
+
+
+def _upload_bytes_to_bucket(
+    bucket: str,
+    object_path: str,
+    data: bytes,
+    content_type: Optional[str],
+) -> Optional[str]:
+    client = _get_supabase_client()
+    if not client:
+        return None
+    try:
+        client.storage.from_(bucket).upload(
+            object_path,
+            data,
+            file_options={"content-type": content_type or "application/octet-stream", "upsert": "true"},
+        )
+        return client.storage.from_(bucket).get_public_url(object_path)
+    except Exception as exc:
+        logger.warning("Supabase upload failed for %s/%s: %s", bucket, object_path, exc)
+        return None
+
+
+def _upload_file_to_bucket(
+    bucket: str,
+    file_path: Path,
+    bucket_prefix: str,
+    content_type: Optional[str] = None,
+) -> Optional[str]:
+    if not file_path.exists():
+        return None
+    if content_type is None:
+        content_type = mimetypes.guess_type(file_path.name)[0]
+    object_path = _build_object_path(bucket_prefix, file_path.name, content_type)
+    return _upload_bytes_to_bucket(bucket, object_path, file_path.read_bytes(), content_type)
+
+
+def _upload_remote_image(
+    image_url: str,
+    bucket: str,
+    bucket_prefix: str,
+) -> Optional[str]:
+    try:
+        response = httpx.get(image_url, timeout=20.0, follow_redirects=True)
+        response.raise_for_status()
+        content_type = response.headers.get("content-type")
+        if content_type and not content_type.lower().startswith("image/"):
+            return None
+        filename = Path(urlparse(image_url).path).name or "image"
+        object_path = _build_object_path(bucket_prefix, filename, content_type)
+        return _upload_bytes_to_bucket(bucket, object_path, response.content, content_type)
+    except Exception as exc:
+        logger.warning("Failed to upload remote image %s: %s", image_url, exc)
+        return None
+
+
+def sync_recipe_media_to_supabase(recipe: ImportedRecipe) -> None:
+    settings = get_settings()
+    if not settings.supabase_url or not settings.supabase_service_role_key:
+        return
+
+    image_bucket = settings.supabase_storage_bucket_images
+    video_bucket = settings.supabase_storage_bucket_videos
+    prefix = settings.supabase_storage_prefix.strip("/") if settings.supabase_storage_prefix else "imports"
+
+    if recipe.media_image_url:
+        if _is_http_url(recipe.media_image_url):
+            if not _is_supabase_public_url(recipe.media_image_url, image_bucket):
+                uploaded = _upload_remote_image(
+                    recipe.media_image_url,
+                    image_bucket,
+                    f"{prefix}/images/{recipe.source_platform}",
+                )
+                if uploaded:
+                    recipe.media_image_url = uploaded
+        else:
+            image_path = Path(recipe.media_image_url)
+            if image_path.exists():
+                uploaded = _upload_file_to_bucket(
+                    image_bucket,
+                    image_path,
+                    f"{prefix}/images/{recipe.source_platform}",
+                )
+                if uploaded:
+                    recipe.media_image_url = uploaded
+
+    if recipe.media_video_url:
+        if _is_http_url(recipe.media_video_url):
+            if _is_supabase_public_url(recipe.media_video_url, video_bucket):
+                return
+            # Prefer local download for videos; remote streaming uploads are avoided.
+        else:
+            video_path = Path(recipe.media_video_url)
+            if video_path.exists():
+                uploaded = _upload_file_to_bucket(
+                    video_bucket,
+                    video_path,
+                    f"{prefix}/videos/{recipe.source_platform}",
+                )
+                if uploaded:
+                    recipe.media_video_url = uploaded
+
+
+def upload_local_media_to_supabase(
+    file_path: Path,
+    bucket: str,
+    prefix: str,
+    content_type: Optional[str] = None,
+) -> Optional[str]:
+    return _upload_file_to_bucket(bucket, file_path, prefix, content_type)

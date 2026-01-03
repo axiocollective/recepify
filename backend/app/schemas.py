@@ -111,3 +111,16 @@ class ShoppingListItemDTO(BaseModel):
 
 class ShoppingListSyncDTO(BaseModel):
     items: List[ShoppingListItemDTO] = Field(default_factory=list)
+
+
+class RecipeCollectionDTO(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
+
+    id: Optional[UUID] = None
+    name: str
+    recipe_ids: List[UUID] = Field(default_factory=list, alias="recipeIds")
+    created_at: Optional[datetime] = Field(default=None, alias="createdAt")
+
+
+class RecipeCollectionsSyncDTO(BaseModel):
+    collections: List[RecipeCollectionDTO] = Field(default_factory=list)

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
+import sys
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -18,6 +20,7 @@ from .import_utils import (
     ensure_storage_path,
     get_openai_client,
     instructions_from_strings,
+    sync_recipe_media_to_supabase,
 )
 
 
@@ -83,8 +86,9 @@ def _download_tiktok_video(tiktok_url: str) -> Path:
     file_id = uuid.uuid4().hex[:8]
     output_template = target_dir / f"tiktok_{file_id}.%(ext)s"
 
-    command = [
-        "yt-dlp",
+    yt_dlp_cmd = shutil.which("yt-dlp")
+    base_cmd = [yt_dlp_cmd] if yt_dlp_cmd else [sys.executable, "-m", "yt_dlp"]
+    command = base_cmd + [
         "-f",
         "bv*+ba/best",
         "--no-playlist",
@@ -266,4 +270,5 @@ def import_tiktok(url: str) -> Tuple[Dict[str, Any], str]:
     transcript = _transcribe_audio(audio_path)
     recipe = _openai_recipe_from_signals(url, oembed, transcript)
     converted = _convert_recipe(recipe, video_path, thumbnail_path)
-    return converted.model_dump_recipe(), str(video_path)
+    sync_recipe_media_to_supabase(converted)
+    return converted.model_dump_recipe(), converted.media_video_url or str(video_path)

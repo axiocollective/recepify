@@ -4,18 +4,31 @@ import json
 import re
 
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from typing import Any, Dict, List, Literal, Optional, Union
 from uuid import UUID, uuid4, uuid5, NAMESPACE_DNS
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Header
+from sqlalchemy import text
+import httpx
 from sqlmodel import Session, select
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from ..config import get_settings
 from ..dependencies import get_db_session
-from ..models import Ingredient, InstructionStep, Recipe, RecipeTag, ShoppingListItem, UserSettings
+from ..models import (
+    Ingredient,
+    InstructionStep,
+    Recipe,
+    RecipeTag,
+    ShoppingListItem,
+    UserSettings,
+    RecipeCollection,
+    RecipeCollectionItem,
+    UsageMonthly,
+    ImportUsageMonthly,
+)
 from ..schemas import (
     IngredientDTO,
     InstructionStepDTO,
@@ -25,6 +38,8 @@ from ..schemas import (
     UserSettingsUpdateDTO,
     ShoppingListItemDTO,
     ShoppingListSyncDTO,
+    RecipeCollectionDTO,
+    RecipeCollectionsSyncDTO,
 )
 from ..services import import_instagram as instagram_service
 from ..services import import_scan as scan_service
@@ -60,6 +75,10 @@ class RecipeAssistantRecipe(BaseModel):
     difficulty: Optional[str] = None
     meal_type: Optional[str] = None
     source: Optional[str] = None
+    nutrition_calories: Optional[str] = None
+    nutrition_protein: Optional[str] = None
+    nutrition_carbs: Optional[str] = None
+    nutrition_fat: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
     notes: Optional[str] = None
     ingredients: List[str] = Field(default_factory=list)
@@ -398,6 +417,17 @@ def _format_recipe_context(recipe: RecipeAssistantRecipe) -> str:
             "Steps:\n"
             + "\n".join(f"{idx + 1}. {step}" for idx, step in enumerate(recipe.steps) if step.strip())
         )
+    nutrition_bits: List[str] = []
+    if recipe.nutrition_calories:
+        nutrition_bits.append(f"Calories: {recipe.nutrition_calories}")
+    if recipe.nutrition_protein:
+        nutrition_bits.append(f"Protein: {recipe.nutrition_protein}")
+    if recipe.nutrition_carbs:
+        nutrition_bits.append(f"Carbs: {recipe.nutrition_carbs}")
+    if recipe.nutrition_fat:
+        nutrition_bits.append(f"Fat: {recipe.nutrition_fat}")
+    if nutrition_bits:
+        sections.append("Nutrition: " + ", ".join(nutrition_bits))
     if recipe.notes:
         sections.append(f"Chef notes: {recipe.notes}")
     return "\n".join(section for section in sections if section)
@@ -742,10 +772,10 @@ def _parse_structured_reply(raw_text: str) -> Optional[AssistantStructuredRespon
 
 def _generate_structured_sections_response(
     client: Any, conversation: List[Dict[str, str]]
-) -> AssistantStructuredResponse:
+) -> tuple[AssistantStructuredResponse, int, Optional[str]]:
     last_error: Optional[Exception] = None
 
-    def invoke(messages: List[Dict[str, str]], model_name: str) -> Optional[AssistantStructuredResponse]:
+    def invoke(messages: List[Dict[str, str]], model_name: str) -> tuple[Optional[AssistantStructuredResponse], int]:
         nonlocal last_error
         try:
             response = client.responses.parse(
@@ -753,29 +783,29 @@ def _generate_structured_sections_response(
                 input=messages,
                 text_format=AssistantStructuredResponse,
             )
-            return response.output_parsed
+            return response.output_parsed, _extract_usage_tokens(response)
         except Exception as exc:
             last_error = exc
             logger.warning("ChefGPT model %s failed to respond: %s", model_name, exc)
-            return None
+            return None, 0
 
-    def try_models(messages: List[Dict[str, str]]) -> Optional[AssistantStructuredResponse]:
+    def try_models(messages: List[Dict[str, str]]) -> tuple[Optional[AssistantStructuredResponse], int, Optional[str]]:
         for model_name in CHEFGPT_MODEL_CANDIDATES:
-            structured = invoke(messages, model_name)
+            structured, tokens = invoke(messages, model_name)
             if structured:
-                return structured
-        return None
+                return structured, tokens, model_name
+        return None, 0, None
 
-    structured = try_models(conversation)
+    structured, tokens, model_name = try_models(conversation)
     if structured:
-        return structured
+        return structured, tokens, model_name
 
     retry_conversation = conversation + [
         {"role": "user", "content": SCHEMA_CORRECTION_PROMPT},
     ]
-    structured = try_models(retry_conversation)
+    structured, tokens, model_name = try_models(retry_conversation)
     if structured:
-        return structured
+        return structured, tokens, model_name
 
     fallback_message = (
         "I'm struggling to format this reply. Please try another question or rephrase."
@@ -789,10 +819,12 @@ def _generate_structured_sections_response(
                 bullets=[fallback_message],
             )
         ]
-    )
+    ), 0, None
 
 
-def _generate_plain_assistant_response(client: Any, conversation: List[Dict[str, str]]) -> str:
+def _generate_plain_assistant_response(
+    client: Any, conversation: List[Dict[str, str]]
+) -> tuple[str, int, Optional[str]]:
     last_error: Optional[Exception] = None
     for model_name in CHEFGPT_MODEL_CANDIDATES or ("gpt-4o-mini",):
         try:
@@ -802,7 +834,7 @@ def _generate_plain_assistant_response(client: Any, conversation: List[Dict[str,
             )
             text = _extract_assistant_text(response)
             if text:
-                return text
+                return text, _extract_usage_tokens(response), model_name
         except Exception as exc:
             last_error = exc
             logger.warning("ChefGPT plain mode with %s failed: %s", model_name, exc)
@@ -827,6 +859,34 @@ def _get_or_create_user_settings(session: Session, user_id: UUID) -> UserSetting
     return settings
 
 
+def _delete_user_data(session: Session, user_id: UUID) -> None:
+    params = {"user_id": str(user_id)}
+    session.exec(
+        text(
+            "delete from recipe_collection_items where collection_id in "
+            "(select id from recipe_collections where owner_id = :user_id)"
+        ),
+        params,
+    )
+    session.exec(text("delete from recipe_collections where owner_id = :user_id"), params)
+    session.exec(
+        text("delete from recipe_ingredients where recipe_id in (select id from recipes where owner_id = :user_id)"),
+        params,
+    )
+    session.exec(
+        text("delete from recipe_steps where recipe_id in (select id from recipes where owner_id = :user_id)"),
+        params,
+    )
+    session.exec(text("delete from recipe_likes where owner_id = :user_id"), params)
+    session.exec(text("delete from recipes where owner_id = :user_id"), params)
+    session.exec(text("delete from shopping_list_items where owner_id = :user_id"), params)
+    session.exec(text("delete from shopping_list_item where user_id = :user_id"), params)
+    session.exec(text("delete from usage_monthly where owner_id = :user_id"), params)
+    session.exec(text("delete from import_usage_monthly where owner_id = :user_id"), params)
+    session.exec(text("delete from profiles where id = :user_id"), params)
+    session.commit()
+
+
 @router.get("/users/me/settings", response_model=UserSettingsReadDTO)
 def get_user_settings(session: Session = Depends(get_db_session)) -> UserSettingsReadDTO:
     settings = _get_or_create_user_settings(session, DEFAULT_USER_ID)
@@ -845,6 +905,40 @@ def update_user_settings(
     session.commit()
     session.refresh(settings)
     return settings
+
+
+@router.delete("/users/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user_account(
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> None:
+    if not x_user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-User-Id header is required.")
+    try:
+        user_id = UUID(x_user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user id.") from exc
+
+    _delete_user_data(session, user_id)
+
+    if not _SETTINGS.supabase_url or not _SETTINGS.supabase_service_role_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Supabase service role key is not configured.",
+        )
+
+    admin_url = f"{_SETTINGS.supabase_url.rstrip('/')}/auth/v1/admin/users/{user_id}"
+    headers = {
+        "Authorization": f"Bearer {_SETTINGS.supabase_service_role_key}",
+        "apikey": _SETTINGS.supabase_service_role_key,
+    }
+    response = httpx.delete(admin_url, headers=headers, timeout=10.0)
+    if response.status_code >= 300:
+        logger.error("Failed to delete Supabase user: %s", response.text)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to delete Supabase user.",
+        )
 
 
 @router.get("/recipes", response_model=List[RecipeReadDTO])
@@ -943,43 +1037,76 @@ def delete_recipe(recipe_id: UUID, session: Session = Depends(get_db_session)) -
 
 
 @router.post("/import/web", response_model=ImportResponse)
-def import_web(payload: ImportRequest) -> ImportResponse:
+def import_web(
+    payload: ImportRequest,
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> ImportResponse:
     try:
         recipe_data = web_service.import_web(payload.url)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    if x_user_email or x_user_id:
+        _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "web")
     return ImportResponse(recipe=recipe_data)
 
 
 @router.post("/import/tiktok", response_model=ImportResponse)
-def import_tiktok(payload: ImportRequest) -> ImportResponse:
+def import_tiktok(
+    payload: ImportRequest,
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> ImportResponse:
     try:
         recipe_data, video_path = tiktok_service.import_tiktok(payload.url)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    if x_user_email or x_user_id:
+        _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "tiktok")
     return ImportResponse(recipe=recipe_data, videoPath=video_path)
 
 
 @router.post("/import/instagram", response_model=ImportResponse)
-def import_instagram(payload: ImportRequest) -> ImportResponse:
+def import_instagram(
+    payload: ImportRequest,
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> ImportResponse:
     try:
         recipe_data, video_path = instagram_service.import_instagram(payload.url)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    if x_user_email or x_user_id:
+        _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "instagram")
     return ImportResponse(recipe=recipe_data, videoPath=video_path)
 
 
 @router.post("/import/pinterest", response_model=ImportResponse)
-def import_pinterest(payload: ImportRequest) -> ImportResponse:
+def import_pinterest(
+    payload: ImportRequest,
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> ImportResponse:
     try:
         recipe_data = pinterest_service.import_pinterest(payload.url)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    if x_user_email or x_user_id:
+        _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "pinterest")
     return ImportResponse(recipe=recipe_data)
 
 
 @router.post("/import/scan", response_model=ImportResponse)
-async def import_scan(file: UploadFile = File(...)) -> ImportResponse:
+async def import_scan(
+    file: UploadFile = File(...),
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> ImportResponse:
     contents = await file.read()
     if not contents:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded image is empty.")
@@ -989,12 +1116,19 @@ async def import_scan(file: UploadFile = File(...)) -> ImportResponse:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    if x_user_email or x_user_id:
+        _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "scan")
     return ImportResponse(recipe=recipe_data)
 
 
 
 @router.post("/assistant/recipe", response_model=RecipeAssistantResponse)
-def recipe_assistant(payload: RecipeAssistantRequest) -> RecipeAssistantResponse:
+def recipe_assistant(
+    payload: RecipeAssistantRequest,
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> RecipeAssistantResponse:
     recipe_context = _format_recipe_context(payload.recipe)
     client = get_openai_client()
     base_instructions = (
@@ -1012,16 +1146,27 @@ def recipe_assistant(payload: RecipeAssistantRequest) -> RecipeAssistantResponse
     for message in payload.messages:
         conversation.append({"role": message.role, "content": message.content})
 
+    tokens_used = 0
+    tokens_weighted = 0
     if payload.structured:
-        structured_response = _generate_structured_sections_response(client, conversation)
+        structured_response, tokens_used, model_name = _generate_structured_sections_response(client, conversation)
+        tokens_weighted = _apply_token_weight(tokens_used, model_name)
         reply_payload = json.dumps(structured_response.model_dump())
     else:
-        reply_payload = _generate_plain_assistant_response(client, conversation)
+        reply_payload, tokens_used, model_name = _generate_plain_assistant_response(client, conversation)
+        tokens_weighted = _apply_token_weight(tokens_used, model_name)
+    if x_user_email or x_user_id:
+        _increment_ai_usage(session, _resolve_user_id(x_user_email, x_user_id), tokens_weighted)
     return RecipeAssistantResponse(reply=reply_payload)
 
 
 @router.post("/assistant/finder", response_model=RecipeFinderResponse)
-def recipe_finder(payload: RecipeFinderRequest) -> RecipeFinderResponse:
+def recipe_finder(
+    payload: RecipeFinderRequest,
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> RecipeFinderResponse:
     query = payload.query.strip()
     if not query:
         raise HTTPException(
@@ -1087,6 +1232,10 @@ def recipe_finder(payload: RecipeFinderRequest) -> RecipeFinderResponse:
                     matches_payload.append(RecipeFinderMatch(id=recipe_id, summary=summary))
 
             reply_text = parsed.get("response") or "I couldn't find a perfect match in your recipe box."
+            if x_user_email or x_user_id:
+                tokens = _extract_usage_tokens(response)
+                tokens_weighted = _apply_token_weight(tokens, "gpt-4o-mini")
+                _increment_ai_usage(session, _resolve_user_id(x_user_email, x_user_id), tokens_weighted)
             return RecipeFinderResponse(reply=reply_text.strip(), matches=matches_payload[:3])
         except Exception as exc:
             logger.warning("ChefGPT finder failed, falling back to keyword search: %s", exc)
@@ -1108,7 +1257,12 @@ def _normalize_text(value: Optional[str]) -> Optional[str]:
     return cleaned or None
 
 
-def _resolve_user_id(raw_email: Optional[str]) -> UUID:
+def _resolve_user_id(raw_email: Optional[str], raw_user_id: Optional[str] = None) -> UUID:
+    if raw_user_id:
+        try:
+            return UUID(raw_user_id)
+        except ValueError:
+            pass
     if not raw_email:
         return DEFAULT_USER_ID
     normalized = raw_email.strip().lower()
@@ -1117,12 +1271,124 @@ def _resolve_user_id(raw_email: Optional[str]) -> UUID:
     return uuid5(NAMESPACE_DNS, f"recepify:{normalized}")
 
 
+def _get_period_start(reference: Optional[datetime] = None) -> date:
+    point = reference or datetime.utcnow()
+    return date(point.year, point.month, 1)
+
+
+def _extract_usage_tokens(response: Any) -> int:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return 0
+    total = getattr(usage, "total_tokens", None)
+    if isinstance(total, int):
+        return max(0, total)
+    if isinstance(usage, dict):
+        total = usage.get("total_tokens")
+        if isinstance(total, int):
+            return max(0, total)
+    input_tokens = getattr(usage, "input_tokens", None)
+    output_tokens = getattr(usage, "output_tokens", None)
+    if isinstance(usage, dict):
+        input_tokens = usage.get("input_tokens", input_tokens)
+        output_tokens = usage.get("output_tokens", output_tokens)
+    if isinstance(input_tokens, int) or isinstance(output_tokens, int):
+        return max(0, (input_tokens or 0) + (output_tokens or 0))
+    return 0
+
+
+def _apply_token_weight(tokens: int, model_name: Optional[str]) -> int:
+    if tokens <= 0:
+        return 0
+    weights = {
+        "gpt-4o-mini": 1.0,
+        "o4-mini": 1.2,
+        "gpt-4o": 4.0,
+    }
+    weight = weights.get(model_name or "", 1.0)
+    return max(1, int(round(tokens * weight)))
+
+
+def _increment_ai_usage(session: Session, owner_id: UUID, tokens: int) -> None:
+    if tokens <= 0:
+        return
+    period_start = _get_period_start()
+    existing = session.exec(
+        select(UsageMonthly).where(
+            UsageMonthly.owner_id == owner_id,
+            UsageMonthly.period_start == period_start,
+        )
+    ).first()
+    if existing:
+        existing.ai_tokens += tokens
+        existing.updated_at = datetime.utcnow()
+    else:
+        session.add(
+            UsageMonthly(
+                owner_id=owner_id,
+                period_start=period_start,
+                import_count=0,
+                ai_tokens=tokens,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+        )
+    session.commit()
+
+
+def _increment_import_usage(session: Session, owner_id: UUID, source: str) -> None:
+    period_start = _get_period_start()
+    usage = session.exec(
+        select(UsageMonthly).where(
+            UsageMonthly.owner_id == owner_id,
+            UsageMonthly.period_start == period_start,
+        )
+    ).first()
+    if usage:
+        usage.import_count += 1
+        usage.updated_at = datetime.utcnow()
+    else:
+        session.add(
+            UsageMonthly(
+                owner_id=owner_id,
+                period_start=period_start,
+                import_count=1,
+                ai_tokens=0,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+        )
+    source_key = (source or "unknown").lower()
+    source_usage = session.exec(
+        select(ImportUsageMonthly).where(
+            ImportUsageMonthly.owner_id == owner_id,
+            ImportUsageMonthly.period_start == period_start,
+            ImportUsageMonthly.source == source_key,
+        )
+    ).first()
+    if source_usage:
+        source_usage.import_count += 1
+        source_usage.updated_at = datetime.utcnow()
+    else:
+        session.add(
+            ImportUsageMonthly(
+                owner_id=owner_id,
+                period_start=period_start,
+                source=source_key,
+                import_count=1,
+                updated_at=datetime.utcnow(),
+            )
+        )
+    session.commit()
+
+
 @router.get("/shopping-list", response_model=List[ShoppingListItemDTO])
 def get_shopping_list_items(
     x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     session: Session = Depends(get_db_session),
 ) -> List[ShoppingListItemDTO]:
-    user_id = _resolve_user_id(x_user_email)
+    user_id = _resolve_user_id(x_user_email, x_user_id)
     items = session.exec(
         select(ShoppingListItem)
         .where(ShoppingListItem.user_id == user_id)
@@ -1135,9 +1401,10 @@ def get_shopping_list_items(
 def replace_shopping_list_items(
     payload: ShoppingListSyncDTO,
     x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     session: Session = Depends(get_db_session),
 ) -> List[ShoppingListItemDTO]:
-    user_id = _resolve_user_id(x_user_email)
+    user_id = _resolve_user_id(x_user_email, x_user_id)
     existing_items = session.exec(
         select(ShoppingListItem).where(ShoppingListItem.user_id == user_id)
     ).all()
@@ -1169,3 +1436,103 @@ def replace_shopping_list_items(
         session.add_all(new_items)
     session.commit()
     return new_items
+
+
+@router.get("/collections", response_model=List[RecipeCollectionDTO])
+def get_recipe_collections(
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> List[RecipeCollectionDTO]:
+    user_id = _resolve_user_id(x_user_email, x_user_id)
+    collections = session.exec(
+        select(RecipeCollection)
+        .where(RecipeCollection.owner_id == user_id)
+        .order_by(RecipeCollection.created_at)
+    ).all()
+    if not collections:
+        return []
+    collection_ids = [collection.id for collection in collections]
+    items = session.exec(
+        select(RecipeCollectionItem).where(RecipeCollectionItem.collection_id.in_(collection_ids))
+    ).all()
+    item_map: Dict[UUID, List[UUID]] = {collection_id: [] for collection_id in collection_ids}
+    for item in items:
+        item_map.setdefault(item.collection_id, []).append(item.recipe_id)
+    return [
+        RecipeCollectionDTO(
+            id=collection.id,
+            name=collection.name,
+            recipe_ids=item_map.get(collection.id, []),
+            created_at=collection.created_at,
+        )
+        for collection in collections
+    ]
+
+
+@router.put("/collections", response_model=List[RecipeCollectionDTO])
+def replace_recipe_collections(
+    payload: RecipeCollectionsSyncDTO,
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> List[RecipeCollectionDTO]:
+    user_id = _resolve_user_id(x_user_email, x_user_id)
+    existing = session.exec(
+        select(RecipeCollection).where(RecipeCollection.owner_id == user_id)
+    ).all()
+    existing_ids = [collection.id for collection in existing]
+    if existing_ids:
+        existing_items = session.exec(
+            select(RecipeCollectionItem).where(RecipeCollectionItem.collection_id.in_(existing_ids))
+        ).all()
+        for item in existing_items:
+            session.delete(item)
+        for collection in existing:
+            session.delete(collection)
+        session.commit()
+
+    now = datetime.utcnow()
+    new_collections: List[RecipeCollection] = []
+    new_items: List[RecipeCollectionItem] = []
+
+    for entry in payload.collections:
+        normalized_name = _normalize_text(entry.name)
+        if not normalized_name:
+            continue
+        collection_id = entry.id or uuid4()
+        collection = RecipeCollection(
+            id=collection_id,
+            owner_id=user_id,
+            name=normalized_name,
+            created_at=entry.created_at or now,
+        )
+        new_collections.append(collection)
+        for recipe_id in entry.recipe_ids:
+            new_items.append(
+                RecipeCollectionItem(
+                    id=uuid4(),
+                    collection_id=collection_id,
+                    recipe_id=recipe_id,
+                    created_at=now,
+                )
+            )
+
+    if new_collections:
+        session.add_all(new_collections)
+    if new_items:
+        session.add_all(new_items)
+    session.commit()
+
+    item_map: Dict[UUID, List[UUID]] = {collection.id: [] for collection in new_collections}
+    for item in new_items:
+        item_map.setdefault(item.collection_id, []).append(item.recipe_id)
+    return [
+        RecipeCollectionDTO(
+            id=collection.id,
+            name=collection.name,
+            recipe_ids=item_map.get(collection.id, []),
+            created_at=collection.created_at,
+        )
+        for collection in new_collections
+    ]

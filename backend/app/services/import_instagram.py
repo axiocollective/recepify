@@ -13,6 +13,7 @@ from .import_utils import (
     ensure_domain,
     get_openai_client,
     instructions_from_strings,
+    sync_recipe_media_to_supabase,
 )
 
 
@@ -196,4 +197,5 @@ def import_instagram(url: str) -> Tuple[Dict[str, Any], Optional[str]]:
     recipe = _openai_recipe_from_signals(url, metadata, caption_text)
     thumbnail_url = _extract_thumbnail_url(metadata)
     converted = _convert_recipe(recipe, thumbnail_url)
+    sync_recipe_media_to_supabase(converted)
     return converted.model_dump_recipe(), None

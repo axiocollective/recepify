@@ -9,6 +9,12 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     database_url: str = "sqlite:///./recipefy.db"
+    supabase_db_url: Optional[str] = None
+    supabase_url: Optional[str] = None
+    supabase_service_role_key: Optional[str] = None
+    supabase_storage_bucket_videos: str = "recipe-videos"
+    supabase_storage_bucket_images: str = "recipe-images"
+    supabase_storage_prefix: str = "imports"
     storage_dir: Path = Path("storage")
     frontend_origins: Optional[str] = None
     openai_api_key: Optional[str] = None
@@ -27,5 +33,7 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
+    if settings.supabase_db_url and settings.database_url == "sqlite:///./recipefy.db":
+        settings.database_url = settings.supabase_db_url
     settings.storage_dir.mkdir(parents=True, exist_ok=True)
     return settings

@@ -20,6 +20,7 @@ from .import_utils import (
     ensure_storage_path,
     get_openai_client,
     instructions_from_strings,
+    sync_recipe_media_to_supabase,
 )
 
 
@@ -209,4 +210,5 @@ def import_scan(image_bytes: bytes, filename: Optional[str], content_type: Optio
     converted = _convert_recipe(recipe, image_path)
     converted.metadata["rawText"] = raw_text
     converted.metadata["extractedBy"] = "google-vision+openai"
+    sync_recipe_media_to_supabase(converted)
     return converted.model_dump_recipe()

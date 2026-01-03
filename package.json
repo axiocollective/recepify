@@ -2,16 +2,11 @@
   "name": "recepify",
   "private": true,
   "workspaces": [
-    "apps/web",
     "apps/mobile",
     "packages/shared"
   ],
   "scripts": {
-    "start": "npm run start:web",
-    "dev:web": "npm run dev --workspace web",
-    "build:web": "npm run build --workspace web",
-    "start:web": "npm run start --workspace web",
-    "lint:web": "npm run lint --workspace web",
+    "start": "npm run dev:mobile",
     "dev:mobile": "npm run start --workspace mobile"
   },
   "devDependencies": {
@@ -19,5 +14,8 @@
     "@types/react-dom": "^18.3.3",
     "react": "18.2.0",
     "react-dom": "18.2.0"
+  },
+  "dependencies": {
+    "expo-font": "^14.0.10"
   }
 }

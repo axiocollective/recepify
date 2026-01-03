@@ -29,6 +29,7 @@ from .import_utils import (
     pick_best_recipe,
     resolve_schema_image,
     safe_list,
+    sync_recipe_media_to_supabase,
 )
 
 logger = logging.getLogger(__name__)
@@ -261,6 +262,90 @@ def _openai_from_page(
     )
 
 
+def _openai_from_pages(
+    primary_url: str,
+    primary_html: str,
+    secondary_url: Optional[str],
+    secondary_html: Optional[str],
+    image_url: Optional[str],
+    *,
+    platform: str = "web",
+    extracted_via_label: str = "openai_from_body",
+) -> ImportedRecipe:
+    client = get_openai_client()
+
+    def _title_tag(html: str) -> Optional[str]:
+        soup = BeautifulSoup(html, "html.parser")
+        return soup.title.string.strip() if soup.title and soup.title.string else None
+
+    payload: dict[str, Any] = {
+        "primary": {
+            "url": primary_url,
+            "title_tag": _title_tag(primary_html),
+            "body_text": extract_page_text(primary_html)[:120_000],
+        }
+    }
+    if secondary_url and secondary_html:
+        payload["secondary"] = {
+            "url": secondary_url,
+            "title_tag": _title_tag(secondary_html),
+            "body_text": extract_page_text(secondary_html)[:120_000],
+        }
+
+    system_prompt = (
+        "Extract a recipe from the provided page text.\n"
+        "You may receive a primary page and an optional secondary page for extra context.\n"
+        "Return ONLY JSON matching this schema:\n"
+        "{title, description, meal_type, difficulty, prep_time, cook_time, total_time, servings,\n"
+        " nutrition:{calories,protein,carbs,fat}, ingredients:[string], instructions:[string], tags:[string], chefs_notes,\n"
+        " media:{video_path,image_url}, source_url, source_domain, source_platform, extracted_via}.\n"
+        "Rules:\n"
+        "- Prefer the PRIMARY page for the recipe; use SECONDARY only if it fills gaps.\n"
+        "- Ingredients must be individual lines like '500 g flour'.\n"
+        "- Instructions must be actionable steps.\n"
+        "- Do NOT guess values for meal_type/difficulty/nutrition/tags if missing.\n"
+        "- Keep null/empty when information is unavailable.\n"
+    )
+
+    response = client.responses.parse(
+        model="gpt-4o-mini",
+        input=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        ],
+        text_format=_LLMRecipe,
+    )
+
+    llm_recipe: _LLMRecipe = response.output_parsed
+    nutrition = llm_recipe.nutrition
+    media = llm_recipe.media
+
+    return ImportedRecipe(
+        title=llm_recipe.title or _title_tag(primary_html) or "Untitled Recipe",
+        description=llm_recipe.description,
+        meal_type=llm_recipe.meal_type,
+        difficulty=llm_recipe.difficulty,
+        prep_time=llm_recipe.prep_time,
+        cook_time=llm_recipe.cook_time,
+        total_time=llm_recipe.total_time,
+        servings=llm_recipe.servings,
+        nutrition_calories=nutrition.calories,
+        nutrition_protein=nutrition.protein,
+        nutrition_carbs=nutrition.carbs,
+        nutrition_fat=nutrition.fat,
+        chef_notes=llm_recipe.chefs_notes,
+        source_platform=platform,
+        source_url=primary_url,
+        source_domain=ensure_domain(primary_url),
+        extracted_via=llm_recipe.extracted_via or extracted_via_label,
+        media_image_url=image_url or media.image_url,
+        media_video_url=media.video_path,
+        ingredients=ingredients_from_strings(llm_recipe.ingredients),
+        instructions=instructions_from_strings(llm_recipe.instructions),
+        tags=llm_recipe.tags,
+    )
+
+
 def import_web(url: str) -> Dict[str, Any]:
     html = fetch_html(url)
     og_image = extract_og_image(html)
@@ -285,6 +370,7 @@ def import_web(url: str) -> Dict[str, Any]:
         raise ValueError("Failed to import recipe. The URL appears not to include recipe details.")
 
     _attach_video_asset(recipe)
+    sync_recipe_media_to_supabase(recipe)
 
     data = recipe.model_dump_recipe()
     data.setdefault("tags", [])

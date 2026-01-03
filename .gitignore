@@ -1,4 +1,7 @@
 .DS_Store
+*.log
+__pycache__/
+.expo/
 
 # Frontend build artifacts & deps
 apps/web/.next/
@@ -20,6 +23,7 @@ backend/.env
 backend/.env.*
 backend/storage/
 backend/recipefy.db
+backend/uvicorn.log
 
 # General env overrides
 .env
@@ -29,3 +33,4 @@ backend/recommended/
 
 # Workspace root dependencies
 node_modules/
+supabase/.temp/

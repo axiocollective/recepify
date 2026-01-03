@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import List, Optional
 from uuid import UUID, uuid4
 
@@ -109,4 +109,45 @@ class ShoppingListItem(SQLModel, table=True):
     recipe_id: Optional[str] = None
     recipe_name: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class RecipeCollection(SQLModel, table=True):
+    __tablename__ = "recipe_collections"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    owner_id: UUID = Field(index=True)
+    name: str
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class RecipeCollectionItem(SQLModel, table=True):
+    __tablename__ = "recipe_collection_items"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    collection_id: UUID = Field(foreign_key="recipe_collections.id", ondelete="CASCADE")
+    recipe_id: UUID = Field(index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class UsageMonthly(SQLModel, table=True):
+    __tablename__ = "usage_monthly"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    owner_id: UUID = Field(index=True)
+    period_start: date = Field(index=True)
+    import_count: int = Field(default=0)
+    ai_tokens: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class ImportUsageMonthly(SQLModel, table=True):
+    __tablename__ = "import_usage_monthly"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    owner_id: UUID = Field(index=True)
+    period_start: date = Field(index=True)
+    source: str = Field(index=True)
+    import_count: int = Field(default=0)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
