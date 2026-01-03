@@ -115,6 +115,16 @@ export const AppNavigator: React.FC = () => {
     Alert.alert("Import failed", message);
   };
 
+  const notifyEmptyImport = (recipe: { ingredients?: unknown[]; steps?: unknown[] }) => {
+    const ingredients = recipe.ingredients ?? [];
+    const steps = recipe.steps ?? [];
+    if (ingredients.length > 0 || steps.length > 0) return;
+    Alert.alert(
+      "Import incomplete",
+      "We couldn't find meaningful recipe data for this link, so we didn't use any credits. Please try another source or add it manually."
+    );
+  };
+
   const navigateToMyRecipes = (tag?: string) => {
     setMyRecipesInitialTag(tag ?? null);
     navigateTo("myRecipes");
@@ -240,6 +250,7 @@ export const AppNavigator: React.FC = () => {
                 refreshUsageSummary();
                 setNewlyImportedRecipeId(nextRecipe.id);
                 navigateTo("recipeDetail");
+                notifyEmptyImport(nextRecipe);
               } catch (error) {
                 handleImportError(error);
               }
@@ -259,6 +270,7 @@ export const AppNavigator: React.FC = () => {
                 refreshUsageSummary();
                 setNewlyImportedRecipeId(nextRecipe.id);
                 navigateTo("recipeDetail");
+                notifyEmptyImport(nextRecipe);
               } catch (error) {
                 handleImportError(error);
               }
@@ -277,6 +289,7 @@ export const AppNavigator: React.FC = () => {
                 refreshUsageSummary();
                 setNewlyImportedRecipeId(nextRecipe.id);
                 navigateTo("recipeDetail");
+                notifyEmptyImport(nextRecipe);
               } catch (error) {
                 handleImportError(error);
               }
@@ -295,6 +308,7 @@ export const AppNavigator: React.FC = () => {
                 refreshUsageSummary();
                 setNewlyImportedRecipeId(nextRecipe.id);
                 navigateTo("recipeDetail");
+                notifyEmptyImport(nextRecipe);
               } catch (error) {
                 handleImportError(error);
               }

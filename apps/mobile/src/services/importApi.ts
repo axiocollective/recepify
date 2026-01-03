@@ -168,12 +168,6 @@ const mapImportedRecipe = (payload: ImportResponse): Recipe => {
   const ingredients = toIngredients(recipe.ingredients);
   const steps = toSteps(recipe.instructions);
 
-  if (ingredients.length === 0 && steps.length === 0) {
-    throw new Error(
-      "We couldn't find meaningful recipe data for this link, so we didn't use any credits. Please try another source or add it manually."
-    );
-  }
-
   return {
     id: `recipe-${Date.now()}`,
     title: recipe.title?.trim() || "Imported Recipe",

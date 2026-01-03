@@ -1049,8 +1049,8 @@ def import_web(
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    _ensure_import_has_data(recipe_data)
-    if x_user_email or x_user_id:
+    has_data = _has_import_data(recipe_data)
+    if has_data and (x_user_email or x_user_id):
         _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "web")
     return ImportResponse(recipe=recipe_data)
 
@@ -1066,8 +1066,8 @@ def import_tiktok(
         recipe_data, video_path = tiktok_service.import_tiktok(payload.url)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
-    _ensure_import_has_data(recipe_data)
-    if x_user_email or x_user_id:
+    has_data = _has_import_data(recipe_data)
+    if has_data and (x_user_email or x_user_id):
         _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "tiktok")
     return ImportResponse(recipe=recipe_data, videoPath=video_path)
 
@@ -1083,8 +1083,8 @@ def import_instagram(
         recipe_data, video_path = instagram_service.import_instagram(payload.url)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
-    _ensure_import_has_data(recipe_data)
-    if x_user_email or x_user_id:
+    has_data = _has_import_data(recipe_data)
+    if has_data and (x_user_email or x_user_id):
         _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "instagram")
     return ImportResponse(recipe=recipe_data, videoPath=video_path)
 
@@ -1102,8 +1102,8 @@ def import_pinterest(
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    _ensure_import_has_data(recipe_data)
-    if x_user_email or x_user_id:
+    has_data = _has_import_data(recipe_data)
+    if has_data and (x_user_email or x_user_id):
         _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "pinterest")
     return ImportResponse(recipe=recipe_data)
 
@@ -1124,24 +1124,15 @@ async def import_scan(
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    _ensure_import_has_data(recipe_data)
-    if x_user_email or x_user_id:
+    has_data = _has_import_data(recipe_data)
+    if has_data and (x_user_email or x_user_id):
         _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "scan")
     return ImportResponse(recipe=recipe_data)
 
-
-def _ensure_import_has_data(recipe_data: Dict[str, Any]) -> None:
+def _has_import_data(recipe_data: Dict[str, Any]) -> bool:
     ingredients = recipe_data.get("ingredients") or []
     instructions = recipe_data.get("instructions") or []
-    if ingredients or instructions:
-        return
-    raise HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail=(
-            "We couldn't find meaningful recipe data for this link, so we didn't use any credits. "
-            "Please try another source or add it manually."
-        ),
-    )
+    return bool(ingredients or instructions)
 
 
 

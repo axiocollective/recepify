@@ -635,6 +635,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setCurrentScreen("recipeEdit");
             refreshUsageSummary();
             setImportItems((prev) => prev.filter((importItem) => importItem.id !== itemId));
+            if ((nextRecipe.ingredients?.length ?? 0) === 0 && (nextRecipe.steps?.length ?? 0) === 0) {
+              Alert.alert(
+                "Import incomplete",
+                "We couldn't find meaningful recipe data for this link, so we didn't use any credits. Please try another source or add it manually."
+              );
+            }
           })
           .catch((error) => {
             const message = error instanceof Error ? error.message : "Something went wrong. Please try again.";
@@ -671,7 +677,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
       }, 2000);
     },
-    [handleRecipeSelect, importItems, recipes, refreshUsageSummary]
+    [addRecipe, handleRecipeSelect, importItems, recipes, refreshUsageSummary]
   );
 
   const handleAddToShoppingList = useCallback(
