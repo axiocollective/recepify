@@ -365,7 +365,11 @@ def _needs_ocr(recipe: _InstagramRecipe) -> bool:
     return len(recipe.ingredients) == 0 or len(recipe.steps) == 0
 
 
-def _convert_recipe(recipe: _InstagramRecipe, thumbnail_url: Optional[str]) -> ImportedRecipe:
+def _convert_recipe(
+    recipe: _InstagramRecipe,
+    thumbnail_url: Optional[str],
+    video_path: Optional[Path],
+) -> ImportedRecipe:
     ingredients: List[ImportedIngredient] = []
     for item in recipe.ingredients:
         base_line = clean_text(f"{item.amount or ''} {item.name}".strip())
@@ -390,8 +394,8 @@ def _convert_recipe(recipe: _InstagramRecipe, thumbnail_url: Optional[str]) -> I
         source_url=recipe.source_url,
         source_domain=recipe.source_domain,
         extracted_via=recipe.extracted_via,
-        media_video_url=None,
-        media_local_path=None,
+        media_video_url=str(video_path) if video_path else None,
+        media_local_path=str(video_path) if video_path else None,
         media_image_url=thumbnail_url,
         ingredients=ingredients,
         instructions=instructions_from_strings(recipe.steps),
@@ -443,6 +447,6 @@ def import_instagram(url: str) -> Tuple[Dict[str, Any], Optional[str]]:
         or (rescue.get("meta") or {}).get("og_image")
     )
 
-    converted = _convert_recipe(recipe, thumbnail_url)
+    converted = _convert_recipe(recipe, thumbnail_url, video_path)
     sync_recipe_media_to_supabase(converted)
-    return converted.model_dump_recipe(), None
+    return converted.model_dump_recipe(), str(video_path) if video_path else None
