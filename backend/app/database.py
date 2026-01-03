@@ -4,7 +4,6 @@ from contextlib import contextmanager
 from typing import Any, Dict
 
 from sqlmodel import SQLModel, Session, create_engine
-from sqlalchemy.pool import NullPool
 
 from .config import get_settings
 
@@ -15,26 +14,16 @@ def _build_connect_args(database_url: str) -> Dict[str, Any]:
         return {"check_same_thread": False}
     if database_url.startswith("postgresql"):
         # Supabase (and most managed Postgres providers) require SSL.
-        # PgBouncer + psycopg can throw DuplicatePreparedStatement; disable prepared statements/cache.
-        return {
-            "sslmode": "require",
-            "prepare_threshold": 0,
-            "prepared_statement_cache_size": 0,
-            "statement_cache_size": 0,
-        }
+        return {"sslmode": "require"}
     return {}
 
 
 _connect_args = _build_connect_args(settings.database_url)
-_engine_kwargs: Dict[str, Any] = {
-    "connect_args": _connect_args,
-    "pool_pre_ping": True,
-}
-if settings.database_url.startswith("postgresql"):
-    # PgBouncer + psycopg: avoid statement/prepare caching.
-    _engine_kwargs["poolclass"] = NullPool
-
-engine = create_engine(settings.database_url, **_engine_kwargs)
+engine = create_engine(
+    settings.database_url,
+    connect_args=_connect_args,
+    pool_pre_ping=True,
+)
 
 
 def init_db() -> None:
