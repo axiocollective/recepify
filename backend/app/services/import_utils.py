@@ -19,6 +19,14 @@ from supabase import Client, create_client
 from ..config import get_settings
 
 logger = logging.getLogger(__name__)
+_settings_snapshot = get_settings()
+logger.info(
+    "Storage config: supabase_url=%s bucket_images=%s bucket_videos=%s prefix=%s",
+    _settings_snapshot.supabase_url,
+    _settings_snapshot.supabase_storage_bucket_images,
+    _settings_snapshot.supabase_storage_bucket_videos,
+    _settings_snapshot.supabase_storage_prefix,
+)
 
 
 def clean_text(value: Optional[str]) -> str:
