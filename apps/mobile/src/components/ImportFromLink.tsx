@@ -214,22 +214,7 @@ export const ImportFromLink: React.FC<ImportFromLinkProps> = ({ onBack, onImport
           ))}
         </View>
 
-        <View style={styles.supported}>
-          <Text style={styles.supportedLabel}>SUPPORTED PLATFORMS</Text>
-          <View style={styles.supportedRow}>
-            {[
-              { name: "TikTok", icon: "🎵" },
-              { name: "Instagram", icon: "📷" },
-              { name: "Pinterest", icon: "📌" },
-              { name: "Any Website", icon: "🌐" },
-            ].map((platform) => (
-              <View key={platform.name} style={styles.platformChip}>
-                <Text style={styles.platformIcon}>{platform.icon}</Text>
-                <Text style={styles.platformText}>{platform.name}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
+        
       </View>
     </ScrollView>
   );
