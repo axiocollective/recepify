@@ -77,6 +77,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
     if (!source) return null;
     if (source === "voice") return null;
     if (source === "photo") return "Scan";
+    if (source === "youtube") return "YouTube";
     return source.charAt(0).toUpperCase() + source.slice(1);
   };
 
@@ -287,6 +288,41 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
   const showImportReview = Boolean(isNewImport) || showImportNotice;
   const canManageCollections = Boolean(onAddToCollection && onCreateCollection);
 
+  const hasIngredients = recipe.ingredients.length > 0;
+  const hasSteps = recipe.steps.length > 0;
+  const hasTitle = Boolean(recipe.title?.trim());
+  const hasDescription = Boolean(recipe.description?.trim());
+  const hasServings = Boolean(recipe.servings && recipe.servings > 0);
+  const hasCookingTime = Boolean(recipe.totalTime || recipe.cookTime || recipe.prepTime);
+
+  const isIncomplete = !hasTitle || !hasIngredients;
+  const looksGood =
+    hasTitle &&
+    hasDescription &&
+    hasIngredients &&
+    hasSteps &&
+    hasServings &&
+    hasCookingTime &&
+    hasNutrition;
+  const hasMissingDetails = !isIncomplete && !looksGood;
+
+  const importReviewCopy = isIncomplete
+    ? {
+        title: "Recipe incomplete",
+        body:
+          "This source didn’t include enough information to create a usable recipe. Please add the missing details or try another link. No credits were used.",
+      }
+    : looksGood
+      ? {
+          title: "Recipe looks good",
+          body: "All the key details are here. You can approve it now, or tweak anything you’d like.",
+        }
+      : {
+          title: "A few details are missing",
+          body:
+            "Some information is missing. You can add what’s missing manually or use AI to fill the gaps.",
+        };
+
   return (
     <>
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 200 }}>
@@ -361,14 +397,12 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
           {showImportReview && (
             <View style={[styles.importReviewCard, shadow.md]}>
               <View style={styles.importReviewHeader}>
-                <View style={styles.importReviewIcon}>
+                <View style={[styles.importReviewIcon, isIncomplete && styles.importReviewIconDanger]}>
                   <Ionicons name="information-circle-outline" size={18} color={colors.gray700} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.importReviewTitle}>Recipe imported</Text>
-                  <Text style={styles.importReviewText}>
-                    Please review the imported recipe and make sure everything is correct.
-                  </Text>
+                  <Text style={styles.importReviewTitle}>{importReviewCopy.title}</Text>
+                  <Text style={styles.importReviewText}>{importReviewCopy.body}</Text>
                 </View>
               </View>
               <View style={styles.importReviewActions}>
@@ -379,41 +413,64 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
                   <Text style={styles.importEditText}>Edit manually</Text>
                 </Pressable>
                 <View style={styles.importOptimizeWrap}>
-                  {(showPremiumBadge || showCreditsBadge) && (
-                    <LinearGradient
-                      colors={showPremiumBadge ? ["#fbbf24", "#f59e0b", "#d97706"] : ["#fb923c", "#f97316"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.importBadge}
+                  {isIncomplete ? (
+                    <Pressable
+                      style={styles.importDeleteButton}
+                      onPress={() => {
+                        Alert.alert(
+                          "Delete recipe?",
+                          "This will permanently remove the recipe.",
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            { text: "Delete", style: "destructive", onPress: onDelete },
+                          ]
+                        );
+                      }}
                     >
-                      <Ionicons
-                        name={showPremiumBadge ? "star" : "alert-circle"}
-                        size={11}
-                        color={colors.white}
-                      />
-                      {showPremiumBadge && <Text style={styles.importBadgeText}>Premium</Text>}
-                    </LinearGradient>
+                      <View style={styles.importDeleteButtonInner}>
+                        <Ionicons name="trash-outline" size={16} color={colors.white} />
+                        <Text style={styles.importDeleteText}>Delete recipe</Text>
+                      </View>
+                    </Pressable>
+                  ) : (
+                    <>
+                      {(showPremiumBadge || showCreditsBadge) && (
+                        <LinearGradient
+                          colors={showPremiumBadge ? ["#fbbf24", "#f59e0b", "#d97706"] : ["#fb923c", "#f97316"]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.importBadge}
+                        >
+                          <Ionicons
+                            name={showPremiumBadge ? "star" : "alert-circle"}
+                            size={11}
+                            color={colors.white}
+                          />
+                          {showPremiumBadge && <Text style={styles.importBadgeText}>Premium</Text>}
+                        </LinearGradient>
+                      )}
+                      <Pressable
+                        style={styles.importOptimizeButton}
+                        onPress={() => {
+                          if (aiUsageBlocked) {
+                            Alert.alert("AI unavailable", aiLimitMessage);
+                            return;
+                          }
+                          onOptimizeWithAI?.();
+                        }}
+                      >
+                        <LinearGradient
+                          colors={["#a855f7", "#9333ea"]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={styles.importOptimizeButtonInner}
+                        >
+                          <Ionicons name="sparkles" size={16} color={colors.white} />
+                          <Text style={styles.importOptimizeText}>Optimize with AI</Text>
+                        </LinearGradient>
+                      </Pressable>
+                    </>
                   )}
-                  <Pressable
-                    style={styles.importOptimizeButton}
-                    onPress={() => {
-                      if (aiUsageBlocked) {
-                        Alert.alert("AI unavailable", aiLimitMessage);
-                        return;
-                      }
-                      onOptimizeWithAI?.();
-                    }}
-                  >
-                    <LinearGradient
-                      colors={["#a855f7", "#9333ea"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.importOptimizeButtonInner}
-                    >
-                      <Ionicons name="sparkles" size={16} color={colors.white} />
-                      <Text style={styles.importOptimizeText}>Optimize with AI</Text>
-                    </LinearGradient>
-                  </Pressable>
                 </View>
               </View>
             </View>
@@ -435,82 +492,98 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
           </View>
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="people-outline" size={16} color={colors.gray700} />
-            <Text style={styles.cardTitle}>Adjust Servings</Text>
-            <View style={styles.servingsControls}>
-              <Pressable
-                style={[styles.servingsButton, currentServings <= 1 && styles.servingsButtonDisabled]}
-                onPress={() => {
-                  const next = Math.max(1, currentServings - 1);
-                  setCurrentServings(next);
-                  onUpdateViewSettings?.({ servings: next, unitSystem });
-                }}
-                disabled={currentServings <= 1}
-              >
-                <Ionicons name="remove" size={16} color={colors.gray700} />
-              </Pressable>
-              <Text style={styles.servingsCount}>{currentServings}</Text>
-              <Pressable
-                style={styles.servingsButton}
-                onPress={() => {
-                  const next = currentServings + 1;
-                  setCurrentServings(next);
-                  onUpdateViewSettings?.({ servings: next, unitSystem });
-                }}
-              >
-                <Ionicons name="add" size={16} color={colors.gray700} />
-              </Pressable>
+        {!isIncomplete && (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="people-outline" size={16} color={colors.gray700} />
+              <Text style={styles.cardTitle}>Adjust Servings</Text>
+              <View style={styles.servingsControls}>
+                <Pressable
+                  style={[styles.servingsButton, currentServings <= 1 && styles.servingsButtonDisabled]}
+                  onPress={() => {
+                    const next = Math.max(1, currentServings - 1);
+                    setCurrentServings(next);
+                    onUpdateViewSettings?.({ servings: next, unitSystem });
+                  }}
+                  disabled={currentServings <= 1}
+                >
+                  <Ionicons name="remove" size={16} color={colors.gray700} />
+                </Pressable>
+                <Text style={styles.servingsCount}>{currentServings}</Text>
+                <Pressable
+                  style={styles.servingsButton}
+                  onPress={() => {
+                    const next = currentServings + 1;
+                    setCurrentServings(next);
+                    onUpdateViewSettings?.({ servings: next, unitSystem });
+                  }}
+                >
+                  <Ionicons name="add" size={16} color={colors.gray700} />
+                </Pressable>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Ingredients</Text>
           </View>
-          <View style={styles.unitRow}>
-            <View style={styles.unitToggle}>
-              {(["metric", "us"] as const).map((unit) => (
+          {hasIngredients && (
+            <View style={styles.unitRow}>
+              <View style={styles.unitToggle}>
+                {(["metric", "us"] as const).map((unit) => (
+                  <Pressable
+                    key={unit}
+                    style={[styles.unitChip, unitSystem === unit && styles.unitChipActive]}
+                    onPress={() => {
+                      setUnitSystem(unit);
+                      onUpdateViewSettings?.({ servings: currentServings, unitSystem: unit });
+                    }}
+                  >
+                    <Text style={[styles.unitChipText, unitSystem === unit && styles.unitChipTextActive]}>
+                      {unit === "metric" ? "Metric" : "US"}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              {onAddToShoppingList && (
                 <Pressable
-                  key={unit}
-                  style={[styles.unitChip, unitSystem === unit && styles.unitChipActive]}
+                  style={[styles.addToListButton, listAdded && styles.addToListButtonActive]}
                   onPress={() => {
-                    setUnitSystem(unit);
-                    onUpdateViewSettings?.({ servings: currentServings, unitSystem: unit });
+                    const selectedIngredients = recipe.ingredients.filter((_, index) =>
+                      checkedIngredients.has(index)
+                    );
+                    if (selectedIngredients.length === 0) {
+                      Alert.alert(
+                        "Select ingredients",
+                        "Choose the ingredients you want to add to your shopping list."
+                      );
+                      return;
+                    }
+                    const convertedIngredients = selectedIngredients.map((ingredient) => {
+                      const amount = ingredient.amount
+                        ? convertAmount(
+                            scaleAmount(ingredient.amount, currentServings, recipe.servings || 1),
+                            unitSystem
+                          ).trim()
+                        : "";
+                      return {
+                        ...ingredient,
+                        amount,
+                      };
+                    });
+                    onAddToShoppingList(convertedIngredients, recipe.title, recipe.id);
+                    setListAdded(true);
+                    setTimeout(() => setListAdded(false), 1600);
                   }}
                 >
-                  <Text style={[styles.unitChipText, unitSystem === unit && styles.unitChipTextActive]}>
-                    {unit === "metric" ? "Metric" : "US"}
-                  </Text>
+                  <Ionicons name={listAdded ? "checkmark" : "cart-outline"} size={14} color={colors.white} />
+                  <Text style={styles.addToListText}>{listAdded ? "Added" : "Add to List"}</Text>
                 </Pressable>
-              ))}
+              )}
             </View>
-            {onAddToShoppingList && (
-              <Pressable
-                style={[styles.addToListButton, listAdded && styles.addToListButtonActive]}
-                onPress={() => {
-                  const selectedIngredients = recipe.ingredients.filter((_, index) =>
-                    checkedIngredients.has(index)
-                  );
-                  if (selectedIngredients.length === 0) {
-                    Alert.alert(
-                      "Select ingredients",
-                      "Choose the ingredients you want to add to your shopping list."
-                    );
-                    return;
-                  }
-                  onAddToShoppingList(selectedIngredients, recipe.title, recipe.id);
-                  setListAdded(true);
-                  setTimeout(() => setListAdded(false), 1600);
-                }}
-              >
-                <Ionicons name={listAdded ? "checkmark" : "cart-outline"} size={14} color={colors.white} />
-                <Text style={styles.addToListText}>{listAdded ? "Added" : "Add to List"}</Text>
-              </Pressable>
-            )}
-          </View>
+          )}
           {recipe.ingredients.map((ingredient, index) => (
             <Pressable key={`${ingredient.name}-${index}`} style={styles.ingredientRow} onPress={() => toggleIngredient(index)}>
               <View style={[styles.checkbox, checkedIngredients.has(index) && styles.checkboxChecked]}>
@@ -612,6 +685,15 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
               <Text style={styles.stepText}>{step}</Text>
             </View>
           ))}
+          {recipe.source === "youtube" && recipe.sourceUrl && (
+            <Pressable
+              style={styles.youtubeLinkButton}
+              onPress={() => Linking.openURL(recipe.sourceUrl!)}
+            >
+              <Ionicons name="logo-youtube" size={18} color={colors.white} />
+              <Text style={styles.youtubeLinkText}>Watch on YouTube</Text>
+            </Pressable>
+          )}
         </View>
 
         <View style={styles.card}>
@@ -692,46 +774,50 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
         />
       )}
 
-      <RecipeAssistantChat
-        isOpen={assistantOpen}
-        onClose={() => setAssistantOpen(false)}
-        recipe={recipe}
-      />
+      {!isIncomplete && (
+        <>
+          <RecipeAssistantChat
+            isOpen={assistantOpen}
+            onClose={() => setAssistantOpen(false)}
+            recipe={recipe}
+          />
 
-      {aiUsageBlocked && (
-        <View style={styles.limitBanner}>
-          <Ionicons name="alert-circle" size={16} color={colors.purple600} />
-          <Text style={styles.limitBannerText}>{aiLimitMessage}</Text>
-        </View>
+          {aiUsageBlocked && (
+            <View style={styles.limitBanner}>
+              <Ionicons name="alert-circle" size={16} color={colors.purple600} />
+              <Text style={styles.limitBannerText}>{aiLimitMessage}</Text>
+            </View>
+          )}
+          <View style={styles.floatingAssistantWrap}>
+            <Pressable
+              style={[styles.floatingAssistant, shadow.lg, !isPremium && styles.floatingAssistantDisabled]}
+              onPress={() => {
+                if (!isPremium) {
+                  Alert.alert(
+                    aiDisabled ? "AI disabled" : "Monthly limit reached",
+                    aiLimitMessage
+                  );
+                  return;
+                }
+                setAssistantOpen(true);
+              }}
+              disabled={!isPremium}
+            >
+              <Ionicons name="sparkles" size={22} color={isPremium ? colors.white : colors.gray500} />
+            </Pressable>
+            {!isPremium && (
+              <LinearGradient
+                colors={["#fbbf24", "#f59e0b", "#d97706"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.premiumBadge, shadow.md]}
+              >
+                <Ionicons name="star" size={10} color={colors.white} />
+              </LinearGradient>
+            )}
+          </View>
+        </>
       )}
-      <View style={styles.floatingAssistantWrap}>
-        <Pressable
-          style={[styles.floatingAssistant, shadow.lg, !isPremium && styles.floatingAssistantDisabled]}
-          onPress={() => {
-            if (!isPremium) {
-            Alert.alert(
-              aiDisabled ? "AI disabled" : "Monthly limit reached",
-              aiLimitMessage
-            );
-              return;
-            }
-            setAssistantOpen(true);
-          }}
-          disabled={!isPremium}
-        >
-          <Ionicons name="sparkles" size={22} color={isPremium ? colors.white : colors.gray500} />
-        </Pressable>
-        {!isPremium && (
-          <LinearGradient
-            colors={["#fbbf24", "#f59e0b", "#d97706"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.premiumBadge, shadow.md]}
-          >
-            <Ionicons name="star" size={10} color={colors.white} />
-          </LinearGradient>
-        )}
-      </View>
     </>
   );
 };
@@ -855,6 +941,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  importReviewIconDanger: {
+    backgroundColor: colors.red500,
+  },
   importReviewTitle: {
     ...typography.bodyBold,
     color: colors.gray900,
@@ -911,6 +1000,24 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   importOptimizeText: {
+    ...typography.bodySmall,
+    color: colors.white,
+    fontWeight: "600",
+  },
+  importDeleteButton: {
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    backgroundColor: colors.red500,
+  },
+  importDeleteButtonInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    minHeight: 48,
+  },
+  importDeleteText: {
     ...typography.bodySmall,
     color: colors.white,
     fontWeight: "600",
@@ -1095,6 +1202,22 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.gray700,
     flex: 1,
+  },
+  youtubeLinkButton: {
+    marginTop: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    backgroundColor: colors.red500,
+  },
+  youtubeLinkText: {
+    ...typography.bodySmall,
+    color: colors.white,
+    fontWeight: "600",
   },
   videoWrap: {
     borderRadius: radius.lg,

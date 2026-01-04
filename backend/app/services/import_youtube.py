@@ -414,7 +414,11 @@ def _openai_build_recipe(
     return recipe
 
 
-def _convert_recipe(recipe: _YouTubeRecipe, disclaimer: Optional[str]) -> ImportedRecipe:
+def _convert_recipe(
+    recipe: _YouTubeRecipe,
+    disclaimer: Optional[str],
+    thumbnail_url: Optional[str],
+) -> ImportedRecipe:
     ingredients: List[ImportedIngredient] = []
     for item in recipe.ingredients:
         base_line = clean_text(f"{item.amount or ''} {item.name}".strip())
@@ -448,7 +452,7 @@ def _convert_recipe(recipe: _YouTubeRecipe, disclaimer: Optional[str]) -> Import
         extracted_via=recipe.extracted_via,
         media_video_url=None,
         media_local_path=None,
-        media_image_url=None,
+        media_image_url=thumbnail_url,
         ingredients=ingredients,
         instructions=instructions_from_strings(recipe.steps),
         tags=[],
@@ -464,16 +468,24 @@ def import_youtube(url: str) -> Dict[str, Any]:
     author = None
     duration_s = None
     description = ""
+    thumbnail_url = None
 
     if "_error" not in (oembed or {}):
         title = oembed.get("title")
         author = oembed.get("author_name")
+        thumbnail_url = oembed.get("thumbnail_url") or oembed.get("thumbnail") or thumbnail_url
 
     if "_error" not in (yinfo or {}):
         duration_s = yinfo.get("duration")
         description = yinfo.get("description") or ""
         title = title or yinfo.get("title")
         author = author or yinfo.get("uploader") or yinfo.get("channel")
+        thumbnail_url = thumbnail_url or yinfo.get("thumbnail")
+        if not thumbnail_url and isinstance(yinfo.get("thumbnails"), list):
+            for candidate in reversed(yinfo["thumbnails"]):
+                if isinstance(candidate, dict) and candidate.get("url"):
+                    thumbnail_url = str(candidate["url"])
+                    break
 
     duration_min = (duration_s / 60) if duration_s else None
     ing_ok = _caption_has_ingredients(description)
@@ -493,7 +505,7 @@ def import_youtube(url: str) -> Dict[str, Any]:
         }
         recipe = _openai_build_recipe(url, signals)
         recipe.extracted_via = "description_only+openai"
-        return _convert_recipe(recipe, disclaimer=None).model_dump_recipe()
+        return _convert_recipe(recipe, disclaimer=None, thumbnail_url=thumbnail_url).model_dump_recipe()
 
     if ing_ok and not steps_ok:
         steps_override: List[str] = []
@@ -545,7 +557,7 @@ def import_youtube(url: str) -> Dict[str, Any]:
             recipe.extracted_via = "whisper_steps_rescue+openai"
         else:
             recipe.extracted_via = "steps_rescue_partial+openai"
-        return _convert_recipe(recipe, disclaimer=disclaimer).model_dump_recipe()
+        return _convert_recipe(recipe, disclaimer=disclaimer, thumbnail_url=thumbnail_url).model_dump_recipe()
 
     subs_text, subs_via = _yt_dlp_fetch_subtitles_text(url)
     transcript_text = subs_text
@@ -576,4 +588,4 @@ def import_youtube(url: str) -> Dict[str, Any]:
     }
     recipe = _openai_build_recipe(url, signals)
     recipe.extracted_via = subs_via or "subtitles_or_whisper_chunks+openai"
-    return _convert_recipe(recipe, disclaimer=None).model_dump_recipe()
+    return _convert_recipe(recipe, disclaimer=None, thumbnail_url=thumbnail_url).model_dump_recipe()

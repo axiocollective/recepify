@@ -41,8 +41,8 @@ const SOURCE_STEPS: Record<RecipeImportLoadingProps["source"], StepConfig[]> = {
   ],
   youtube: [
     { id: "connect", text: "Connecting to YouTube...", duration: 2000, icon: "link-outline" },
-    { id: "description", text: "Reading the video description...", duration: 3000, icon: "document-text-outline" },
-    { id: "subs", text: "Checking subtitles for steps...", duration: 3500, icon: "chatbubble-ellipses-outline" },
+    { id: "description", text: "Reading the description and captions...", duration: 3000, icon: "document-text-outline" },
+    { id: "video", text: "Checking the video for key moments...", duration: 3500, icon: "play-outline" },
     { id: "extract", text: "Extracting recipe details...", duration: 4000, icon: "sparkles" },
     { id: "finalize", text: "Finalizing your recipe...", duration: 2500, icon: "restaurant-outline" },
   ],
