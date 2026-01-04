@@ -32,7 +32,7 @@ export const ImportInbox: React.FC<ImportInboxProps> = ({ items, onBack, onActio
             </View>
             <Text style={styles.emptyTitle}>No shared recipes yet</Text>
             <Text style={styles.emptySubtitle}>
-              Share any TikTok, Instagram, Pinterest or web recipe from your phone and it will show up here instantly.
+              Your inbox is empty. Share a recipe link from social media or the web, and it will appear here.
             </Text>
             <Pressable onPress={onBack} style={styles.emptyButton}>
               <Text style={styles.emptyButtonText}>Start importing</Text>
@@ -65,6 +65,8 @@ const getPlatformLabel = (platform: Platform) => {
       return "Instagram";
     case "pinterest":
       return "Pinterest";
+    case "youtube":
+      return "YouTube";
     case "web":
       return "Web";
     case "photo":

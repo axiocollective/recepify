@@ -157,7 +157,7 @@ export const Search: React.FC<SearchProps> = ({ recipes, onRecipeSelect }) => {
           <View style={styles.filterSection}>
             <Text style={styles.filterLabel}>Source</Text>
             <View style={styles.filterRow}>
-              {["", "tiktok", "instagram", "pinterest", "web", "photo"].map((source) => (
+              {["", "tiktok", "instagram", "youtube", "pinterest", "web", "photo"].map((source) => (
                 <Pressable
                   key={source || "all"}
                   onPress={() => setFilters({ ...filters, source })}
@@ -167,7 +167,9 @@ export const Search: React.FC<SearchProps> = ({ recipes, onRecipeSelect }) => {
                     {source
                       ? source === "photo"
                         ? "Scan"
-                        : source.charAt(0).toUpperCase() + source.slice(1)
+                        : source === "youtube"
+                          ? "YouTube"
+                          : source.charAt(0).toUpperCase() + source.slice(1)
                       : "All"}
                   </Text>
                 </Pressable>

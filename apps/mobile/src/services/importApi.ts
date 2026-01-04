@@ -89,6 +89,7 @@ const normalizePlatform = (platform?: string | null): Recipe["source"] => {
   if (normalized === "tiktok") return "tiktok";
   if (normalized === "pinterest") return "pinterest";
   if (normalized === "instagram") return "instagram";
+  if (normalized === "youtube") return "youtube";
   if (normalized === "photo" || normalized === "scan") return "photo";
   if (normalized === "voice") return "voice";
   return "web";
@@ -158,15 +159,26 @@ const splitIngredientAmount = (line: string): Recipe["ingredients"][number] | nu
   };
 };
 
+const isHostedVideoUrl = (url?: string): boolean => {
+  if (!url) return false;
+  if (url.startsWith(API_BASE_URL)) return true;
+  return url.includes("/media/") || url.includes("/storage/");
+};
+
 const mapImportedRecipe = (payload: ImportResponse): Recipe => {
   const recipe = payload.recipe ?? {};
   const thumbnail =
     resolveMediaUrl(recipe.mediaImageUrl) || resolveMediaUrl(recipe.mediaLocalPath);
-  const videoUrl =
+  let videoUrl =
     resolveMediaUrl(recipe.mediaVideoUrl) || resolveMediaUrl(payload.videoPath);
   const servingsNumber = toNumber(recipe.servings);
   const ingredients = toIngredients(recipe.ingredients);
   const steps = toSteps(recipe.instructions);
+  const source = normalizePlatform(recipe.sourcePlatform);
+
+  if ((source === "tiktok" || source === "instagram") && !isHostedVideoUrl(videoUrl)) {
+    videoUrl = undefined;
+  }
 
   return {
     id: `recipe-${Date.now()}`,
@@ -180,7 +192,7 @@ const mapImportedRecipe = (payload: ImportResponse): Recipe => {
     difficulty: recipe.difficulty as Recipe["difficulty"] | undefined,
     ingredients,
     steps,
-    source: normalizePlatform(recipe.sourcePlatform),
+    source,
     sourceUrl: recipe.sourceUrl || undefined,
     thumbnail,
     videoUrl,
@@ -231,6 +243,8 @@ export const importFromInstagram = (url: string) => postImportUrl("/import/insta
 
 export const importFromPinterest = (url: string) => postImportUrl("/import/pinterest", url);
 
+export const importFromYouTube = (url: string) => postImportUrl("/import/youtube", url);
+
 export const importFromUrl = (url: string) => {
   const lower = url.toLowerCase();
   if (lower.includes("tiktok.com") || lower.includes("vm.tiktok.com")) {
@@ -242,19 +256,27 @@ export const importFromUrl = (url: string) => {
   if (lower.includes("pinterest.com") || lower.includes("pin.it")) {
     return importFromPinterest(url);
   }
+  if (lower.includes("youtube.com") || lower.includes("youtu.be")) {
+    return importFromYouTube(url);
+  }
   return importFromWeb(url);
 };
 
-export const importFromScan = async (imageUri: string): Promise<Recipe> => {
-  const imageResponse = await fetch(imageUri);
-  if (!imageResponse.ok) {
-    throw new Error("Unable to load the image for scanning.");
+export const importFromScan = async (imageUris: string[]): Promise<Recipe> => {
+  if (!imageUris.length) {
+    throw new Error("Please select at least one image.");
   }
-  const blob = await imageResponse.blob();
-  const nameFromUri = imageUri.split("/").pop()?.split("?")[0] || "scan.jpg";
-
   const formData = new FormData();
-  formData.append("file", blob, nameFromUri);
+  const files = imageUris.slice(0, 3);
+  for (const uri of files) {
+    const imageResponse = await fetch(uri);
+    if (!imageResponse.ok) {
+      throw new Error("Unable to load the image for scanning.");
+    }
+    const blob = await imageResponse.blob();
+    const nameFromUri = uri.split("/").pop()?.split("?")[0] || "scan.jpg";
+    formData.append("files", blob, nameFromUri);
+  }
 
   const response = await fetch(`${API_PREFIX}/import/scan`, {
     method: "POST",

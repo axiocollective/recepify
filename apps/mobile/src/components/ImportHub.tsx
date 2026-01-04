@@ -16,7 +16,7 @@ export const ImportHub: React.FC<ImportHubProps> = ({ onNavigate, onAddManually,
       id: "importFromLink" as const,
       icon: "link-outline" as const,
       title: "From Link",
-      description: "Paste a TikTok, Instagram, Pinterest or any recipe link.",
+      description: "Paste a TikTok, Instagram, YouTube, Pinterest or any recipe link.",
       action: () => onNavigate("importFromLink"),
     },
     {

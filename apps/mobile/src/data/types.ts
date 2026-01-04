@@ -1,5 +1,5 @@
 export type ImportStatus = "processing" | "ready" | "needsConnection" | "failed";
-export type Platform = "tiktok" | "instagram" | "pinterest" | "web" | "voice" | "photo";
+export type Platform = "tiktok" | "instagram" | "pinterest" | "youtube" | "web" | "voice" | "photo";
 
 export interface Ingredient {
   amount: string;

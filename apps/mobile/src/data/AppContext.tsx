@@ -1,7 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AppState, Linking } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { sampleImportItems } from "./mockData";
 import { BottomTab, ImportItem, Ingredient, PlanTier, Recipe, RecipeCollection, Screen, ShoppingListItem, UsageSummary } from "./types";
 import {
   addShoppingListItems,
@@ -67,7 +66,7 @@ interface AppContextValue {
   navigateTo: (screen: Screen) => void;
   handleRecipeSelect: (recipe: Recipe) => void;
   toggleFavorite: (recipeId: string) => void;
-  handleImportAction: (itemId: string, action: "open" | "connect" | "retry" | "delete") => void;
+  handleImportAction: (itemId: string, action: "open" | "connect" | "retry" | "delete") => Promise<void>;
   handleAddToShoppingList: (ingredients: Ingredient[], recipeName: string, recipeId: string) => void;
   updateShoppingListItems: (items: ShoppingListItem[]) => void;
   createCollection: (name: string, recipeId?: string) => void;
@@ -114,6 +113,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [userId, setUserId] = useState<string | null>(null);
   const [simulateEmptyState, setSimulateEmptyState] = useState(false);
   const lastUserIdRef = useRef<string | null>(null);
+  const videoFallbackAlerts = useRef(new Set<string>());
 
   const createUuid = useCallback(
     () =>
@@ -176,6 +176,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (lower.includes("instagram.com") || lower.includes("instagr.am")) {
       return "instagram";
     }
+    if (lower.includes("youtube.com") || lower.includes("youtu.be")) {
+      return "youtube";
+    }
     return "web";
   }, []);
 
@@ -188,6 +191,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     if (platform === "instagram") {
       return "Instagram recipe link";
+    }
+    if (platform === "youtube") {
+      return "YouTube recipe link";
     }
 
     try {
@@ -286,14 +292,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setUserCountry(profile.country ?? "United States");
         setNeedsOnboarding(!profile.language || !profile.country);
         const nextAiDisabled = Boolean(profile.ai_disabled);
-        const nextPlan = (profile.plan as PlanTier | null) ?? (nextAiDisabled ? "ai_disabled" : "free");
-        setAiDisabled(nextPlan === "ai_disabled" ? true : nextAiDisabled);
+        const storedPlan = (profile.plan as PlanTier | null) ?? "free";
+        const nextPlan = storedPlan === "ai_disabled" ? "free" : storedPlan;
+        setAiDisabled(nextAiDisabled);
         setPlan(nextPlan);
         setBonusImports(profile.bonus_imports ?? 0);
         setBonusTokens(profile.bonus_tokens ?? 0);
         setSubscriptionPeriod(profile.subscription_period === "monthly" ? "monthly" : "yearly");
       } else {
         setNeedsOnboarding(true);
+        setImportItems([]);
       }
       setRecipes(loadedRecipes);
       setShoppingListItems(loadedShopping);
@@ -505,10 +513,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const nextName = payload.name ?? userName;
     const nextLanguage = payload.language ?? userLanguage;
     const nextCountry = payload.country ?? userCountry;
-    const nextPlan = payload.plan ?? plan;
+    const nextPlan = payload.plan === "ai_disabled" ? "free" : payload.plan ?? plan;
     const nextSubscriptionPeriod = payload.subscriptionPeriod ?? subscriptionPeriod;
-    const nextAiDisabled =
-      payload.plan !== undefined ? payload.plan === "ai_disabled" : payload.aiDisabled ?? aiDisabled;
+    const nextAiDisabled = payload.aiDisabled ?? aiDisabled;
 
     if (payload.name !== undefined) {
       setUserName(payload.name);
@@ -529,8 +536,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setAiDisabled(payload.aiDisabled);
     }
     if (payload.plan !== undefined) {
-      setPlan(payload.plan);
-      setAiDisabled(payload.plan === "ai_disabled");
+      setPlan(payload.plan === "ai_disabled" ? "free" : payload.plan);
     }
     if (payload.subscriptionPeriod !== undefined) {
       setSubscriptionPeriod(payload.subscriptionPeriod);
@@ -609,7 +615,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [recipes]);
 
   const handleImportAction = useCallback(
-    (itemId: string, action: "open" | "connect" | "retry" | "delete") => {
+    async (itemId: string, action: "open" | "connect" | "retry" | "delete") => {
       const item = importItems.find((importItem) => importItem.id === itemId);
       if (!item) return;
 
@@ -627,30 +633,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             importItem.id === itemId ? { ...importItem, status: "processing" } : importItem
           )
         );
-        void importFromUrl(item.url)
-          .then(async (imported) => {
-            const saved = await addRecipe(imported);
-            const nextRecipe = saved ?? imported;
-            setSelectedRecipe(nextRecipe);
-            setCurrentScreen("recipeEdit");
-            refreshUsageSummary();
-            setImportItems((prev) => prev.filter((importItem) => importItem.id !== itemId));
-            if ((nextRecipe.ingredients?.length ?? 0) === 0 && (nextRecipe.steps?.length ?? 0) === 0) {
-              Alert.alert(
-                "Import incomplete",
-                "We couldn't find meaningful recipe data for this link, so we didn't use any credits. Please try another source or add it manually."
-              );
+        try {
+          const imported = await importFromUrl(item.url);
+          const saved = await addRecipe(imported);
+          const nextRecipe = saved ?? imported;
+          setSelectedRecipe(nextRecipe);
+          setCurrentScreen("recipeEdit");
+          refreshUsageSummary();
+          setImportItems((prev) => prev.filter((importItem) => importItem.id !== itemId));
+            const alertKey = nextRecipe.id || nextRecipe.sourceUrl || nextRecipe.title;
+            if ((nextRecipe.source === "tiktok" || nextRecipe.source === "instagram") && !nextRecipe.videoUrl) {
+              if (!alertKey || !videoFallbackAlerts.current.has(alertKey)) {
+                if (alertKey) {
+                  videoFallbackAlerts.current.add(alertKey);
+                }
+                Alert.alert(
+                  "Video not accessible",
+                  "We couldn’t read the video, so we used the caption text instead. Please review the recipe before saving."
+                );
+              }
             }
-          })
-          .catch((error) => {
-            const message = error instanceof Error ? error.message : "Something went wrong. Please try again.";
-            Alert.alert("Import failed", message);
-            setImportItems((prev) =>
-              prev.map((importItem) =>
-                importItem.id === itemId ? { ...importItem, status: "failed" } : importItem
-              )
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error ?? "");
+          if (message.includes("YOUTUBE_TOO_LONG_NO_DESC")) {
+            Alert.alert(
+              "Video too long to import",
+              "This video is longer than 15 minutes and doesn’t include ingredients in the description. Please try another link or add the recipe manually. No credits were used."
             );
-          });
+          } else {
+            Alert.alert(
+              "Import didn’t work",
+              "We couldn’t read this link properly. Please try again or use a different link. No credits were used."
+            );
+          }
+          setImportItems((prev) =>
+            prev.map((importItem) =>
+              importItem.id === itemId ? { ...importItem, status: "failed" } : importItem
+            )
+          );
+        }
         return;
       }
 

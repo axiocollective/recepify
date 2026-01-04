@@ -7,6 +7,7 @@ import { RecipeThumbnail } from "./RecipeThumbnail";
 import { RECIPE_TAGS } from "../../../../packages/shared/constants/recipe-tags";
 import { AddToCollectionModal } from "./AddToCollectionModal";
 import { formatDuration } from "../utils/formatDuration";
+import { ImportQuickActions } from "./ImportQuickActions";
 
 interface MyRecipesProps {
   recipes: Recipe[];
@@ -33,6 +34,7 @@ const SOURCE_FILTER_OPTIONS = [
   { value: "", label: "All" },
   { value: "tiktok", label: "TikTok" },
   { value: "instagram", label: "Instagram" },
+  { value: "youtube", label: "YouTube" },
   { value: "pinterest", label: "Pinterest" },
   { value: "web", label: "Web" },
   { value: "photo", label: "Scan" },
@@ -113,14 +115,6 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
         return a.localeCompare(b);
       }),
     [tagCounts]
-  );
-
-  const visibleActions = useMemo(
-    () =>
-      inboxCount > 0
-        ? ["importFromLink", "scanRecipe", "manual", "inbox"]
-        : ["importFromLink", "scanRecipe", "manual"],
-    [inboxCount]
   );
 
   const resetFilters = () => {
@@ -292,6 +286,15 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
         )}
       </View>
 
+      <View style={styles.importSection}>
+        <ImportQuickActions
+          onNavigate={onNavigate}
+          onAddManually={onAddManually}
+          inboxCount={inboxCount}
+          importReadyCount={importReadyCount}
+        />
+      </View>
+
       {showFilters && viewType === "recipes" && (
         <View style={styles.filterPanel}>
           <View style={styles.filterPanelHeader}>
@@ -427,53 +430,10 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
         recipes.length === 0 ? (
           <View style={styles.emptyStateSimple}>
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyCardTitle}>Add Recipe</Text>
-              <View
-                style={[
-                  styles.emptyQuickActions,
-                  visibleActions.length < 4 ? styles.emptyQuickActionsTight : null,
-                ]}
-              >
-                {visibleActions.map((actionId) => {
-                  const labelMap = {
-                    importFromLink: "Share Link",
-                    scanRecipe: "Scan",
-                    manual: "Manually",
-                    inbox: "Inbox",
-                  } as const;
-                  const iconMap = {
-                    importFromLink: "link-outline",
-                    scanRecipe: "camera-outline",
-                    manual: "add",
-                    inbox: "mail-outline",
-                  } as const;
-                  const handleAction = () => {
-                    if (actionId === "manual") {
-                      onAddManually();
-                      return;
-                    }
-                    if (actionId === "inbox") {
-                      onNavigate("importInbox");
-                      return;
-                    }
-                    onNavigate(actionId as Screen);
-                  };
-
-                  return (
-                    <Pressable key={actionId} onPress={handleAction} style={styles.emptyAction}>
-                      <View style={styles.emptyActionIcon}>
-                        <Ionicons name={iconMap[actionId]} size={20} color={colors.white} />
-                        {actionId === "inbox" && importReadyCount > 0 && (
-                          <View style={styles.emptyBadge}>
-                            <Text style={styles.emptyBadgeText}>{importReadyCount}</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.emptyActionLabel}>{labelMap[actionId]}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <Text style={styles.emptyCardTitle}>No recipes yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Use the Add Recipe section above to import from links, social, or scan a recipe.
+              </Text>
             </View>
           </View>
         ) : filteredRecipes.length === 0 ? (
@@ -908,6 +868,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.gray200,
+  },
+  importSection: {
+    paddingVertical: spacing.lg,
   },
   headerTop: {
     flexDirection: "row",
@@ -1463,51 +1426,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: colors.gray900,
     marginBottom: spacing.lg,
-  },
-  emptyQuickActions: {
-    width: "100%",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: spacing.md,
-  },
-  emptyQuickActionsTight: {
-    justifyContent: "center",
-    gap: spacing.xl,
-  },
-  emptyAction: {
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  emptyActionIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: radius.full,
-    backgroundColor: colors.gray900,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyActionLabel: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "500",
-    color: colors.gray600,
-    textAlign: "center",
-    maxWidth: 80,
-  },
-  emptyBadge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    width: 20,
-    height: 20,
-    borderRadius: radius.full,
-    backgroundColor: colors.purple600,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyBadgeText: {
-    ...typography.captionBold,
-    color: colors.white,
   },
   modalBackdrop: {
     flex: 1,

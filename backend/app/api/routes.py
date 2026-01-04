@@ -45,6 +45,7 @@ from ..services import import_instagram as instagram_service
 from ..services import import_scan as scan_service
 from ..services import import_pinterest as pinterest_service
 from ..services import import_tiktok as tiktok_service
+from ..services import import_youtube as youtube_service
 from ..services import import_web as web_service
 from ..services.import_utils import get_openai_client
 
@@ -1108,18 +1109,58 @@ def import_pinterest(
     return ImportResponse(recipe=recipe_data)
 
 
-@router.post("/import/scan", response_model=ImportResponse)
-async def import_scan(
-    file: UploadFile = File(...),
+@router.post("/import/youtube", response_model=ImportResponse)
+def import_youtube(
+    payload: ImportRequest,
     x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
     x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     session: Session = Depends(get_db_session),
 ) -> ImportResponse:
-    contents = await file.read()
-    if not contents:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded image is empty.")
     try:
-        recipe_data = scan_service.import_scan(contents, file.filename, file.content_type)
+        recipe_data = youtube_service.import_youtube(payload.url)
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    has_data = _has_import_data(recipe_data)
+    if has_data and (x_user_email or x_user_id):
+        _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "youtube")
+    return ImportResponse(recipe=recipe_data)
+
+
+@router.post("/import/scan", response_model=ImportResponse)
+async def import_scan(
+    files: Optional[List[UploadFile]] = File(default=None),
+    file: Optional[UploadFile] = File(default=None),
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> ImportResponse:
+    uploads: List[UploadFile] = []
+    if files:
+        uploads.extend(files)
+    if file:
+        uploads.append(file)
+    if not uploads:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded image is empty.")
+
+    images: List[Dict[str, Optional[str]]] = []
+    for upload in uploads[:3]:
+        contents = await upload.read()
+        if not contents:
+            continue
+        images.append(
+            {
+                "bytes": contents,
+                "filename": upload.filename,
+                "content_type": upload.content_type,
+            }
+        )
+    if not images:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded image is empty.")
+
+    try:
+        recipe_data = scan_service.import_scan(images)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     except RuntimeError as exc:
