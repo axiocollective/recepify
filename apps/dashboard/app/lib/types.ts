@@ -1,0 +1,49 @@
+export type PlanTier = "base" | "premium" | "ai_disabled" | string;
+
+export type UsageEvent = {
+  id: string;
+  owner_id: string;
+  request_id: string | null;
+  event_type: string;
+  source: string | null;
+  model_provider: string | null;
+  model_name: string | null;
+  tokens_input: number;
+  tokens_output: number;
+  tokens_total: number;
+  tokens_weighted: number;
+  ai_credits_used: number;
+  import_credits_used: number;
+  cost_usd: number | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type ProfileRow = {
+  id: string;
+  name: string | null;
+  plan: PlanTier | null;
+  subscription_period: "monthly" | "yearly" | null;
+  created_at: string | null;
+  trial_ends_at: string | null;
+  bonus_imports: number | null;
+  bonus_tokens: number | null;
+  trial_imports: number | null;
+  trial_tokens: number | null;
+  trial_imports_used: number | null;
+  trial_tokens_used: number | null;
+};
+
+export type UsageSummary = {
+  totalUsers: number;
+  baseUsers: number;
+  premiumUsers: number;
+  trialUsers: number;
+  totalImports: number;
+  totalAiCredits: number;
+  totalCostUsd: number;
+  activeUsers: number;
+  dailySeries: Array<{ date: string; imports: number; aiCredits: number }>;
+  bySource: Array<{ label: string; value: number }>;
+  byModel: Array<{ label: string; value: number }>;
+};

@@ -1582,7 +1582,11 @@ def _log_usage_events(
                 ai_credits_used=ai_credits_used,
                 import_credits_used=0,
                 cost_usd=cost_usd,
-                metadata={k: v for k, v in event.items() if k not in {"provider", "model", "input_tokens", "output_tokens", "total_tokens"}},
+                metadata_={
+                    k: v
+                    for k, v in event.items()
+                    if k not in {"provider", "model", "input_tokens", "output_tokens", "total_tokens"}
+                },
             )
         )
 
@@ -1602,7 +1606,7 @@ def _log_usage_events(
                 ai_credits_used=0,
                 import_credits_used=import_credits_used,
                 cost_usd=None,
-                metadata={},
+                metadata_={},
             )
         )
 

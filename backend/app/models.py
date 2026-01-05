@@ -171,5 +171,5 @@ class UsageEvent(SQLModel, table=True):
     ai_credits_used: int = Field(default=0)
     import_credits_used: int = Field(default=0)
     cost_usd: Optional[float] = Field(default=None)
-    metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    metadata_: dict = Field(default_factory=dict, sa_column=Column("metadata", JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
