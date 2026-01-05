@@ -342,12 +342,12 @@ export const RecipeAssistantChat: React.FC<RecipeAssistantChatProps> = ({ isOpen
   const { height: windowHeight } = useWindowDimensions();
   const sheetHeight = Math.round(windowHeight * 0.75);
   const scrollRef = useRef<ScrollView | null>(null);
-  const { plan, usageSummary, bonusTokens, aiDisabled, refreshUsageSummary } = useApp();
-  const aiLimitReached = isAiLimitReached(plan, usageSummary, bonusTokens);
+  const { plan, usageSummary, bonusTokens, aiDisabled, refreshUsageSummary, trialActive, trialTokensRemaining } = useApp();
+  const aiLimitReached = isAiLimitReached(plan, usageSummary, bonusTokens, trialTokensRemaining);
   const aiUsageBlocked = aiDisabled || aiLimitReached;
   const aiLimitMessage = aiDisabled
     ? "AI features are disabled on your plan. Upgrade to re-enable ChefGPT."
-    : getAiLimitMessage(plan);
+    : getAiLimitMessage(plan, trialActive);
 
   const suggestions = useMemo(
     () => [
@@ -437,6 +437,7 @@ export const RecipeAssistantChat: React.FC<RecipeAssistantChatProps> = ({ isOpen
       const response = await askRecipeAssistant({
         recipe: buildAssistantRecipePayload(activeRecipe),
         messages: [{ role: "assistant", content: assistantSystemPrompt }, ...history],
+        usage_context: "chat",
       });
 
       const reply = formatAssistantReply(response.reply ?? "", { forceBullets: isStepsQuestion });
@@ -531,9 +532,12 @@ export const RecipeAssistantChat: React.FC<RecipeAssistantChatProps> = ({ isOpen
           </ScrollView>
 
           <View style={styles.footer}>
-            <Text style={styles.disclaimerText}>
-              ChefGPT can make mistakes. Please double-check important details.
-            </Text>
+            <View style={styles.disclaimerBox}>
+              <Text style={styles.disclaimerTitle}>Quick check recommended</Text>
+              <Text style={styles.disclaimerBody}>
+                AI suggestions aren’t always perfect.{"\n"}Please review the changes and adjust anything as needed.
+              </Text>
+            </View>
             {aiUsageBlocked && (
               <View style={styles.limitBanner}>
                 <Ionicons name="alert-circle" size={16} color={colors.purple600} />
@@ -724,10 +728,21 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.gray100,
   },
-  disclaimerText: {
-    fontSize: 11,
-    lineHeight: 14,
-    color: colors.gray400,
+  disclaimerBox: {
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  disclaimerTitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+    color: colors.gray900,
+    textAlign: "center",
+  },
+  disclaimerBody: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.gray500,
     textAlign: "center",
   },
   footer: {

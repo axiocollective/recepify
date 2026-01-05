@@ -142,16 +142,14 @@ export const Home: React.FC<HomeProps> = ({
           </Text>
         </View>
 
-        {!hasRecipes && (
-          <View style={styles.section}>
-            <ImportQuickActions
-              onNavigate={onNavigate}
-              onAddManually={onAddManually}
-              inboxCount={inboxCount}
-              importReadyCount={importReadyCount}
-            />
-          </View>
-        )}
+        <View style={styles.section}>
+          <ImportQuickActions
+            onNavigate={onNavigate}
+            onAddManually={onAddManually}
+            inboxCount={inboxCount}
+            importReadyCount={importReadyCount}
+          />
+        </View>
 
         {hasRecipes && homeTags.length > 0 && (
           <View style={styles.tagGridSection}>

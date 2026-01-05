@@ -8,38 +8,43 @@ import { getImportLimitMessage, isImportLimitReached } from "../data/usageLimits
 
 interface ScanRecipeProps {
   onBack: () => void;
-  onScan: (imageData: string) => Promise<void>;
+  onScan: (imageData: string[]) => Promise<void>;
 }
 
 export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
   const [isScanning, setIsScanning] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [progress, setProgress] = useState(0);
-  const { plan, usageSummary, bonusImports, navigateTo } = useApp();
-  const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports);
-  const limitMessage = getImportLimitMessage(plan);
+  const { plan, usageSummary, bonusImports, trialActive, trialImportsRemaining, navigateTo } = useApp();
+  const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports, trialImportsRemaining);
+  const limitMessage = getImportLimitMessage(plan, trialActive);
   const openPlans = () => navigateTo("planBilling");
+  const limitTitle =
+    plan === "paid" || plan === "premium"
+      ? "Monthly imports used up"
+      : trialActive
+      ? "Trial imports used up"
+      : "Imports require credits";
   const showLimitAlert = () => {
     if (plan === "paid" || plan === "premium") {
-      Alert.alert("Monthly limit reached", limitMessage, [
+      Alert.alert(limitTitle, limitMessage, [
         { text: "Buy credits", onPress: openPlans },
         { text: "Cancel", style: "cancel" },
       ]);
       return;
     }
-    Alert.alert("Monthly limit reached", limitMessage, [
-      { text: "Upgrade plan", onPress: openPlans },
+    Alert.alert(limitTitle, limitMessage, [
       { text: "Buy credits", onPress: openPlans },
       { text: "Cancel", style: "cancel" },
     ]);
   };
 
-  const startScanning = async (image: string) => {
+  const startScanning = async (images: string[]) => {
     if (importLimitReached) {
       showLimitAlert();
       return;
     }
-    setPreviewImage(image);
+    if (!images.length) return;
     setIsScanning(true);
     setProgress(15);
 
@@ -57,7 +62,7 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
       clearInterval(progressInterval);
       setProgress(100);
       try {
-        await onScan(image);
+        await onScan(images);
       } finally {
         setIsScanning(false);
         setProgress(0);
@@ -68,6 +73,11 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
   const handleTakePhoto = async () => {
     if (importLimitReached) {
       showLimitAlert();
+      return;
+    }
+    if (isScanning) return;
+    if (selectedImages.length >= 3) {
+      Alert.alert("Limit reached", "You can scan up to 3 photos at a time.");
       return;
     }
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -81,7 +91,7 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
         quality: 0.9,
       });
       if (!result.canceled && result.assets[0]?.uri) {
-        void startScanning(result.assets[0].uri);
+        setSelectedImages((prev) => [...prev, result.assets[0].uri].slice(0, 3));
       }
     } catch {
       Alert.alert("Camera unavailable", "Please choose a photo from your library instead.");
@@ -94,6 +104,7 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
       showLimitAlert();
       return;
     }
+    if (isScanning) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permission.status !== "granted") {
       Alert.alert("Photos access needed", "Please allow photo library access to upload an image.");
@@ -101,10 +112,13 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      selectionLimit: Math.max(1, 3 - selectedImages.length),
       quality: 0.9,
     });
-    if (!result.canceled && result.assets[0]?.uri) {
-      void startScanning(result.assets[0].uri);
+    if (!result.canceled && result.assets.length > 0) {
+      const next = result.assets.map((asset) => asset.uri).filter(Boolean);
+      setSelectedImages((prev) => [...prev, ...next].slice(0, 3));
     }
   };
 
@@ -120,16 +134,32 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
       </View>
 
       <View style={styles.body}>
-        {previewImage ? (
+        {selectedImages.length > 0 ? (
           <View style={styles.previewWrap}>
             <View style={styles.previewCard}>
-              <Image source={{ uri: previewImage }} style={styles.previewImage} resizeMode="cover" />
+              <View style={styles.previewGrid}>
+                {selectedImages.map((image, index) => (
+                  <View key={`${image}-${index}`} style={styles.previewItem}>
+                    <Image source={{ uri: image }} style={styles.previewImage} resizeMode="cover" />
+                    <Pressable
+                      style={styles.previewRemove}
+                      onPress={() =>
+                        setSelectedImages((prev) => prev.filter((_, idx) => idx !== index))
+                      }
+                    >
+                      <Ionicons name="close" size={14} color={colors.white} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
               {isScanning && (
                 <View style={styles.scanningOverlay}>
                   <View style={styles.scanningCard}>
                     <View style={styles.scanningRow}>
                       <ActivityIndicator size="small" color={colors.gray900} />
-                      <Text style={styles.scanningText}>Scanning recipe...</Text>
+                      <Text style={styles.scanningText}>
+                        Scanning {selectedImages.length} photo{selectedImages.length > 1 ? "s" : ""}...
+                      </Text>
                     </View>
                     <View style={styles.progressTrack}>
                       <View style={[styles.progressFill, { width: `${Math.min(Math.max(progress, 0), 100)}%` }]} />
@@ -137,6 +167,29 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
                   </View>
                 </View>
               )}
+            </View>
+            <View style={styles.previewActions}>
+              {selectedImages.length < 3 && (
+                <>
+                  <Pressable style={styles.previewActionButton} onPress={handleTakePhoto}>
+                    <Ionicons name="camera-outline" size={16} color={colors.gray700} />
+                    <Text style={styles.previewActionText}>Add photo</Text>
+                  </Pressable>
+                  <Pressable style={styles.previewActionButton} onPress={handleChooseFromGallery}>
+                    <Ionicons name="image-outline" size={16} color={colors.gray700} />
+                    <Text style={styles.previewActionText}>Add from gallery</Text>
+                  </Pressable>
+                </>
+              )}
+              <Pressable
+                style={[styles.scanButton, isScanning && styles.scanButtonDisabled]}
+                onPress={() => startScanning(selectedImages)}
+                disabled={isScanning}
+              >
+                <Text style={styles.scanButtonText}>
+                  {isScanning ? "Scanning..." : `Scan ${selectedImages.length} photo${selectedImages.length > 1 ? "s" : ""}`}
+                </Text>
+              </Pressable>
             </View>
           </View>
         ) : (
@@ -187,21 +240,6 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
           </Text>
         )}
 
-        {!previewImage && (
-          <View style={styles.tipsBlock}>
-            <Text style={styles.tipsTitle}>Tips for best results</Text>
-            {[
-              { title: "Good lighting", subtitle: "Ensure recipe is well-lit and clearly visible" },
-              { title: "Straight angle", subtitle: "Photo from directly above works best" },
-              { title: "Review & edit", subtitle: "Edit any details after AI extraction" },
-            ].map((tip) => (
-              <View key={tip.title} style={styles.tipRow}>
-                <Text style={styles.tipTitle}>{tip.title}</Text>
-                <Text style={styles.tipSubtitle}>{tip.subtitle}</Text>
-              </View>
-            ))}
-          </View>
-        )}
       </View>
     </ScrollView>
   );
@@ -245,9 +283,64 @@ const styles = StyleSheet.create({
     borderColor: colors.gray200,
     overflow: "hidden",
   },
+  previewGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  previewItem: {
+    width: "32%",
+    borderRadius: radius.md,
+    overflow: "hidden",
+  },
   previewImage: {
     width: "100%",
-    height: 320,
+    height: 110,
+  },
+  previewRemove: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewActions: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  previewActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  previewActionText: {
+    ...typography.bodySmall,
+    color: colors.gray700,
+    fontWeight: "600",
+  },
+  scanButton: {
+    borderRadius: radius.lg,
+    backgroundColor: colors.gray900,
+    paddingVertical: spacing.md,
+    alignItems: "center",
+  },
+  scanButtonDisabled: {
+    opacity: 0.6,
+  },
+  scanButtonText: {
+    ...typography.bodySmall,
+    color: colors.white,
+    fontWeight: "600",
   },
   scanningOverlay: {
     position: "absolute",

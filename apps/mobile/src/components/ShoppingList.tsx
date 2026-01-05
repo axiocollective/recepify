@@ -32,11 +32,6 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
   const [newItemName, setNewItemName] = useState("");
   const [newItemAmount, setNewItemAmount] = useState("");
   const [viewMode, setViewMode] = useState<"recipe" | "ingredient">("ingredient");
-  const detectDefaultUnit = () => {
-    const text = items.map((item) => item.amount ?? "").join(" ").toLowerCase();
-    return /(g|kg|ml|l|°c)\b/.test(text) ? "metric" : "us";
-  };
-  const [unitSystem, setUnitSystem] = useState<"metric" | "us">(detectDefaultUnit());
 
   const checkedCount = useMemo(() => items.filter((item) => item.isChecked).length, [items]);
 
@@ -91,81 +86,9 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
     return { quantity, unitRaw };
   };
 
-  const normalizeUnit = (unitRaw: string): string | null => {
-    const map: Record<string, string> = {
-      g: "g",
-      gram: "g",
-      grams: "g",
-      kg: "kg",
-      kilogram: "kg",
-      kilograms: "kg",
-      ml: "ml",
-      milliliter: "ml",
-      millilitre: "ml",
-      l: "l",
-      liter: "l",
-      litre: "l",
-      oz: "oz",
-      ounce: "oz",
-      ounces: "oz",
-      lb: "lb",
-      lbs: "lb",
-      pound: "lb",
-      pounds: "lb",
-      cup: "cup",
-      cups: "cup",
-      tbsp: "tbsp",
-      tbs: "tbsp",
-      tablespoon: "tbsp",
-      tablespoons: "tbsp",
-      tsp: "tsp",
-      teaspoon: "tsp",
-      teaspoons: "tsp",
-      "fl oz": "fl oz",
-      floz: "fl oz",
-      "fluid ounce": "fl oz",
-      "fluid ounces": "fl oz",
-    };
-    return map[unitRaw] || null;
-  };
-
   const formatQuantity = (value: number) => {
     const rounded = value >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
     return Number.isInteger(rounded) ? String(rounded) : String(rounded);
-  };
-
-  const convertAmount = (amount: string, nextUnitSystem: "metric" | "us") => {
-    const parts = parseAmountParts(amount);
-    if (!parts) return amount;
-    const unit = normalizeUnit(parts.unitRaw || "");
-    if (!unit) return amount;
-    const value = parts.quantity;
-    if (nextUnitSystem === "us") {
-      if (["g", "kg", "ml", "l"].includes(unit)) {
-        const grams = unit === "g" ? value : unit === "kg" ? value * 1000 : unit === "ml" ? value : value * 1000;
-        return `${formatQuantity(grams / 28.3495)} oz`;
-      }
-      if (unit === "oz") return `${formatQuantity(value)} oz`;
-      if (unit === "lb") return `${formatQuantity(value)} lb`;
-      if (unit === "cup") return `${formatQuantity(value)} cup`;
-      if (unit === "tbsp") return `${formatQuantity(value)} tbsp`;
-      if (unit === "tsp") return `${formatQuantity(value)} tsp`;
-      if (unit === "fl oz") return `${formatQuantity(value)} fl oz`;
-    } else {
-      if (["oz", "lb", "cup", "tbsp", "tsp", "fl oz"].includes(unit)) {
-        if (unit === "oz") return `${formatQuantity(value * 28.3495)} g`;
-        if (unit === "lb") return `${formatQuantity(value * 453.592)} g`;
-        if (unit === "cup") return `${formatQuantity(value * 240)} ml`;
-        if (unit === "tbsp") return `${formatQuantity(value * 15)} ml`;
-        if (unit === "tsp") return `${formatQuantity(value * 5)} ml`;
-        if (unit === "fl oz") return `${formatQuantity(value * 29.5735)} ml`;
-      }
-      if (unit === "g") return `${formatQuantity(value)} g`;
-      if (unit === "kg") return `${formatQuantity(value)} kg`;
-      if (unit === "ml") return `${formatQuantity(value)} ml`;
-      if (unit === "l") return `${formatQuantity(value)} l`;
-    }
-    return amount;
   };
 
   const ingredientItems = useMemo<IngredientGroupItem[]>(() => {
@@ -296,7 +219,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
         <Text style={[styles.ingredientText, item.isChecked ? styles.ingredientTextChecked : null]}>
           {item.amount ? (
             <Text style={[styles.ingredientAmountText, item.isChecked ? styles.ingredientAmountTextChecked : null]}>
-              {convertAmount(item.amount, unitSystem)}{" "}
+              {item.amount}{" "}
             </Text>
           ) : null}
           <Text style={[styles.ingredientNameText, item.isChecked ? styles.ingredientNameTextChecked : null]}>
@@ -368,22 +291,6 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
                   </Pressable>
                 </View>
               </View>
-              <View style={styles.unitToggleRow}>
-                <Text style={styles.viewLabel}>Units</Text>
-                <View style={styles.unitToggle}>
-                  {(["metric", "us"] as const).map((unit) => (
-                    <Pressable
-                      key={unit}
-                      style={[styles.unitChip, unitSystem === unit && styles.unitChipActive]}
-                      onPress={() => setUnitSystem(unit)}
-                    >
-                      <Text style={[styles.unitChipText, unitSystem === unit && styles.unitChipTextActive]}>
-                        {unit === "metric" ? "Metric" : "US"}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
             </View>
           )}
         </View>
@@ -430,7 +337,7 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({ items, onUpdateItems
                         <Text style={[styles.ingredientText, item.isChecked ? styles.ingredientTextChecked : null]}>
                           {item.amount ? (
                             <Text style={[styles.ingredientAmountText, item.isChecked ? styles.ingredientAmountTextChecked : null]}>
-                              {convertAmount(item.amount, unitSystem)}{" "}
+                              {item.amount}{" "}
                             </Text>
                           ) : null}
                           <Text style={[styles.ingredientNameText, item.isChecked ? styles.ingredientNameTextChecked : null]}>

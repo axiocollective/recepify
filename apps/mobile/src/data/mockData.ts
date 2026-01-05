@@ -1,6 +1,4 @@
-import { ImportItem, Recipe } from "./types";
-
-export const sampleImportItems: ImportItem[] = [];
+import { Recipe } from "./types";
 
 export const sampleRecipes: Recipe[] = [
   {

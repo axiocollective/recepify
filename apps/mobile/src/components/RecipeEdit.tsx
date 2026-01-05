@@ -51,13 +51,13 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   const [newTagDraft, setNewTagDraft] = useState("");
   const [showTagInput, setShowTagInput] = useState(false);
   const formDataRef = useRef(formData);
-  const { plan, usageSummary, bonusTokens, refreshUsageSummary, userLanguage } = useApp();
-  const aiLimitReached = isAiLimitReached(plan, usageSummary, bonusTokens);
+  const { plan, usageSummary, bonusTokens, refreshUsageSummary, userLanguage, trialActive, trialTokensRemaining } = useApp();
+  const aiLimitReached = isAiLimitReached(plan, usageSummary, bonusTokens, trialTokensRemaining);
   const isPremium = plan === "paid" || plan === "premium";
   const creditsExhausted = aiLimitReached;
-  const isAIDisabled = aiDisabled || !isPremium || creditsExhausted;
+  const isAIDisabled = aiDisabled || creditsExhausted;
   const showPremiumBadge = !isPremium;
-  const showCreditsBadge = isPremium && creditsExhausted;
+  const showCreditsBadge = creditsExhausted;
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const disclaimerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pulseAnim = useRef(new Animated.Value(0)).current;
@@ -75,6 +75,14 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   const menuAnim = useRef(new Animated.Value(0)).current;
   const tagInputRef = useRef<TextInput>(null);
   const didAutoRun = useRef(false);
+  const titleValue = formData.title?.trim();
+  const descriptionValue = formData.description?.trim();
+  const hasAiIngredients = formData.ingredients?.some(
+    (ingredient) => ingredient.name?.trim() || ingredient.amount?.trim()
+  );
+  const hasAiInputs = Boolean(titleValue && descriptionValue && hasAiIngredients);
+  const aiInputMissing = !hasAiInputs;
+  const hideAi = isNewRecipe && !recipe.isImported && recipe.id.startsWith("recipe-");
 
   useEffect(() => {
     const pulseLoop = Animated.loop(
@@ -404,6 +412,13 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   };
 
   const openAIMenu = () => {
+    if (aiInputMissing) {
+      Alert.alert(
+        "Add a bit more",
+        "Please add a title, a short description, and at least one ingredient before using AI."
+      );
+      return;
+    }
     if (isAIDisabled) {
       showCreditsTooltipNow();
       return;
@@ -679,6 +694,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               `Estimate the total time in minutes based on the ingredients and steps. Respond ONLY in JSON like {"totalTimeMinutes": 25}. Do not include words or units.`,
           },
         ],
+        usage_context: "estimate_time",
       });
       const normalized = cleanJsonText(response.reply ?? "");
       const parsed = extractJsonObject(normalized);
@@ -793,6 +809,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               `Write at most two crisp sentences (maximum 200 characters total) in ${snapshotLanguageLabel} that capture this recipe's key flavors and cooking style. Keep it punchy, no emojis, no lists—plain text only.`,
           },
         ],
+        usage_context: "generate_description",
       });
       const summary = limitToTwoSentences(response.reply ?? "");
       if (!summary) {
@@ -849,6 +866,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               `Clean up and normalize the ingredient list so it is easy to read. Keep the same number of ingredients and order. Fix wording, add missing amounts when possible, and normalize units. Respond ONLY with JSON array like [{"index":1,"name":"tomatoes","amount":"200 g"}] written in ${snapshotLanguageLabel}. If amount is "to taste", use the full phrase (e.g. "nach Geschmack"). Ingredients:\n${ingredientList}`,
           },
         ],
+        usage_context: "optimize_ingredients",
       });
       const normalized = cleanJsonText(response.reply ?? "");
       let updates: Array<{ index?: number; amount?: string; name?: string }> = [];
@@ -910,6 +928,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               `Generate a clear, logically ordered list of cooking steps for this recipe in ${snapshotLanguageLabel}. Each step should be 1–3 sentences, detailed enough to cook without being verbose. Do NOT prefix steps with "Step 1" or numbers. Respond ONLY in JSON with the shape {"steps": ["Sentence...", "Sentence..."]}.`,
           },
         ],
+        usage_context: "generate_steps",
       });
       const steps = parseStepsFromReply(response.reply ?? "");
       if (!steps.length) {
@@ -946,6 +965,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               `Estimate the per-serving nutrition for this recipe (calories, protein grams, carbs grams, fat grams) based on the ingredient list and their amounts. Respond ONLY in JSON like {"calories": number, "protein": "10g", "carbs": "25g", "fat": "12g"} using whole numbers, and write any units in ${snapshotLanguageLabel}.`,
           },
         ],
+        usage_context: "calculate_nutrition",
       });
       const nutrition = parseNutritionFromReply(response.reply ?? "");
       if (!nutrition) {
@@ -987,6 +1007,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               )}. Respond strictly in JSON like {"tags":["tag1","tag2"]} using the exact casing provided.`,
           },
         ],
+        usage_context: "suggest_tags",
       });
       const tags = parseTagsFromReply(response.reply ?? "")
         .map((tag) => tag.toLowerCase())
@@ -1019,14 +1040,15 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   const handleTranslateRecipe = async (sourceLanguage: "de" | "en", targetLanguage: "de" | "en") => {
     const snapshot = formDataRef.current;
     const response = await askRecipeAssistant({
-        recipe: buildRecipePayload(snapshot),
-        messages: [
-          {
-            role: "user",
-            content: `Translate this entire recipe from ${sourceLanguage === "de" ? "German" : "English"} into ${targetLanguage === "de" ? "German" : "English"}. Return valid JSON with the same structure (title, description, notes, ingredients (amount/name/line), steps). Do not add commentary or tags.`,
-          },
-        ],
-      });
+      recipe: buildRecipePayload(snapshot),
+      messages: [
+        {
+          role: "user",
+          content: `Translate this entire recipe from ${sourceLanguage === "de" ? "German" : "English"} into ${targetLanguage === "de" ? "German" : "English"}. Return valid JSON with the same structure (title, description, notes, ingredients (amount/name/line), steps). Do not add commentary or tags.`,
+        },
+      ],
+      usage_context: "translate_recipe",
+    });
     const normalized = cleanJsonText(response.reply ?? "");
     const parsed = extractJsonObject(normalized);
     if (!parsed || typeof parsed !== "object") {
@@ -1067,6 +1089,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
             `Create a short, clear recipe title in ${snapshotLanguageLabel} using the available ingredients, steps, or description. Return plain text only, no quotes.`,
         },
       ],
+      usage_context: "improve_title",
     });
     const suggestion = (response.reply ?? "").split("\n")[0]?.trim();
     if (!suggestion) {
@@ -1089,6 +1112,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
             `Infer the ingredient list for this recipe in ${snapshotLanguageLabel} from the description and steps. Respond ONLY with JSON array like [{"name":"ingredient","amount":"200 g"}]. Use empty string for unknown amounts.`,
         },
       ],
+      usage_context: "infer_ingredients",
     });
     const inferred = parseIngredientsFromReply(response.reply ?? "");
     if (!inferred.length) {
@@ -1252,7 +1276,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   };
 
   useEffect(() => {
-    if (!initialAiAction || didAutoRun.current) return;
+    if (!initialAiAction || didAutoRun.current || hideAi) return;
     didAutoRun.current = true;
     if (initialAiAction === "optimize") {
       void handleOptimize();
@@ -1286,7 +1310,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   };
 
   const processingActive = isTranslating || isOptimizing;
-  const aiButtonDisabled = isAIDisabled || isTranslating || isOptimizing;
+  const aiButtonDisabled = isAIDisabled || isTranslating || isOptimizing || aiInputMissing;
   const contentScale = contentAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 0.98],
@@ -1307,37 +1331,39 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               </Pressable>
               <Text style={styles.headerTitle}>Edit Recipe</Text>
               <View style={styles.headerActionsInline}>
-              <View style={styles.chefButtonWrap}>
-                {renderAiBadge()}
-                {showCreditsTooltip && (
-                  <View style={styles.headerTooltip}>
-                    <Text style={styles.headerTooltipText}>
-                      ⚠️ {showPremiumBadge
-                        ? "AI is a Premium feature. Upgrade to unlock."
-                        : getAiLimitMessage(plan)}
-                    </Text>
-                  </View>
-                )}
-                <Pressable
-                  onPress={openAIMenu}
-                  style={({ pressed }) => [
-                    styles.chefButtonPressable,
-                    pressed && !isAIDisabled && styles.chefButtonPressed,
-                  ]}
-                >
-                  <LinearGradient
-                    colors={isAIDisabled ? [colors.gray200, colors.gray200] : ["#a855f7", "#9333ea"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.chefButton}
+              {!hideAi && (
+                <View style={styles.chefButtonWrap}>
+                  {renderAiBadge()}
+                  {showCreditsTooltip && (
+                    <View style={styles.headerTooltip}>
+                      <Text style={styles.headerTooltipText}>
+                        ⚠️ {showPremiumBadge
+                          ? "AI is a Premium feature. Upgrade to unlock."
+                          : getAiLimitMessage(plan, trialActive)}
+                      </Text>
+                    </View>
+                  )}
+                  <Pressable
+                    onPress={openAIMenu}
+                    style={({ pressed }) => [
+                      styles.chefButtonPressable,
+                      pressed && !aiButtonDisabled && styles.chefButtonPressed,
+                    ]}
                   >
-                    <Ionicons name="sparkles" size={16} color={isAIDisabled ? colors.gray500 : colors.white} />
-                    <Text style={[styles.chefButtonText, isAIDisabled && styles.chefButtonTextDisabled]}>
-                      AI
-                    </Text>
-                  </LinearGradient>
-                </Pressable>
-              </View>
+                    <LinearGradient
+                      colors={aiButtonDisabled ? [colors.gray200, colors.gray200] : ["#a855f7", "#9333ea"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.chefButton}
+                    >
+                      <Ionicons name="sparkles" size={16} color={aiButtonDisabled ? colors.gray500 : colors.white} />
+                      <Text style={[styles.chefButtonText, aiButtonDisabled && styles.chefButtonTextDisabled]}>
+                        AI
+                      </Text>
+                    </LinearGradient>
+                  </Pressable>
+                </View>
+              )}
               <Pressable
                 style={[styles.saveButton, shadow.md]}
                 onPress={() => {
@@ -1371,11 +1397,12 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
             <View style={styles.field}>
               <View style={styles.labelRow}>
                 <Text style={styles.label}>Description</Text>
-                {renderInlineAiPill({
-                  label: isGeneratingDescription ? "Writing..." : "Write",
-                  disabled: !canGenerateDescription || isGeneratingDescription || aiButtonDisabled,
-                  onPress: () => runAiAction(() => void handleGenerateDescription()),
-                })}
+                {!hideAi &&
+                  renderInlineAiPill({
+                    label: isGeneratingDescription ? "Writing..." : "Write",
+                    disabled: !canGenerateDescription || isGeneratingDescription || aiButtonDisabled,
+                    onPress: () => runAiAction(() => void handleGenerateDescription()),
+                  })}
               </View>
               <TextInput
                 value={formData.description || ""}
@@ -1423,11 +1450,12 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Time & Servings</Text>
           <View style={styles.sectionActions}>
-            {renderInlineAiPill({
-              label: isEstimatingTotalTime ? "Estimating..." : "Estimate",
-              disabled: !canEstimateTotalTime || isEstimatingTotalTime || aiButtonDisabled,
-              onPress: () => runAiAction(() => void handleEstimateTotalTime()),
-            })}
+            {!hideAi &&
+              renderInlineAiPill({
+                label: isEstimatingTotalTime ? "Estimating..." : "Estimate",
+                disabled: !canEstimateTotalTime || isEstimatingTotalTime || aiButtonDisabled,
+                onPress: () => runAiAction(() => void handleEstimateTotalTime()),
+              })}
           </View>
         </View>
         <View style={styles.grid}>
@@ -1463,11 +1491,12 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Ingredients</Text>
           <View style={styles.sectionActions}>
-            {renderInlineAiPill({
-              label: isOptimizingIngredients ? "Optimizing..." : "Optimize",
-              disabled: !canOptimizeIngredients || isOptimizingIngredients || aiButtonDisabled,
-              onPress: () => runAiAction(() => void handleOptimizeIngredients()),
-            })}
+            {!hideAi &&
+              renderInlineAiPill({
+                label: isOptimizingIngredients ? "Optimizing..." : "Optimize",
+                disabled: !canOptimizeIngredients || isOptimizingIngredients || aiButtonDisabled,
+                onPress: () => runAiAction(() => void handleOptimizeIngredients()),
+              })}
             <Pressable style={styles.addButton} onPress={addIngredient}>
               <Ionicons name="add" size={16} color={colors.gray700} />
               <Text style={styles.addButtonText}>Add</Text>
@@ -1509,11 +1538,12 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Instructions</Text>
           <View style={styles.sectionActions}>
-            {renderInlineAiPill({
-              label: isGeneratingSteps ? "Improving..." : "Improve",
-              disabled: !canGenerateSteps || isGeneratingSteps || aiButtonDisabled,
-              onPress: () => runAiAction(() => void handleImproveSteps()),
-            })}
+            {!hideAi &&
+              renderInlineAiPill({
+                label: isGeneratingSteps ? "Improving..." : "Improve",
+                disabled: !canGenerateSteps || isGeneratingSteps || aiButtonDisabled,
+                onPress: () => runAiAction(() => void handleImproveSteps()),
+              })}
             <Pressable style={styles.addButton} onPress={addStep}>
               <Ionicons name="add" size={16} color={colors.gray700} />
               <Text style={styles.addButtonText}>Add</Text>
@@ -1546,11 +1576,12 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Nutrition</Text>
           <View style={styles.sectionActions}>
-            {renderInlineAiPill({
-              label: isCalculatingNutrition ? "Calculating..." : "Calculate",
-              disabled: !canCalculateNutrition || isCalculatingNutrition || aiButtonDisabled,
-              onPress: () => runAiAction(() => void handleCalculateNutrition()),
-            })}
+            {!hideAi &&
+              renderInlineAiPill({
+                label: isCalculatingNutrition ? "Calculating..." : "Calculate",
+                disabled: !canCalculateNutrition || isCalculatingNutrition || aiButtonDisabled,
+                onPress: () => runAiAction(() => void handleCalculateNutrition()),
+              })}
           </View>
         </View>
         <View style={styles.grid}>
@@ -1610,11 +1641,12 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Tags</Text>
           <View style={styles.sectionActions}>
-            {renderInlineAiPill({
-              label: isSuggestingTags ? "Suggesting..." : "Suggest",
-              disabled: !canSuggestTags || isSuggestingTags || aiButtonDisabled,
-              onPress: () => runAiAction(() => void handleSuggestTags()),
-            })}
+            {!hideAi &&
+              renderInlineAiPill({
+                label: isSuggestingTags ? "Suggesting..." : "Suggest",
+                disabled: !canSuggestTags || isSuggestingTags || aiButtonDisabled,
+                onPress: () => runAiAction(() => void handleSuggestTags()),
+              })}
             <Pressable style={styles.addButton} onPress={addTag}>
               <Ionicons name="add" size={16} color={colors.gray700} />
               <Text style={styles.addButtonText}>Add</Text>
@@ -1703,7 +1735,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
         </ScrollView>
       </Animated.View>
 
-      {isAIMenuVisible && (
+      {isAIMenuVisible && !hideAi && (
         <View style={styles.sheetOverlay} pointerEvents="box-none">
           <Pressable style={styles.sheetBackdrop} onPress={closeAIMenu} />
           <Animated.View
@@ -2010,47 +2042,8 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
                     },
                   ]}
                 />
-                <Animated.View
-                  style={[
-                    styles.orbitSparkle,
-                    {
-                      transform: [
-                        {
-                          rotate: spinAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: ["0deg", "360deg"],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                >
-                  <Ionicons name="sparkles" size={16} color="#c084fc" />
-                </Animated.View>
-                <Animated.View
-                  style={[
-                    styles.orbitSparkleAlt,
-                    {
-                      transform: [
-                        {
-                          rotate: spinAnimReverse.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: ["360deg", "0deg"],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                >
-                  <Ionicons name="sparkles" size={14} color="#f472b6" />
-                </Animated.View>
               </View>
               <View style={styles.processingText}>
-                {!isTranslating && (
-                  <Text style={styles.processingTip}>
-                    Tip: Add ingredients and steps manually for the best results.
-                  </Text>
-                )}
                 <Text style={styles.processingTitle}>
                   {isTranslating ? "✨ ChefGPT is translating..." : "✨ ChefGPT does its magic"}
                 </Text>
@@ -2112,7 +2105,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
         </View>
       )}
 
-      {showDisclaimer && (
+      {showDisclaimer && !hideAi && (
         <Animated.View
           style={[
             styles.disclaimerWrap,
@@ -2922,25 +2915,9 @@ const styles = StyleSheet.create({
   processingPingAlt: {
     backgroundColor: "rgba(236, 72, 153, 0.3)",
   },
-  orbitSparkle: {
-    position: "absolute",
-    top: -8,
-    right: -8,
-  },
-  orbitSparkleAlt: {
-    position: "absolute",
-    bottom: -8,
-    left: -8,
-  },
   processingText: {
     alignItems: "center",
     gap: 8,
-  },
-  processingTip: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.gray600,
-    textAlign: "center",
   },
   processingTitle: {
     fontSize: 20,

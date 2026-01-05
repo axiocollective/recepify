@@ -14,20 +14,25 @@ interface ImportFromPinterestProps {
 export const ImportFromPinterest: React.FC<ImportFromPinterestProps> = ({ onBack, onImport }) => {
   const [url, setUrl] = useState("");
   const [isImporting, setIsImporting] = useState(false);
-  const { plan, usageSummary, bonusImports, navigateTo } = useApp();
-  const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports);
-  const limitMessage = getImportLimitMessage(plan);
+  const { plan, usageSummary, bonusImports, trialActive, trialImportsRemaining, navigateTo } = useApp();
+  const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports, trialImportsRemaining);
+  const limitMessage = getImportLimitMessage(plan, trialActive);
   const openPlans = () => navigateTo("planBilling");
+  const limitTitle =
+    plan === "paid" || plan === "premium"
+      ? "Monthly imports used up"
+      : trialActive
+      ? "Trial imports used up"
+      : "Imports require credits";
   const showLimitAlert = () => {
     if (plan === "paid" || plan === "premium") {
-      Alert.alert("Monthly limit reached", limitMessage, [
+      Alert.alert(limitTitle, limitMessage, [
         { text: "Buy credits", onPress: openPlans },
         { text: "Cancel", style: "cancel" },
       ]);
       return;
     }
-    Alert.alert("Monthly limit reached", limitMessage, [
-      { text: "Upgrade plan", onPress: openPlans },
+    Alert.alert(limitTitle, limitMessage, [
       { text: "Buy credits", onPress: openPlans },
       { text: "Cancel", style: "cancel" },
     ]);
@@ -108,10 +113,10 @@ export const ImportFromPinterest: React.FC<ImportFromPinterestProps> = ({ onBack
           </View>
           <Pressable
             onPress={handleImport}
-            disabled={!url.trim() || isImporting || importLimitReached}
+            disabled={!url.trim() || isImporting}
             style={[
               styles.primaryButton,
-              !url.trim() || isImporting || importLimitReached ? styles.primaryButtonDisabled : null,
+              !url.trim() || isImporting ? styles.primaryButtonDisabled : null,
             ]}
           >
             {isImporting ? (

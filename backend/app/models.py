@@ -2,6 +2,7 @@ from datetime import datetime, date
 from typing import List, Optional
 from uuid import UUID, uuid4
 
+from sqlalchemy import Column, JSON
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -151,3 +152,24 @@ class ImportUsageMonthly(SQLModel, table=True):
     source: str = Field(index=True)
     import_count: int = Field(default=0)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class UsageEvent(SQLModel, table=True):
+    __tablename__ = "usage_events"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    owner_id: UUID = Field(index=True)
+    request_id: Optional[UUID] = Field(default=None, index=True)
+    event_type: str = Field(index=True)
+    source: Optional[str] = Field(default=None, index=True)
+    model_provider: Optional[str] = Field(default=None, index=True)
+    model_name: Optional[str] = Field(default=None, index=True)
+    tokens_input: int = Field(default=0)
+    tokens_output: int = Field(default=0)
+    tokens_total: int = Field(default=0)
+    tokens_weighted: int = Field(default=0)
+    ai_credits_used: int = Field(default=0)
+    import_credits_used: int = Field(default=0)
+    cost_usd: Optional[float] = Field(default=None)
+    metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)

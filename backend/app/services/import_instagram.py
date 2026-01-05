@@ -25,6 +25,7 @@ from .import_utils import (
     instructions_from_strings,
     sync_recipe_media_to_supabase,
 )
+from .usage_utils import append_usage_event, build_usage_event, extract_openai_usage
 
 
 class _IngredientLine(BaseModel):
@@ -290,7 +291,7 @@ def _openai_recipe_from_signals(
     rescue: dict[str, Any],
     transcript: Optional[str],
     ocr_text: Optional[str] = None,
-) -> _InstagramRecipe:
+) -> tuple[_InstagramRecipe, Dict[str, Any]]:
     client = get_openai_client()
 
     oembed_ok = "_error" not in (oembed or {})
@@ -342,6 +343,15 @@ def _openai_recipe_from_signals(
         ],
         text_format=_InstagramRecipe,
     )
+    usage = extract_openai_usage(response)
+    usage_event = build_usage_event(
+        "openai",
+        model="gpt-4o-mini",
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+        total_tokens=usage["total_tokens"],
+        stage="instagram_openai",
+    )
 
     recipe = response.output_parsed
     recipe.source_url = instagram_url
@@ -358,7 +368,7 @@ def _openai_recipe_from_signals(
     if ocr_text.strip():
         used.append("ocr")
     recipe.extracted_via = "+".join(used) if used else "openai_no_signals"
-    return recipe
+    return recipe, usage_event
 
 
 def _needs_ocr(recipe: _InstagramRecipe) -> bool:
@@ -369,6 +379,7 @@ def _convert_recipe(
     recipe: _InstagramRecipe,
     thumbnail_url: Optional[str],
     video_path: Optional[Path],
+    usage_events: Optional[List[Dict[str, Any]]] = None,
 ) -> ImportedRecipe:
     ingredients: List[ImportedIngredient] = []
     for item in recipe.ingredients:
@@ -383,7 +394,7 @@ def _convert_recipe(
             )
         )
 
-    return ImportedRecipe(
+    converted = ImportedRecipe(
         title=recipe.title,
         description=recipe.description,
         servings=recipe.servings,
@@ -405,6 +416,10 @@ def _convert_recipe(
             "confidence": recipe.confidence,
         },
     )
+    if usage_events:
+        for event in usage_events:
+            append_usage_event(converted.metadata, event)
+    return converted
 
 
 def import_instagram(url: str) -> Tuple[Dict[str, Any], Optional[str]]:
@@ -418,25 +433,28 @@ def import_instagram(url: str) -> Tuple[Dict[str, Any], Optional[str]]:
             transcript = _transcribe_audio(audio_path)
 
     rescue = _playwright_rescue(url)
-    recipe = _openai_recipe_from_signals(
+    usage_events: List[Dict[str, Any]] = []
+    recipe, usage_event = _openai_recipe_from_signals(
         instagram_url=url,
         oembed=oembed,
         rescue=rescue,
         transcript=transcript,
         ocr_text=None,
     )
+    usage_events.append(usage_event)
 
     screenshot_path = rescue.get("screenshot_path")
     if _needs_ocr(recipe) and screenshot_path:
         ocr_text = _ocr_from_image(screenshot_path)
         if ocr_text:
-            recipe_ocr = _openai_recipe_from_signals(
+            recipe_ocr, ocr_event = _openai_recipe_from_signals(
                 instagram_url=url,
                 oembed=oembed,
                 rescue=rescue,
                 transcript=transcript,
                 ocr_text=ocr_text[:5000],
             )
+            usage_events.append(ocr_event)
             if (len(recipe_ocr.ingredients) + len(recipe_ocr.steps)) > (
                 len(recipe.ingredients) + len(recipe.steps)
             ):
@@ -447,6 +465,6 @@ def import_instagram(url: str) -> Tuple[Dict[str, Any], Optional[str]]:
         or (rescue.get("meta") or {}).get("og_image")
     )
 
-    converted = _convert_recipe(recipe, thumbnail_url, video_path)
+    converted = _convert_recipe(recipe, thumbnail_url, video_path, usage_events)
     sync_recipe_media_to_supabase(converted)
     return converted.model_dump_recipe(), str(video_path) if video_path else None

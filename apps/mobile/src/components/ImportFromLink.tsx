@@ -14,20 +14,25 @@ interface ImportFromLinkProps {
 export const ImportFromLink: React.FC<ImportFromLinkProps> = ({ onBack, onImport }) => {
   const [url, setUrl] = useState("");
   const [isImporting, setIsImporting] = useState(false);
-  const { plan, usageSummary, bonusImports, navigateTo } = useApp();
-  const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports);
-  const limitMessage = getImportLimitMessage(plan);
+  const { plan, usageSummary, bonusImports, trialActive, trialImportsRemaining, navigateTo } = useApp();
+  const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports, trialImportsRemaining);
+  const limitMessage = getImportLimitMessage(plan, trialActive);
   const openPlans = () => navigateTo("planBilling");
+  const limitTitle =
+    plan === "paid" || plan === "premium"
+      ? "Monthly imports used up"
+      : trialActive
+      ? "Trial imports used up"
+      : "Imports require credits";
   const showLimitAlert = () => {
     if (plan === "paid" || plan === "premium") {
-      Alert.alert("Monthly imports used up", limitMessage, [
+      Alert.alert(limitTitle, limitMessage, [
         { text: "Buy credits", onPress: openPlans },
         { text: "Cancel", style: "cancel" },
       ]);
       return;
     }
-    Alert.alert("Monthly imports used up", limitMessage, [
-      { text: "Upgrade plan", onPress: openPlans },
+    Alert.alert(limitTitle, limitMessage, [
       { text: "Buy credits", onPress: openPlans },
       { text: "Cancel", style: "cancel" },
     ]);

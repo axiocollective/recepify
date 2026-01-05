@@ -22,6 +22,7 @@ from .import_utils import (
     instructions_from_strings,
     sync_recipe_media_to_supabase,
 )
+from .usage_utils import append_usage_event, build_usage_event, extract_openai_usage
 
 
 class _IngredientLine(BaseModel):
@@ -191,7 +192,7 @@ def _openai_recipe_from_signals(
     tiktok_url: str,
     oembed: dict[str, Any],
     transcript: str,
-) -> _TikTokRecipe:
+) -> tuple[_TikTokRecipe, Dict[str, Any]]:
     client = get_openai_client()
     payload = {
         "url": tiktok_url,
@@ -216,15 +217,29 @@ def _openai_recipe_from_signals(
         ],
         text_format=_TikTokRecipe,
     )
+    usage = extract_openai_usage(response)
+    usage_event = build_usage_event(
+        "openai",
+        model="gpt-4o-mini",
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+        total_tokens=usage["total_tokens"],
+        stage="tiktok_openai",
+    )
 
     recipe = response.output_parsed
     recipe.source_url = tiktok_url
     recipe.source_domain = ensure_domain(tiktok_url)
     recipe.extracted_via = "yt-dlp+whisper+openai"
-    return recipe
+    return recipe, usage_event
 
 
-def _convert_recipe(recipe: _TikTokRecipe, video_path: Path, thumbnail_path: Path) -> ImportedRecipe:
+def _convert_recipe(
+    recipe: _TikTokRecipe,
+    video_path: Path,
+    thumbnail_path: Path,
+    usage_event: Optional[Dict[str, Any]] = None,
+) -> ImportedRecipe:
     ingredients: List[ImportedIngredient] = []
     for item in recipe.ingredients:
         base_line = clean_text(f"{item.amount or ''} {item.name}".strip())
@@ -238,7 +253,7 @@ def _convert_recipe(recipe: _TikTokRecipe, video_path: Path, thumbnail_path: Pat
             )
         )
 
-    return ImportedRecipe(
+    converted = ImportedRecipe(
         title=recipe.title,
         description=recipe.description,
         servings=recipe.servings,
@@ -260,6 +275,9 @@ def _convert_recipe(recipe: _TikTokRecipe, video_path: Path, thumbnail_path: Pat
             "confidence": recipe.confidence,
         },
     )
+    if usage_event:
+        append_usage_event(converted.metadata, usage_event)
+    return converted
 
 
 def import_tiktok(url: str) -> Tuple[Dict[str, Any], str]:
@@ -268,7 +286,7 @@ def import_tiktok(url: str) -> Tuple[Dict[str, Any], str]:
     thumbnail_path = _capture_thumbnail(video_path)
     audio_path = _extract_audio(video_path)
     transcript = _transcribe_audio(audio_path)
-    recipe = _openai_recipe_from_signals(url, oembed, transcript)
-    converted = _convert_recipe(recipe, video_path, thumbnail_path)
+    recipe, usage_event = _openai_recipe_from_signals(url, oembed, transcript)
+    converted = _convert_recipe(recipe, video_path, thumbnail_path, usage_event)
     sync_recipe_media_to_supabase(converted)
     return converted.model_dump_recipe(), converted.media_video_url or str(video_path)

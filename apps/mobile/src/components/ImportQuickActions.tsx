@@ -27,11 +27,16 @@ export const ImportQuickActions: React.FC<ImportQuickActionsProps> = ({
   inboxCount = 0,
   importReadyCount = 0,
 }) => {
-  const { plan, usageSummary, bonusImports, navigateTo } = useApp();
-  const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports);
-  const limitMessage = getImportLimitMessage(plan);
+  const { plan, usageSummary, bonusImports, trialActive, trialImportsRemaining, navigateTo } = useApp();
+  const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports, trialImportsRemaining);
+  const limitMessage = getImportLimitMessage(plan, trialActive);
   const openPlans = () => navigateTo("planBilling");
-  const visibleActions = inboxCount > 0 ? actions : actions.filter((action) => action.id !== "inbox");
+  const limitTitle =
+    plan === "paid" || plan === "premium"
+      ? "Monthly imports used up"
+      : trialActive
+      ? "Trial imports used up"
+      : "Imports require credits";
 
   const handleAction = (id: Screen | "manual" | "inbox") => {
     if (id === "manual") {
@@ -44,14 +49,13 @@ export const ImportQuickActions: React.FC<ImportQuickActionsProps> = ({
     }
     if ((id === "importFromLink" || id === "scanRecipe") && importLimitReached) {
       if (plan === "paid" || plan === "premium") {
-        Alert.alert("Monthly limit reached", limitMessage, [
+        Alert.alert(limitTitle, limitMessage, [
           { text: "Buy credits", onPress: openPlans },
           { text: "Cancel", style: "cancel" },
         ]);
         return;
       }
-      Alert.alert("Monthly limit reached", limitMessage, [
-        { text: "Upgrade plan", onPress: openPlans },
+      Alert.alert(limitTitle, limitMessage, [
         { text: "Buy credits", onPress: openPlans },
         { text: "Cancel", style: "cancel" },
       ]);
@@ -64,8 +68,8 @@ export const ImportQuickActions: React.FC<ImportQuickActionsProps> = ({
     <View style={styles.container}>
       <View style={[styles.card, shadow.md]}>
         <Text style={styles.title}>Add Recipe</Text>
-        <View style={[styles.row, visibleActions.length < actions.length ? styles.rowTight : null]}>
-          {visibleActions.map((action) => (
+        <View style={styles.row}>
+          {actions.map((action) => (
             <Pressable
               key={action.id}
               onPress={() => handleAction(action.id)}
@@ -115,10 +119,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     gap: spacing.md,
-  },
-  rowTight: {
-    justifyContent: "center",
-    gap: spacing.xl,
   },
   action: {
     alignItems: "center",

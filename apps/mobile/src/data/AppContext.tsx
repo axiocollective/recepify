@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { Alert, AppState, Linking } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { BottomTab, ImportItem, Ingredient, PlanTier, Recipe, RecipeCollection, Screen, ShoppingListItem, UsageSummary } from "./types";
+import { getImportLimitMessage, getPlanLimits, isImportLimitReached } from "./usageLimits";
 import {
   addShoppingListItems,
   addPayPerUseCredits,
@@ -45,6 +46,10 @@ interface AppContextValue {
   usageSummary: UsageSummary | null;
   bonusImports: number;
   bonusTokens: number;
+  trialActive: boolean;
+  trialImportsRemaining: number;
+  trialTokensRemaining: number;
+  trialEndsAt: string | null;
   subscriptionPeriod: "monthly" | "yearly";
   simulateEmptyState: boolean;
   setIsImportOverlayOpen: (open: boolean) => void;
@@ -109,11 +114,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [bonusImports, setBonusImports] = useState(0);
   const [bonusTokens, setBonusTokens] = useState(0);
+  const [trialStartsAt, setTrialStartsAt] = useState<string | null>(null);
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+  const [trialImports, setTrialImports] = useState(0);
+  const [trialTokens, setTrialTokens] = useState(0);
+  const [trialImportsUsed, setTrialImportsUsed] = useState(0);
+  const [trialTokensUsed, setTrialTokensUsed] = useState(0);
   const [subscriptionPeriod, setSubscriptionPeriod] = useState<"monthly" | "yearly">("yearly");
   const [userId, setUserId] = useState<string | null>(null);
   const [simulateEmptyState, setSimulateEmptyState] = useState(false);
   const lastUserIdRef = useRef<string | null>(null);
   const videoFallbackAlerts = useRef(new Set<string>());
+  const previousAuthRef = useRef(isAuthenticated);
+  const [authCreatedAt, setAuthCreatedAt] = useState<string | null>(null);
+  const lastUsageSummaryRef = useRef<UsageSummary | null>(null);
 
   const createUuid = useCallback(
     () =>
@@ -124,6 +138,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }),
     []
   );
+  const TRIAL_IMPORTS = 15;
+  const TRIAL_TOKENS = 75000;
+  const TRIAL_DAYS = 14;
+  const addDays = (value: Date, days: number) => new Date(value.getTime() + days * 24 * 60 * 60 * 1000);
 
   const extractSharedUrl = useCallback((incoming?: string | null) => {
     if (!incoming) return null;
@@ -292,14 +310,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setUserCountry(profile.country ?? "United States");
         setNeedsOnboarding(!profile.language || !profile.country);
         const nextAiDisabled = Boolean(profile.ai_disabled);
-        const storedPlan = (profile.plan as PlanTier | null) ?? "free";
-        const nextPlan = storedPlan === "ai_disabled" ? "free" : storedPlan;
+        const normalizedPlan = (() => {
+          const rawPlan = profile.plan as string | null | undefined;
+          if (rawPlan === "base") return "free";
+          if (rawPlan === "premium") return "paid";
+          if (rawPlan === "free" || rawPlan === "paid" || rawPlan === "premium" || rawPlan === "ai_disabled") {
+            return rawPlan as PlanTier;
+          }
+          return "free";
+        })();
+        const nextPlan = normalizedPlan === "ai_disabled" ? "free" : normalizedPlan;
         setAiDisabled(nextAiDisabled);
         setPlan(nextPlan);
         setBonusImports(profile.bonus_imports ?? 0);
         setBonusTokens(profile.bonus_tokens ?? 0);
         setSubscriptionPeriod(profile.subscription_period === "monthly" ? "monthly" : "yearly");
+        const now = new Date();
+        const profileCreatedAt = profile.created_at ? new Date(profile.created_at) : null;
+        const trialStart =
+          profile.trial_started_at
+            ? new Date(profile.trial_started_at)
+            : profileCreatedAt ?? (authCreatedAt ? new Date(authCreatedAt) : now);
+        const trialEnd =
+          profile.trial_ends_at
+            ? new Date(profile.trial_ends_at)
+            : addDays(trialStart, TRIAL_DAYS);
+        const hasTrial = Boolean(profile.trial_started_at);
+        if (!hasTrial) {
+          void ensureProfile({
+            trialStartedAt: trialStart.toISOString(),
+            trialEndsAt: trialEnd.toISOString(),
+            trialImports: TRIAL_IMPORTS,
+            trialTokens: TRIAL_TOKENS,
+            trialImportsUsed: 0,
+            trialTokensUsed: 0,
+          });
+        }
+        const trialExpired = trialEnd.getTime() <= now.getTime();
+        if (trialExpired && (profile.trial_imports || profile.trial_tokens)) {
+          void ensureProfile({
+            trialImports: 0,
+            trialTokens: 0,
+          });
+        }
+        setTrialStartsAt(trialStart.toISOString());
+        setTrialEndsAt(trialEnd.toISOString());
+        setTrialImports(trialExpired ? 0 : (profile.trial_imports ?? TRIAL_IMPORTS));
+        setTrialTokens(trialExpired ? 0 : (profile.trial_tokens ?? TRIAL_TOKENS));
+        setTrialImportsUsed(profile.trial_imports_used ?? 0);
+        setTrialTokensUsed(profile.trial_tokens_used ?? 0);
       } else {
+        const now = new Date();
+        const trialStart = authCreatedAt ? new Date(authCreatedAt) : now;
+        const trialEnd = addDays(trialStart, TRIAL_DAYS);
+        void ensureProfile({
+          trialStartedAt: trialStart.toISOString(),
+          trialEndsAt: trialEnd.toISOString(),
+          trialImports: TRIAL_IMPORTS,
+          trialTokens: TRIAL_TOKENS,
+          trialImportsUsed: 0,
+          trialTokensUsed: 0,
+        });
+        setTrialStartsAt(trialStart.toISOString());
+        setTrialEndsAt(trialEnd.toISOString());
+        setTrialImports(TRIAL_IMPORTS);
+        setTrialTokens(TRIAL_TOKENS);
+        setTrialImportsUsed(0);
+        setTrialTokensUsed(0);
         setNeedsOnboarding(true);
         setImportItems([]);
       }
@@ -322,6 +399,94 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
   }, []);
 
+  useEffect(() => {
+    if (!usageSummary) return;
+    const trialActive = Boolean(trialEndsAt && new Date(trialEndsAt).getTime() > Date.now());
+    const isFreePlan = plan === "free";
+    const previous = lastUsageSummaryRef.current;
+    let importDelta = usageSummary.importCount;
+    let tokenDelta = usageSummary.aiTokens;
+    if (previous && previous.periodStart === usageSummary.periodStart) {
+      importDelta = usageSummary.importCount - previous.importCount;
+      tokenDelta = usageSummary.aiTokens - previous.aiTokens;
+    }
+    if (importDelta > 0) {
+      if (isFreePlan) {
+        let remainingDelta = importDelta;
+        const trialRemaining = Math.max(0, trialImports - trialImportsUsed);
+        if (trialActive && trialRemaining > 0) {
+          const useTrial = Math.min(remainingDelta, trialRemaining);
+          const nextUsed = Math.min(trialImports, trialImportsUsed + useTrial);
+          setTrialImportsUsed(nextUsed);
+          void ensureProfile({ trialImportsUsed: nextUsed });
+          remainingDelta -= useTrial;
+        }
+        if (remainingDelta > 0 && bonusImports > 0) {
+          const nextBonus = Math.max(0, bonusImports - remainingDelta);
+          setBonusImports(nextBonus);
+          void ensureProfile({ bonusImports: nextBonus });
+        }
+      } else {
+        const planLimits = getPlanLimits(plan);
+        const previousOverage = previous
+          ? Math.max(0, previous.importCount - planLimits.imports)
+          : 0;
+        const currentOverage = Math.max(0, usageSummary.importCount - planLimits.imports);
+        const overageDelta = previous && previous.periodStart === usageSummary.periodStart
+          ? currentOverage - previousOverage
+          : currentOverage;
+        if (overageDelta > 0 && bonusImports > 0) {
+          const nextBonus = Math.max(0, bonusImports - overageDelta);
+          setBonusImports(nextBonus);
+          void ensureProfile({ bonusImports: nextBonus });
+        }
+      }
+    }
+    if (tokenDelta > 0) {
+      if (isFreePlan) {
+        let remainingDelta = tokenDelta;
+        const trialRemaining = Math.max(0, trialTokens - trialTokensUsed);
+        if (trialActive && trialRemaining > 0) {
+          const useTrial = Math.min(remainingDelta, trialRemaining);
+          const nextUsed = Math.min(trialTokens, trialTokensUsed + useTrial);
+          setTrialTokensUsed(nextUsed);
+          void ensureProfile({ trialTokensUsed: nextUsed });
+          remainingDelta -= useTrial;
+        }
+        if (remainingDelta > 0 && bonusTokens > 0) {
+          const nextBonus = Math.max(0, bonusTokens - remainingDelta);
+          setBonusTokens(nextBonus);
+          void ensureProfile({ bonusTokens: nextBonus });
+        }
+      } else {
+        const planLimits = getPlanLimits(plan);
+        const previousOverage = previous
+          ? Math.max(0, previous.aiTokens - planLimits.tokens)
+          : 0;
+        const currentOverage = Math.max(0, usageSummary.aiTokens - planLimits.tokens);
+        const overageDelta = previous && previous.periodStart === usageSummary.periodStart
+          ? currentOverage - previousOverage
+          : currentOverage;
+        if (overageDelta > 0 && bonusTokens > 0) {
+          const nextBonus = Math.max(0, bonusTokens - overageDelta);
+          setBonusTokens(nextBonus);
+          void ensureProfile({ bonusTokens: nextBonus });
+        }
+      }
+    }
+    lastUsageSummaryRef.current = usageSummary;
+  }, [
+    bonusImports,
+    bonusTokens,
+    plan,
+    trialEndsAt,
+    trialImports,
+    trialImportsUsed,
+    trialTokens,
+    trialTokensUsed,
+    usageSummary,
+  ]);
+
   const purchasePayPerUseCredits = useCallback(async () => {
     try {
       const next = await addPayPerUseCredits({ imports: 15, tokens: 75000 });
@@ -334,46 +499,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
+
   useEffect(() => {
     let isMounted = true;
     supabase.auth.getSession().then(({ data }) => {
       if (!isMounted) return;
-    const session = data.session;
-    const nextUserId = session?.user?.id ?? null;
-    setUserId(nextUserId);
-    setSupabaseUserId(nextUserId);
-    setIsAuthenticated(Boolean(session));
-    setUserEmail(session?.user?.email ?? "");
-    setAssistantUserEmail(session?.user?.email ?? "");
-    setImportUserEmail(session?.user?.email ?? "");
-    setAssistantUserId(session?.user?.id ?? null);
-    setImportUserId(session?.user?.id ?? null);
-    if (nextUserId && nextUserId !== lastUserIdRef.current) {
-      setImportItems([]);
-    }
-    lastUserIdRef.current = nextUserId;
-    if (session) {
-      void refreshData();
-    }
+      const session = data.session;
+      const nextUserId = session?.user?.id ?? null;
+      setUserId(nextUserId);
+      setSupabaseUserId(nextUserId);
+      setIsAuthenticated(Boolean(session));
+      setAuthCreatedAt(session?.user?.created_at ?? null);
+      setUserEmail(session?.user?.email ?? "");
+      setAssistantUserEmail(session?.user?.email ?? "");
+      setImportUserEmail(session?.user?.email ?? "");
+      setAssistantUserId(session?.user?.id ?? null);
+      setImportUserId(session?.user?.id ?? null);
+      if (nextUserId && nextUserId !== lastUserIdRef.current) {
+        setImportItems([]);
+      }
+      lastUserIdRef.current = nextUserId;
+      if (session) {
+        void refreshData();
+      }
     });
 
     const { data: authSubscription } = supabase.auth.onAuthStateChange((_event, session) => {
-    const nextUserId = session?.user?.id ?? null;
-    setUserId(nextUserId);
-    setSupabaseUserId(nextUserId);
-    setIsAuthenticated(Boolean(session));
-    setUserEmail(session?.user?.email ?? "");
-    setAssistantUserEmail(session?.user?.email ?? "");
-    setImportUserEmail(session?.user?.email ?? "");
-    setAssistantUserId(session?.user?.id ?? null);
-    setImportUserId(session?.user?.id ?? null);
-    if (nextUserId && nextUserId !== lastUserIdRef.current) {
-      setImportItems([]);
-    }
-    lastUserIdRef.current = nextUserId;
-    if (session) {
-      void refreshData();
-    }
+      const nextUserId = session?.user?.id ?? null;
+      setUserId(nextUserId);
+      setSupabaseUserId(nextUserId);
+      setIsAuthenticated(Boolean(session));
+      setAuthCreatedAt(session?.user?.created_at ?? null);
+      setUserEmail(session?.user?.email ?? "");
+      setAssistantUserEmail(session?.user?.email ?? "");
+      setImportUserEmail(session?.user?.email ?? "");
+      setAssistantUserId(session?.user?.id ?? null);
+      setImportUserId(session?.user?.id ?? null);
+      if (nextUserId && nextUserId !== lastUserIdRef.current) {
+        setImportItems([]);
+      }
+      lastUserIdRef.current = nextUserId;
+      if (session) {
+        void refreshData();
+      }
     });
 
     return () => {
@@ -487,6 +655,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [isAuthenticated, refreshData, userId]);
 
+  useEffect(() => {
+    if (!previousAuthRef.current && isAuthenticated) {
+      setCurrentScreen("home");
+      setSelectedTab("home");
+      setSelectedRecipe(null);
+    }
+    previousAuthRef.current = isAuthenticated;
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!trialEndsAt) return;
+    const now = Date.now();
+    const endsAt = new Date(trialEndsAt).getTime();
+    if (endsAt <= now && (trialImports > 0 || trialTokens > 0)) {
+      setTrialImports(0);
+      setTrialTokens(0);
+      void ensureProfile({ trialImports: 0, trialTokens: 0 });
+    }
+  }, [trialEndsAt, trialImports, trialTokens]);
+
   const handleLoadingComplete = useCallback((payload?: { name?: string; email?: string }) => {
     setCurrentScreen("home");
     setSelectedTab("home");
@@ -576,6 +764,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPlan("free");
     setBonusImports(0);
     setBonusTokens(0);
+    setTrialStartsAt(null);
+    setTrialEndsAt(null);
+    setTrialImports(0);
+    setTrialTokens(0);
+    setTrialImportsUsed(0);
+    setTrialTokensUsed(0);
     setUsageSummary(null);
   }, [userId]);
 
@@ -588,6 +782,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProfileReady(false);
     setBonusImports(0);
     setBonusTokens(0);
+    setTrialStartsAt(null);
+    setTrialEndsAt(null);
+    setTrialImports(0);
+    setTrialTokens(0);
+    setTrialImportsUsed(0);
+    setTrialTokensUsed(0);
   }, []);
 
   const navigateTo = useCallback((screen: Screen) => {
@@ -626,6 +826,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return;
         }
         if (!item.url) {
+          return;
+        }
+        const importLimitReached = isImportLimitReached(
+          plan,
+          usageSummary,
+          bonusImports,
+          trialImportsRemaining
+        );
+        if (importLimitReached) {
+          const limitMessage = getImportLimitMessage(plan, trialActive);
+          const limitTitle =
+            plan === "paid" || plan === "premium"
+              ? "Monthly imports used up"
+              : trialActive
+              ? "Trial imports used up"
+              : "Imports require credits";
+          Alert.alert(limitTitle, limitMessage, [
+            { text: "Buy credits", onPress: () => navigateTo("planBilling") },
+            { text: "Cancel", style: "cancel" },
+          ]);
           return;
         }
         setImportItems((prev) =>
@@ -698,7 +918,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
       }, 2000);
     },
-    [addRecipe, handleRecipeSelect, importItems, recipes, refreshUsageSummary]
+    [addRecipe, bonusImports, handleRecipeSelect, importItems, plan, recipes, refreshUsageSummary, trialActive, trialImportsRemaining, usageSummary, navigateTo]
   );
 
   const handleAddToShoppingList = useCallback(
@@ -811,6 +1031,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setConnectedAccounts((prev) => ({ ...prev, [platform]: connected }));
   }, []);
 
+  const trialActive = Boolean(trialEndsAt && new Date(trialEndsAt).getTime() > Date.now());
+  const trialImportsRemaining = trialActive
+    ? Math.max(0, trialImports - trialImportsUsed)
+    : 0;
+  const trialTokensRemaining = trialActive
+    ? Math.max(0, trialTokens - trialTokensUsed)
+    : 0;
+
   const value = useMemo<AppContextValue>(
     () => ({
       isAuthenticated,
@@ -834,6 +1062,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       usageSummary,
       bonusImports,
       bonusTokens,
+      trialActive,
+      trialImportsRemaining,
+      trialTokensRemaining,
+      trialEndsAt,
       subscriptionPeriod,
       simulateEmptyState,
       setIsImportOverlayOpen,
@@ -883,6 +1115,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       usageSummary,
       bonusImports,
       bonusTokens,
+      trialActive,
+      trialImportsRemaining,
+      trialTokensRemaining,
+      trialEndsAt,
       subscriptionPeriod,
       simulateEmptyState,
       handleLoadingComplete,
@@ -905,6 +1141,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       refreshUsageSummary,
       purchasePayPerUseCredits,
       setSimulateEmptyState,
+      trialActive,
+      trialImportsRemaining,
+      trialTokensRemaining,
+      trialEndsAt,
     ]
   );
 

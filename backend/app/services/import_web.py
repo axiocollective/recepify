@@ -31,6 +31,7 @@ from .import_utils import (
     safe_list,
     sync_recipe_media_to_supabase,
 )
+from .usage_utils import append_usage_event, build_usage_event, extract_openai_usage
 
 logger = logging.getLogger(__name__)
 
@@ -231,12 +232,21 @@ def _openai_from_page(
         ],
         text_format=_LLMRecipe,
     )
+    usage = extract_openai_usage(response)
+    usage_event = build_usage_event(
+        "openai",
+        model="gpt-4o-mini",
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+        total_tokens=usage["total_tokens"],
+        stage=extracted_via_label,
+    )
 
     llm_recipe: _LLMRecipe = response.output_parsed
     nutrition = llm_recipe.nutrition
     media = llm_recipe.media
 
-    return ImportedRecipe(
+    recipe = ImportedRecipe(
         title=llm_recipe.title or title_tag or "Untitled Recipe",
         description=llm_recipe.description,
         meal_type=llm_recipe.meal_type,
@@ -260,6 +270,8 @@ def _openai_from_page(
         instructions=instructions_from_strings(llm_recipe.instructions),
         tags=llm_recipe.tags,
     )
+    append_usage_event(recipe.metadata, usage_event)
+    return recipe
 
 
 def _openai_from_pages(
@@ -315,12 +327,21 @@ def _openai_from_pages(
         ],
         text_format=_LLMRecipe,
     )
+    usage = extract_openai_usage(response)
+    usage_event = build_usage_event(
+        "openai",
+        model="gpt-4o-mini",
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+        total_tokens=usage["total_tokens"],
+        stage=extracted_via_label,
+    )
 
     llm_recipe: _LLMRecipe = response.output_parsed
     nutrition = llm_recipe.nutrition
     media = llm_recipe.media
 
-    return ImportedRecipe(
+    recipe = ImportedRecipe(
         title=llm_recipe.title or _title_tag(primary_html) or "Untitled Recipe",
         description=llm_recipe.description,
         meal_type=llm_recipe.meal_type,
@@ -344,6 +365,8 @@ def _openai_from_pages(
         instructions=instructions_from_strings(llm_recipe.instructions),
         tags=llm_recipe.tags,
     )
+    append_usage_event(recipe.metadata, usage_event)
+    return recipe
 
 
 def import_web(url: str) -> Dict[str, Any]:

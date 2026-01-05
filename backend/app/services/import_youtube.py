@@ -22,6 +22,7 @@ from .import_utils import (
     get_openai_client,
     instructions_from_strings,
 )
+from .usage_utils import append_usage_event, build_usage_event, extract_openai_usage
 
 MAX_VIDEO_MINUTES_NO_DESC = 15
 MAX_TEXT_TO_LLM_CHARS = 20000
@@ -350,7 +351,7 @@ def _openai_extract_steps_only(
     description: str,
     transcript_text: str,
     model: str = "gpt-4o-mini",
-) -> List[str]:
+) -> tuple[List[str], Dict[str, Any]]:
     client = get_openai_client()
     system_msg = (
         "Extract ONLY the cooking steps as a numbered list from the given transcript/captions. "
@@ -370,25 +371,34 @@ def _openai_extract_steps_only(
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
         ],
     )
+    usage = extract_openai_usage(response)
+    usage_event = build_usage_event(
+        "openai",
+        model=model,
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+        total_tokens=usage["total_tokens"],
+        stage="youtube_steps_only",
+    )
     raw = response.output_text
     try:
         parsed = json.loads(raw)
         steps = parsed.get("steps") or []
-        return [clean_text(step) for step in steps if clean_text(step)]
+        return [clean_text(step) for step in steps if clean_text(step)], usage_event
     except Exception:
         steps: List[str] = []
         for line in raw.splitlines():
             cleaned = re.sub(r"^\d+\s*[\).\:-]\s*", "", line).strip()
             if len(cleaned) >= 3:
                 steps.append(clean_text(cleaned))
-        return steps[:20]
+        return steps[:20], usage_event
 
 
 def _openai_build_recipe(
     youtube_url: str,
     signals: Dict[str, Any],
     model: str = "gpt-4o-mini",
-) -> _YouTubeRecipe:
+) -> tuple[_YouTubeRecipe, Dict[str, Any]]:
     client = get_openai_client()
     system_msg = (
         "You extract cooking recipes from YouTube signals. "
@@ -407,17 +417,27 @@ def _openai_build_recipe(
         ],
         text_format=_YouTubeRecipe,
     )
+    usage = extract_openai_usage(response)
+    usage_event = build_usage_event(
+        "openai",
+        model=model,
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+        total_tokens=usage["total_tokens"],
+        stage="youtube_recipe",
+    )
     recipe = response.output_parsed
     recipe.source_url = youtube_url
     recipe.source_domain = ensure_domain(youtube_url)
     recipe.source_platform = "youtube"
-    return recipe
+    return recipe, usage_event
 
 
 def _convert_recipe(
     recipe: _YouTubeRecipe,
     disclaimer: Optional[str],
     thumbnail_url: Optional[str],
+    usage_events: Optional[List[Dict[str, Any]]] = None,
 ) -> ImportedRecipe:
     ingredients: List[ImportedIngredient] = []
     for item in recipe.ingredients:
@@ -439,7 +459,7 @@ def _convert_recipe(
     if disclaimer:
         metadata["disclaimer"] = disclaimer
 
-    return ImportedRecipe(
+    converted = ImportedRecipe(
         title=recipe.title,
         description=recipe.description,
         servings=recipe.servings,
@@ -458,6 +478,10 @@ def _convert_recipe(
         tags=[],
         metadata=metadata,
     )
+    if usage_events:
+        for event in usage_events:
+            append_usage_event(converted.metadata, event)
+    return converted
 
 
 def import_youtube(url: str) -> Dict[str, Any]:
@@ -503,15 +527,22 @@ def import_youtube(url: str) -> Dict[str, Any]:
             "steps_override": None,
             "subtitles_or_transcript": "",
         }
-        recipe = _openai_build_recipe(url, signals)
+        recipe, usage_event = _openai_build_recipe(url, signals)
         recipe.extracted_via = "description_only+openai"
-        return _convert_recipe(recipe, disclaimer=None, thumbnail_url=thumbnail_url).model_dump_recipe()
+        return _convert_recipe(
+            recipe,
+            disclaimer=None,
+            thumbnail_url=thumbnail_url,
+            usage_events=[usage_event],
+        ).model_dump_recipe()
 
     if ing_ok and not steps_ok:
         steps_override: List[str] = []
+        usage_events: List[Dict[str, Any]] = []
         subs_text, subs_via = _yt_dlp_fetch_subtitles_text(url)
         if subs_text:
-            steps_override = _openai_extract_steps_only(url, title, description, subs_text)
+            steps_override, steps_event = _openai_extract_steps_only(url, title, description, subs_text)
+            usage_events.append(steps_event)
 
         transcript_text = ""
         if len(steps_override) < 4:
@@ -528,8 +559,14 @@ def import_youtube(url: str) -> Dict[str, Any]:
                         chunks_collected.append(f"[{start_s}-{start_s + dur_s}s] {transcript}")
                         used += dur_s
                         transcript_text = "\n".join(chunks_collected)
-                        steps_try = _openai_extract_steps_only(url, title, description, transcript_text)
+                        steps_try, steps_event = _openai_extract_steps_only(
+                            url,
+                            title,
+                            description,
+                            transcript_text,
+                        )
                         steps_override = steps_try
+                        usage_events.append(steps_event)
                         if len(steps_override) >= 6:
                             break
                 except Exception:
@@ -550,14 +587,20 @@ def import_youtube(url: str) -> Dict[str, Any]:
             "steps_override": steps_override,
             "subtitles_or_transcript": (subs_text or transcript_text)[:MAX_TRANSCRIPT_CHARS],
         }
-        recipe = _openai_build_recipe(url, signals)
+        recipe, usage_event = _openai_build_recipe(url, signals)
         if subs_text and len(steps_override) >= 4:
             recipe.extracted_via = f"{subs_via}+steps_rescue+openai"
         elif len(steps_override) >= 4:
             recipe.extracted_via = "whisper_steps_rescue+openai"
         else:
             recipe.extracted_via = "steps_rescue_partial+openai"
-        return _convert_recipe(recipe, disclaimer=disclaimer, thumbnail_url=thumbnail_url).model_dump_recipe()
+        usage_events.append(usage_event)
+        return _convert_recipe(
+            recipe,
+            disclaimer=disclaimer,
+            thumbnail_url=thumbnail_url,
+            usage_events=usage_events,
+        ).model_dump_recipe()
 
     subs_text, subs_via = _yt_dlp_fetch_subtitles_text(url)
     transcript_text = subs_text
@@ -586,6 +629,11 @@ def import_youtube(url: str) -> Dict[str, Any]:
         "steps_override": None,
         "subtitles_or_transcript": transcript_text[:MAX_TRANSCRIPT_CHARS],
     }
-    recipe = _openai_build_recipe(url, signals)
+    recipe, usage_event = _openai_build_recipe(url, signals)
     recipe.extracted_via = subs_via or "subtitles_or_whisper_chunks+openai"
-    return _convert_recipe(recipe, disclaimer=None, thumbnail_url=thumbnail_url).model_dump_recipe()
+    return _convert_recipe(
+        recipe,
+        disclaimer=None,
+        thumbnail_url=thumbnail_url,
+        usage_events=[usage_event],
+    ).model_dump_recipe()

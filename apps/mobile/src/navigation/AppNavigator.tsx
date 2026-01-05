@@ -56,7 +56,11 @@ export const AppNavigator: React.FC = () => {
     usageSummary,
     bonusImports,
     bonusTokens,
+    trialActive,
+    trialImportsRemaining,
+    trialTokensRemaining,
     subscriptionPeriod,
+    trialEndsAt,
     simulateEmptyState,
     setSimulateEmptyState,
     isImportOverlayOpen,
@@ -298,6 +302,8 @@ export const AppNavigator: React.FC = () => {
     if (onboardingStep === "plan") {
       return (
         <ChoosePlanScreen
+          initialPlan="base"
+          initialBilling="yearly"
           onContinue={(payload) => {
             const nextPlan = payload.selectedPlan === "subscription" ? "paid" : "free";
             updateProfile({
@@ -509,6 +515,10 @@ export const AppNavigator: React.FC = () => {
             usageSummary={usageSummary}
             bonusImports={bonusImports}
             bonusTokens={bonusTokens}
+            trialActive={trialActive}
+            trialEndsAt={trialEndsAt}
+            trialImportsRemaining={trialImportsRemaining}
+            trialTokensRemaining={trialTokensRemaining}
             subscriptionPeriod={subscriptionPeriod}
             recipesCount={recipes.length}
             onPlanChange={(value) => updateProfile({ plan: value })}

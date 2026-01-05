@@ -32,6 +32,7 @@ type RecipeAssistantRequest = {
   recipe: AssistantRecipe;
   messages: AssistantMessage[];
   structured?: boolean;
+  usage_context?: string;
 };
 
 type RecipeAssistantResponse = {

@@ -48,18 +48,16 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
 }) => {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const { plan, usageSummary, bonusTokens } = useApp();
-  const aiLimitReached = isAiLimitReached(plan, usageSummary, bonusTokens);
+  const { plan, usageSummary, bonusTokens, trialActive, trialTokensRemaining } = useApp();
+  const aiLimitReached = isAiLimitReached(plan, usageSummary, bonusTokens, trialTokensRemaining);
   const isPremium = plan === "paid" || plan === "premium";
   const creditsExhausted = aiLimitReached;
-  const aiUsageBlocked = aiDisabled || !isPremium || creditsExhausted;
+  const aiUsageBlocked = aiDisabled || creditsExhausted;
   const aiLimitMessage = aiDisabled
     ? "AI features are disabled on your plan. Upgrade to re-enable ChefGPT."
-    : !isPremium
-    ? "ChefGPT is a Premium feature. Upgrade to unlock AI tools."
-    : getAiLimitMessage(plan);
+    : getAiLimitMessage(plan, trialActive);
   const showPremiumBadge = !isPremium;
-  const showCreditsBadge = isPremium && creditsExhausted;
+  const showCreditsBadge = creditsExhausted;
   const [currentServings, setCurrentServings] = useState((recipe.servingsOverride ?? recipe.servings) || 1);
   const [isVideoMuted, setIsVideoMuted] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -690,7 +688,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
               style={styles.youtubeLinkButton}
               onPress={() => Linking.openURL(recipe.sourceUrl!)}
             >
-              <Ionicons name="logo-youtube" size={18} color={colors.white} />
+              <Ionicons name="logo-youtube" size={18} color={colors.gray700} />
               <Text style={styles.youtubeLinkText}>Watch on YouTube</Text>
             </Pressable>
           )}
@@ -790,20 +788,16 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
           )}
           <View style={styles.floatingAssistantWrap}>
             <Pressable
-              style={[styles.floatingAssistant, shadow.lg, !isPremium && styles.floatingAssistantDisabled]}
+              style={[styles.floatingAssistant, shadow.lg, aiUsageBlocked && styles.floatingAssistantDisabled]}
               onPress={() => {
-                if (!isPremium) {
-                  Alert.alert(
-                    aiDisabled ? "AI disabled" : "Monthly limit reached",
-                    aiLimitMessage
-                  );
+                if (aiUsageBlocked) {
+                  Alert.alert("AI unavailable", aiLimitMessage);
                   return;
                 }
                 setAssistantOpen(true);
               }}
-              disabled={!isPremium}
             >
-              <Ionicons name="sparkles" size={22} color={isPremium ? colors.white : colors.gray500} />
+              <Ionicons name="sparkles" size={22} color={aiUsageBlocked ? colors.gray500 : colors.white} />
             </Pressable>
             {!isPremium && (
               <LinearGradient
@@ -1209,14 +1203,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.sm,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
     borderRadius: radius.lg,
-    backgroundColor: colors.red500,
+    backgroundColor: colors.gray300,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    minHeight: 48,
+    ...shadow.md,
   },
   youtubeLinkText: {
     ...typography.bodySmall,
-    color: colors.white,
+    color: colors.gray700,
     fontWeight: "600",
   },
   videoWrap: {

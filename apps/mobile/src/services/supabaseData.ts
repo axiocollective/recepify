@@ -16,6 +16,13 @@ const createUuid = () =>
 
 const isRemoteUrl = (value?: string) => Boolean(value && /^https?:\/\//i.test(value));
 
+const mapPlanToDbValue = (plan?: PlanTier | null) => {
+  if (!plan) return null;
+  if (plan === "free") return "base";
+  if (plan === "paid") return "premium";
+  return plan;
+};
+
 const uploadToBucket = async (uri: string, bucket: string, recipeId: string, kind: string) => {
   if (!uri || isRemoteUrl(uri)) return uri;
   const response = await fetch(uri);
@@ -86,15 +93,38 @@ const mapRecipeRow = (
   };
 };
 
-export const ensureProfile = async (payload: { name?: string; language?: string; country?: string; aiDisabled?: boolean; plan?: PlanTier; subscriptionPeriod?: "monthly" | "yearly" }) => {
+export const ensureProfile = async (payload: {
+  name?: string;
+  language?: string;
+  country?: string;
+  aiDisabled?: boolean;
+  plan?: PlanTier;
+  subscriptionPeriod?: "monthly" | "yearly";
+  trialStartedAt?: string;
+  trialEndsAt?: string;
+  trialImports?: number;
+  trialTokens?: number;
+  trialImportsUsed?: number;
+  trialTokensUsed?: number;
+  bonusImports?: number;
+  bonusTokens?: number;
+}) => {
   if (!currentUserId) return;
-  const updatePayload: Record<string, string | boolean | PlanTier | null> = { id: currentUserId };
+  const updatePayload: Record<string, string | boolean | number | PlanTier | null> = { id: currentUserId };
   if (payload.name !== undefined) updatePayload.name = payload.name ?? null;
   if (payload.language !== undefined) updatePayload.language = payload.language ?? null;
   if (payload.country !== undefined) updatePayload.country = payload.country ?? null;
   if (payload.aiDisabled !== undefined) updatePayload.ai_disabled = payload.aiDisabled ?? null;
-  if (payload.plan !== undefined) updatePayload.plan = payload.plan ?? null;
+  if (payload.plan !== undefined) updatePayload.plan = mapPlanToDbValue(payload.plan);
   if (payload.subscriptionPeriod !== undefined) updatePayload.subscription_period = payload.subscriptionPeriod ?? null;
+  if (payload.trialStartedAt !== undefined) updatePayload.trial_started_at = payload.trialStartedAt ?? null;
+  if (payload.trialEndsAt !== undefined) updatePayload.trial_ends_at = payload.trialEndsAt ?? null;
+  if (payload.trialImports !== undefined) updatePayload.trial_imports = payload.trialImports ?? null;
+  if (payload.trialTokens !== undefined) updatePayload.trial_tokens = payload.trialTokens ?? null;
+  if (payload.trialImportsUsed !== undefined) updatePayload.trial_imports_used = payload.trialImportsUsed ?? null;
+  if (payload.trialTokensUsed !== undefined) updatePayload.trial_tokens_used = payload.trialTokensUsed ?? null;
+  if (payload.bonusImports !== undefined) updatePayload.bonus_imports = payload.bonusImports ?? null;
+  if (payload.bonusTokens !== undefined) updatePayload.bonus_tokens = payload.bonusTokens ?? null;
 
   const { error } = await supabase.from("profiles").upsert(updatePayload);
   if (error) throw error;

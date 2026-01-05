@@ -28,6 +28,7 @@ from ..models import (
     RecipeCollectionItem,
     UsageMonthly,
     ImportUsageMonthly,
+    UsageEvent,
 )
 from ..schemas import (
     IngredientDTO,
@@ -95,6 +96,7 @@ class RecipeAssistantRequest(BaseModel):
     recipe: RecipeAssistantRecipe
     messages: List[RecipeAssistantMessage]
     structured: bool = False
+    usage_context: Optional[str] = None
 
 
 class RecipeAssistantResponse(BaseModel):
@@ -773,10 +775,10 @@ def _parse_structured_reply(raw_text: str) -> Optional[AssistantStructuredRespon
 
 def _generate_structured_sections_response(
     client: Any, conversation: List[Dict[str, str]]
-) -> tuple[AssistantStructuredResponse, int, Optional[str]]:
+) -> tuple[AssistantStructuredResponse, Dict[str, int], Optional[str]]:
     last_error: Optional[Exception] = None
 
-    def invoke(messages: List[Dict[str, str]], model_name: str) -> tuple[Optional[AssistantStructuredResponse], int]:
+    def invoke(messages: List[Dict[str, str]], model_name: str) -> tuple[Optional[AssistantStructuredResponse], Dict[str, int]]:
         nonlocal last_error
         try:
             response = client.responses.parse(
@@ -784,29 +786,29 @@ def _generate_structured_sections_response(
                 input=messages,
                 text_format=AssistantStructuredResponse,
             )
-            return response.output_parsed, _extract_usage_tokens(response)
+            return response.output_parsed, _extract_usage_details(response)
         except Exception as exc:
             last_error = exc
             logger.warning("ChefGPT model %s failed to respond: %s", model_name, exc)
-            return None, 0
+            return None, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
-    def try_models(messages: List[Dict[str, str]]) -> tuple[Optional[AssistantStructuredResponse], int, Optional[str]]:
+    def try_models(messages: List[Dict[str, str]]) -> tuple[Optional[AssistantStructuredResponse], Dict[str, int], Optional[str]]:
         for model_name in CHEFGPT_MODEL_CANDIDATES:
-            structured, tokens = invoke(messages, model_name)
+            structured, usage = invoke(messages, model_name)
             if structured:
-                return structured, tokens, model_name
-        return None, 0, None
+                return structured, usage, model_name
+        return None, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}, None
 
-    structured, tokens, model_name = try_models(conversation)
+    structured, usage, model_name = try_models(conversation)
     if structured:
-        return structured, tokens, model_name
+        return structured, usage, model_name
 
     retry_conversation = conversation + [
         {"role": "user", "content": SCHEMA_CORRECTION_PROMPT},
     ]
-    structured, tokens, model_name = try_models(retry_conversation)
+    structured, usage, model_name = try_models(retry_conversation)
     if structured:
-        return structured, tokens, model_name
+        return structured, usage, model_name
 
     fallback_message = (
         "I'm struggling to format this reply. Please try another question or rephrase."
@@ -820,12 +822,12 @@ def _generate_structured_sections_response(
                 bullets=[fallback_message],
             )
         ]
-    ), 0, None
+    ), {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}, None
 
 
 def _generate_plain_assistant_response(
     client: Any, conversation: List[Dict[str, str]]
-) -> tuple[str, int, Optional[str]]:
+) -> tuple[str, Dict[str, int], Optional[str]]:
     last_error: Optional[Exception] = None
     for model_name in CHEFGPT_MODEL_CANDIDATES or ("gpt-4o-mini",):
         try:
@@ -835,7 +837,7 @@ def _generate_plain_assistant_response(
             )
             text = _extract_assistant_text(response)
             if text:
-                return text, _extract_usage_tokens(response), model_name
+                return text, _extract_usage_details(response), model_name
         except Exception as exc:
             last_error = exc
             logger.warning("ChefGPT plain mode with %s failed: %s", model_name, exc)
@@ -1044,6 +1046,7 @@ def import_web(
     x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     session: Session = Depends(get_db_session),
 ) -> ImportResponse:
+    request_id = uuid4()
     try:
         recipe_data = web_service.import_web(payload.url)
     except NotImplementedError as exc:
@@ -1051,8 +1054,19 @@ def import_web(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     has_data = _has_import_data(recipe_data)
-    if has_data and (x_user_email or x_user_id):
-        _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "web")
+    if x_user_email or x_user_id:
+        owner_id = _resolve_user_id(x_user_email, x_user_id)
+        if has_data:
+            _increment_import_usage(session, owner_id, "web")
+        _log_usage_events(
+            session,
+            owner_id,
+            request_id=request_id,
+            event_type="import",
+            source="web",
+            events=_extract_usage_events(recipe_data),
+            import_credits_used=1 if has_data else 0,
+        )
     return ImportResponse(recipe=recipe_data)
 
 
@@ -1063,13 +1077,25 @@ def import_tiktok(
     x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     session: Session = Depends(get_db_session),
 ) -> ImportResponse:
+    request_id = uuid4()
     try:
         recipe_data, video_path = tiktok_service.import_tiktok(payload.url)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     has_data = _has_import_data(recipe_data)
-    if has_data and (x_user_email or x_user_id):
-        _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "tiktok")
+    if x_user_email or x_user_id:
+        owner_id = _resolve_user_id(x_user_email, x_user_id)
+        if has_data:
+            _increment_import_usage(session, owner_id, "tiktok")
+        _log_usage_events(
+            session,
+            owner_id,
+            request_id=request_id,
+            event_type="import",
+            source="tiktok",
+            events=_extract_usage_events(recipe_data),
+            import_credits_used=1 if has_data else 0,
+        )
     return ImportResponse(recipe=recipe_data, videoPath=video_path)
 
 
@@ -1080,13 +1106,25 @@ def import_instagram(
     x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     session: Session = Depends(get_db_session),
 ) -> ImportResponse:
+    request_id = uuid4()
     try:
         recipe_data, video_path = instagram_service.import_instagram(payload.url)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     has_data = _has_import_data(recipe_data)
-    if has_data and (x_user_email or x_user_id):
-        _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "instagram")
+    if x_user_email or x_user_id:
+        owner_id = _resolve_user_id(x_user_email, x_user_id)
+        if has_data:
+            _increment_import_usage(session, owner_id, "instagram")
+        _log_usage_events(
+            session,
+            owner_id,
+            request_id=request_id,
+            event_type="import",
+            source="instagram",
+            events=_extract_usage_events(recipe_data),
+            import_credits_used=1 if has_data else 0,
+        )
     return ImportResponse(recipe=recipe_data, videoPath=video_path)
 
 
@@ -1097,6 +1135,7 @@ def import_pinterest(
     x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     session: Session = Depends(get_db_session),
 ) -> ImportResponse:
+    request_id = uuid4()
     try:
         recipe_data = pinterest_service.import_pinterest(payload.url)
     except NotImplementedError as exc:
@@ -1104,8 +1143,19 @@ def import_pinterest(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     has_data = _has_import_data(recipe_data)
-    if has_data and (x_user_email or x_user_id):
-        _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "pinterest")
+    if x_user_email or x_user_id:
+        owner_id = _resolve_user_id(x_user_email, x_user_id)
+        if has_data:
+            _increment_import_usage(session, owner_id, "pinterest")
+        _log_usage_events(
+            session,
+            owner_id,
+            request_id=request_id,
+            event_type="import",
+            source="pinterest",
+            events=_extract_usage_events(recipe_data),
+            import_credits_used=1 if has_data else 0,
+        )
     return ImportResponse(recipe=recipe_data)
 
 
@@ -1116,6 +1166,7 @@ def import_youtube(
     x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     session: Session = Depends(get_db_session),
 ) -> ImportResponse:
+    request_id = uuid4()
     try:
         recipe_data = youtube_service.import_youtube(payload.url)
     except NotImplementedError as exc:
@@ -1123,8 +1174,19 @@ def import_youtube(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     has_data = _has_import_data(recipe_data)
-    if has_data and (x_user_email or x_user_id):
-        _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "youtube")
+    if x_user_email or x_user_id:
+        owner_id = _resolve_user_id(x_user_email, x_user_id)
+        if has_data:
+            _increment_import_usage(session, owner_id, "youtube")
+        _log_usage_events(
+            session,
+            owner_id,
+            request_id=request_id,
+            event_type="import",
+            source="youtube",
+            events=_extract_usage_events(recipe_data),
+            import_credits_used=1 if has_data else 0,
+        )
     return ImportResponse(recipe=recipe_data)
 
 
@@ -1136,6 +1198,7 @@ async def import_scan(
     x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     session: Session = Depends(get_db_session),
 ) -> ImportResponse:
+    request_id = uuid4()
     uploads: List[UploadFile] = []
     if files:
         uploads.extend(files)
@@ -1166,14 +1229,35 @@ async def import_scan(
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     has_data = _has_import_data(recipe_data)
-    if has_data and (x_user_email or x_user_id):
-        _increment_import_usage(session, _resolve_user_id(x_user_email, x_user_id), "scan")
+    if x_user_email or x_user_id:
+        owner_id = _resolve_user_id(x_user_email, x_user_id)
+        if has_data:
+            _increment_import_usage(session, owner_id, "scan")
+        _log_usage_events(
+            session,
+            owner_id,
+            request_id=request_id,
+            event_type="scan",
+            source="scan",
+            events=_extract_usage_events(recipe_data),
+            import_credits_used=1 if has_data else 0,
+        )
     return ImportResponse(recipe=recipe_data)
 
 def _has_import_data(recipe_data: Dict[str, Any]) -> bool:
     ingredients = recipe_data.get("ingredients") or []
     instructions = recipe_data.get("instructions") or []
     return bool(ingredients or instructions)
+
+
+def _extract_usage_events(recipe_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    metadata = recipe_data.get("metadata") if isinstance(recipe_data, dict) else None
+    if not isinstance(metadata, dict):
+        return []
+    events = metadata.get("usageEvents")
+    if not isinstance(events, list):
+        return []
+    return [event for event in events if isinstance(event, dict)]
 
 
 
@@ -1201,17 +1285,39 @@ def recipe_assistant(
     for message in payload.messages:
         conversation.append({"role": message.role, "content": message.content})
 
-    tokens_used = 0
+    usage_details = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
     tokens_weighted = 0
+    model_name = None
     if payload.structured:
-        structured_response, tokens_used, model_name = _generate_structured_sections_response(client, conversation)
-        tokens_weighted = _apply_token_weight(tokens_used, model_name)
+        structured_response, usage_details, model_name = _generate_structured_sections_response(client, conversation)
+        tokens_weighted = _apply_token_weight(usage_details["total_tokens"], model_name)
         reply_payload = json.dumps(structured_response.model_dump())
     else:
-        reply_payload, tokens_used, model_name = _generate_plain_assistant_response(client, conversation)
-        tokens_weighted = _apply_token_weight(tokens_used, model_name)
+        reply_payload, usage_details, model_name = _generate_plain_assistant_response(client, conversation)
+        tokens_weighted = _apply_token_weight(usage_details["total_tokens"], model_name)
     if x_user_email or x_user_id:
-        _increment_ai_usage(session, _resolve_user_id(x_user_email, x_user_id), tokens_weighted)
+        owner_id = _resolve_user_id(x_user_email, x_user_id)
+        _increment_ai_usage(session, owner_id, tokens_weighted)
+        _log_usage_events(
+            session,
+            owner_id,
+            request_id=uuid4(),
+            event_type="ai_assistant",
+            source="assistant",
+            events=[
+                {
+                    "provider": "openai",
+                    "model": model_name,
+                    "input_tokens": usage_details["input_tokens"],
+                    "output_tokens": usage_details["output_tokens"],
+                    "total_tokens": usage_details["total_tokens"],
+                    "structured": bool(payload.structured),
+                    "messages": len(payload.messages),
+                    "usage_context": payload.usage_context,
+                }
+            ],
+            import_credits_used=0,
+        )
     return RecipeAssistantResponse(reply=reply_payload)
 
 
@@ -1288,9 +1394,28 @@ def recipe_finder(
 
             reply_text = parsed.get("response") or "I couldn't find a perfect match in your recipe box."
             if x_user_email or x_user_id:
-                tokens = _extract_usage_tokens(response)
-                tokens_weighted = _apply_token_weight(tokens, "gpt-4o-mini")
-                _increment_ai_usage(session, _resolve_user_id(x_user_email, x_user_id), tokens_weighted)
+                usage_details = _extract_usage_details(response)
+                tokens_weighted = _apply_token_weight(usage_details["total_tokens"], "gpt-4o-mini")
+                owner_id = _resolve_user_id(x_user_email, x_user_id)
+                _increment_ai_usage(session, owner_id, tokens_weighted)
+                _log_usage_events(
+                    session,
+                    owner_id,
+                    request_id=uuid4(),
+                    event_type="ai_finder",
+                    source="finder",
+                    events=[
+                        {
+                            "provider": "openai",
+                            "model": "gpt-4o-mini",
+                            "input_tokens": usage_details["input_tokens"],
+                            "output_tokens": usage_details["output_tokens"],
+                            "total_tokens": usage_details["total_tokens"],
+                            "matches": len(matches_payload),
+                        }
+                    ],
+                    import_credits_used=0,
+                )
             return RecipeFinderResponse(reply=reply_text.strip(), matches=matches_payload[:3])
         except Exception as exc:
             logger.warning("ChefGPT finder failed, falling back to keyword search: %s", exc)
@@ -1352,6 +1477,34 @@ def _extract_usage_tokens(response: Any) -> int:
     return 0
 
 
+def _extract_usage_details(response: Any) -> Dict[str, int]:
+    usage = getattr(response, "usage", None)
+    if usage is None and isinstance(response, dict):
+        usage = response.get("usage")
+
+    input_tokens = 0
+    output_tokens = 0
+    total_tokens = 0
+
+    if isinstance(usage, dict):
+        input_tokens = int(usage.get("input_tokens") or 0)
+        output_tokens = int(usage.get("output_tokens") or 0)
+        total_tokens = int(usage.get("total_tokens") or 0)
+    else:
+        input_tokens = int(getattr(usage, "input_tokens", 0) or 0) if usage is not None else 0
+        output_tokens = int(getattr(usage, "output_tokens", 0) or 0) if usage is not None else 0
+        total_tokens = int(getattr(usage, "total_tokens", 0) or 0) if usage is not None else 0
+
+    if total_tokens <= 0:
+        total_tokens = max(0, input_tokens + output_tokens)
+
+    return {
+        "input_tokens": max(0, input_tokens),
+        "output_tokens": max(0, output_tokens),
+        "total_tokens": max(0, total_tokens),
+    }
+
+
 def _apply_token_weight(tokens: int, model_name: Optional[str]) -> int:
     if tokens <= 0:
         return 0
@@ -1362,6 +1515,98 @@ def _apply_token_weight(tokens: int, model_name: Optional[str]) -> int:
     }
     weight = weights.get(model_name or "", 1.0)
     return max(1, int(round(tokens * weight)))
+
+
+def _estimate_openai_cost_usd(model_name: Optional[str], input_tokens: int, output_tokens: int) -> Optional[float]:
+    pricing_per_million = {
+        "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+        "o4-mini": {"input": 1.0, "output": 4.0},
+        "gpt-4o": {"input": 5.0, "output": 15.0},
+    }
+    if not model_name:
+        return None
+    rates = pricing_per_million.get(model_name)
+    if not rates:
+        return None
+    cost = (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
+    return round(cost, 6)
+
+
+def _estimate_vision_cost_usd(images: int) -> Optional[float]:
+    if images <= 0:
+        return None
+    # Update with your current Google Vision pricing.
+    per_image = 0.0015
+    return round(images * per_image, 6)
+
+
+def _log_usage_events(
+    session: Session,
+    owner_id: UUID,
+    *,
+    request_id: UUID,
+    event_type: str,
+    source: Optional[str],
+    events: List[Dict[str, Any]],
+    import_credits_used: int = 0,
+) -> None:
+    for event in events:
+        provider = str(event.get("provider") or "")
+        model = event.get("model")
+        input_tokens = int(event.get("input_tokens") or 0)
+        output_tokens = int(event.get("output_tokens") or 0)
+        total_tokens = int(event.get("total_tokens") or 0)
+        if total_tokens <= 0:
+            total_tokens = max(0, input_tokens + output_tokens)
+        tokens_weighted = _apply_token_weight(total_tokens, model) if provider == "openai" else 0
+        ai_credits_used = tokens_weighted if provider == "openai" else 0
+        cost_usd = None
+        if provider == "openai":
+            cost_usd = _estimate_openai_cost_usd(model, input_tokens, output_tokens)
+        elif provider == "google-vision":
+            images = int(event.get("images") or 0)
+            cost_usd = _estimate_vision_cost_usd(images)
+
+        session.add(
+            UsageEvent(
+                owner_id=owner_id,
+                request_id=request_id,
+                event_type=event_type,
+                source=source,
+                model_provider=provider or None,
+                model_name=model,
+                tokens_input=input_tokens,
+                tokens_output=output_tokens,
+                tokens_total=total_tokens,
+                tokens_weighted=tokens_weighted,
+                ai_credits_used=ai_credits_used,
+                import_credits_used=0,
+                cost_usd=cost_usd,
+                metadata={k: v for k, v in event.items() if k not in {"provider", "model", "input_tokens", "output_tokens", "total_tokens"}},
+            )
+        )
+
+    if import_credits_used > 0:
+        session.add(
+            UsageEvent(
+                owner_id=owner_id,
+                request_id=request_id,
+                event_type="import_credit",
+                source=source,
+                model_provider=None,
+                model_name=None,
+                tokens_input=0,
+                tokens_output=0,
+                tokens_total=0,
+                tokens_weighted=0,
+                ai_credits_used=0,
+                import_credits_used=import_credits_used,
+                cost_usd=None,
+                metadata={},
+            )
+        )
+
+    session.commit()
 
 
 def _increment_ai_usage(session: Session, owner_id: UUID, tokens: int) -> None:

@@ -11,6 +11,10 @@ interface PlanBillingProps {
   usageSummary: UsageSummary | null;
   bonusImports?: number;
   bonusTokens?: number;
+  trialActive?: boolean;
+  trialEndsAt?: string | null;
+  trialImportsRemaining?: number;
+  trialTokensRemaining?: number;
   subscriptionPeriod: "monthly" | "yearly";
   recipesCount: number;
   onPlanChange: (plan: PlanTier) => void;
@@ -31,7 +35,7 @@ const FREE_PLAN = {
   subtitle: "Try Recepyfy",
   includes: [
     "5 recipe imports",
-    "50k AI tokens",
+    "50k AI credits",
     "All features included",
     "No payment required",
   ],
@@ -39,12 +43,12 @@ const FREE_PLAN = {
 
 const getPaidPlanDetails = (billingPeriod: "yearly" | "monthly") => ({
   id: "paid" as const,
-  name: "Subscription",
-  price: billingPeriod === "yearly" ? "CHF 69 / year" : "CHF 7.90 / month",
-  subtitle: billingPeriod === "yearly" ? "Best price overall" : "Best value for regular use",
+  name: "Recepify Premium",
+  price: billingPeriod === "yearly" ? "CHF 69 / year" : "CHF 9 / month",
+  subtitle: billingPeriod === "yearly" ? "Best price overall" : "More flexibility",
   includes: [
     "40 recipe imports per month",
-    "200k AI tokens per month",
+    "200k AI credits per month",
     "All features included",
   ],
   note: billingPeriod === "yearly" ? "Save vs monthly" : "Lower cost per recipe",
@@ -55,6 +59,10 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
   usageSummary,
   bonusImports = 0,
   bonusTokens = 0,
+  trialActive = false,
+  trialEndsAt = null,
+  trialImportsRemaining = 0,
+  trialTokensRemaining = 0,
   subscriptionPeriod,
   recipesCount,
   onPlanChange,
@@ -71,8 +79,8 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
   const planLimits = useMemo(() => getPlanLimits(plan), [plan]);
   const usedImports = usageSummary?.importCount ?? 0;
   const usedTokens = usageSummary?.aiTokens ?? 0;
-  const importLimit = planLimits.imports + bonusImports;
-  const tokenLimit = planLimits.tokens + bonusTokens;
+  const importLimit = planLimits.imports + bonusImports + (plan === "free" ? trialImportsRemaining : 0);
+  const tokenLimit = planLimits.tokens + bonusTokens + (plan === "free" ? trialTokensRemaining : 0);
   const isSubscribed = plan === "paid" || plan === "premium";
   const importProgress = importLimit > 0 ? Math.min(1, usedImports / importLimit) : 0;
   const tokenProgress = tokenLimit > 0 ? Math.min(1, usedTokens / tokenLimit) : 0;
@@ -82,13 +90,39 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
   const [selectedPlan, setSelectedPlan] = useState<"free" | "paid" | "credit_pack">("paid");
   const activeSelection = isOnboarding ? selectedPlan : plan;
   const [billingPeriod, setBillingPeriod] = useState<"yearly" | "monthly">(subscriptionPeriod);
+  const [showPlanOptions, setShowPlanOptions] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<"base" | "subscription">(isSubscribed ? "subscription" : "base");
+  const [pendingSubscriptionBilling, setPendingSubscriptionBilling] =
+    useState<"yearly" | "monthly">(subscriptionPeriod);
+  const [pendingBaseBilling, setPendingBaseBilling] = useState<"yearly" | "monthly">("yearly");
   const paidPlan = getPaidPlanDetails(billingPeriod);
 
   React.useEffect(() => {
     setBillingPeriod(subscriptionPeriod);
   }, [subscriptionPeriod]);
 
+  React.useEffect(() => {
+    if (showPlanOptions) return;
+    setPendingPlan(isSubscribed ? "subscription" : "base");
+    setPendingSubscriptionBilling(subscriptionPeriod);
+    setPendingBaseBilling(isSubscribed ? "yearly" : subscriptionPeriod);
+  }, [isSubscribed, showPlanOptions, subscriptionPeriod]);
+
+
   const formatNumber = (value: number) => value.toLocaleString("en-US");
+  const currentSubscriptionPrice =
+    subscriptionPeriod === "yearly" ? "CHF 69 / year" : "CHF 9 / month";
+  const currentBasePrice =
+    subscriptionPeriod === "yearly" ? "CHF 8 / year" : "CHF 1 / month";
+  const pendingSubscriptionPrice =
+    pendingSubscriptionBilling === "yearly" ? "CHF 69 / year" : "CHF 9 / month";
+  const pendingBasePrice =
+    pendingBaseBilling === "yearly" ? "CHF 8 / year" : "CHF 1 / month";
+  const pendingBaseAlt =
+    pendingBaseBilling === "yearly" ? "or CHF 1 / month" : "or CHF 8 / year";
+  const trialDaysLeft = trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+    : 0;
 
   const openSubscriptionSettings = async () => {
     const url = "itms-apps://apps.apple.com/account/subscriptions";
@@ -148,7 +182,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
         price: "CHF 6.90",
         period: "one-time",
         description: "No subscription",
-        features: ["15 recipe imports", "75k AI tokens", "All features included", "Credits never expire"],
+        features: ["15 recipe imports", "75k AI credits", "All features included", "Credits never expire"],
       },
     ];
 
@@ -313,8 +347,8 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                   {plan === "ai_disabled"
                     ? "AI disabled on this plan"
                     : isSubscribed
-                      ? `of ${formatNumber(planLimits.tokens)} monthly tokens${bonusTokens > 0 ? ` + ${formatNumber(bonusTokens)} extra` : ""}`
-                      : `of ${formatNumber(tokenLimit)} total tokens${bonusTokens > 0 ? ` (includes ${formatNumber(bonusTokens)} pay-per-use)` : ""}`}
+                    ? `of ${formatNumber(planLimits.tokens)} monthly AI credits${bonusTokens > 0 ? ` + ${formatNumber(bonusTokens)} extra` : ""}`
+                    : `of ${formatNumber(tokenLimit)} total AI credits${bonusTokens > 0 ? ` (includes ${formatNumber(bonusTokens)} pay-per-use)` : ""}`}
                 </Text>
                 <View style={styles.statBarTrack}>
                   <View style={[styles.statBarFill, { width: `${tokenProgress * 100}%` }]} />
@@ -325,132 +359,222 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Subscription</Text>
-          <View style={styles.planList}>
-            {[paidPlan].map((option) => {
-              const isSelected = option.id === plan;
-              const planRank = { ai_disabled: -1, free: 0, paid: 1, premium: 2 };
-              const isDowngrade = planRank[option.id] < planRank[plan];
-              const buttonLabel = isSelected
-                ? "Current plan"
-                : isDowngrade
-                  ? "Downgrade"
-                  : option.id === "free"
-                    ? "Switch to Starter"
-                    : "Upgrade";
-              return (
-                <View key={option.id} style={[styles.planCard, isSelected && styles.planCardSelected]}>
-                  <View style={styles.planCardHeader}>
-                    <View style={styles.planHeaderLeft}>
-                      <Text style={[styles.planTitle, isSelected && styles.planTitleSelected]}>
-                        {option.name}
-                      </Text>
-                      <Text style={styles.planPrice}>{option.price}</Text>
-                    </View>
-                    <View style={styles.planHeaderRight}>
-                      {option.id === "paid" && (
-                        <View style={styles.billingToggle}>
-                          {(["yearly", "monthly"] as const).map((period) => (
-                            <Pressable
-                              key={period}
-                              onPress={() => {
-                                setBillingPeriod(period);
-                                onSubscriptionPeriodChange(period);
-                              }}
-                              style={[styles.billingChip, billingPeriod === period && styles.billingChipActive]}
-                            >
-                              <Text style={[styles.billingChipText, billingPeriod === period && styles.billingChipTextActive]}>
-                                {period === "yearly" ? "Yearly" : "Monthly"}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </View>
-                      )}
-                      {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.purple600} />}
-                    </View>
-                  </View>
-                  <Text style={styles.planSubtitle}>{option.subtitle}</Text>
-                  {option.id === "paid" && option.note && (
-                    <Text style={styles.planNoteText}>{option.note}</Text>
-                  )}
-                  <View style={styles.planIncludes}>
-                    {option.includes.map((item) => (
-                      <View key={item} style={styles.planIncludeRow}>
-                        <Ionicons name="checkmark" size={12} color={colors.gray500} />
-                        <Text style={styles.planIncludeText}>{item}</Text>
-                      </View>
-                    ))}
-                  </View>
-                  <Pressable
-                    style={[styles.planUpgradeButton, isSelected && styles.planUpgradeButtonDisabled]}
-                    disabled={isSelected}
-                    onPress={() => {
-                      if (!canSwitchPlans) {
-                        Alert.alert(
-                          "Manage subscription",
-                          "Plan changes are handled in the App Store.",
-                          [{ text: "Open App Store", onPress: openSubscriptionSettings }, { text: "Close" }]
-                        );
-                        return;
-                      }
-                      if (isDowngrade) {
-                        Alert.alert(
-                          "Downgrade plan?",
-                          "Downgrades take effect at the end of your current billing period.",
-                          [
-                            { text: "Keep current plan", style: "cancel" },
-                            { text: "Continue", onPress: () => void safePlanChange(option.id) },
-                          ]
-                        );
-                        return;
-                      }
-                      void safePlanChange(option.id);
-                    }}
-                  >
-                    <Text style={[styles.planUpgradeText, isSelected && styles.planUpgradeTextDisabled]}>
-                      {buttonLabel}
+          <Text style={styles.sectionLabel}>Plan</Text>
+          <Pressable
+            style={[styles.currentPlanCard, shadow.md]}
+            onPress={() => setShowPlanOptions((prev) => !prev)}
+          >
+            <View style={styles.currentPlanHeader}>
+              <View style={styles.currentPlanHeaderLeft}>
+                <Text style={styles.currentPlanName}>
+                  {isSubscribed ? "Recepify Premium" : "Recepify Base"}
+                </Text>
+                <Text style={styles.currentPlanPrice}>
+                  {isSubscribed ? currentSubscriptionPrice : currentBasePrice}
+                </Text>
+                <Text style={styles.currentPlanSubtitle}>
+                  {isSubscribed
+                    ? "Includes monthly imports + AI credits."
+                    : trialActive
+                    ? `Trial active · ${trialDaysLeft} days left · 15 imports + 75k AI credits`
+                    : "Trial ended. Recepify Base is active, and imports/AI require extra credits."}
+                </Text>
+              </View>
+              <Pressable
+                style={styles.changePlanButton}
+                onPress={() => setShowPlanOptions((prev) => !prev)}
+              >
+                <Text style={styles.changePlanText}>{showPlanOptions ? "Close" : "Change"}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+
+          {showPlanOptions && (
+            <View style={styles.planList}>
+              <Pressable
+                style={[
+                  styles.planCard,
+                  pendingPlan === "base" && styles.planCardSelected,
+                ]}
+                onPress={() => setPendingPlan("base")}
+              >
+                <View style={styles.planCardHeader}>
+                  <View style={styles.planHeaderLeft}>
+                    <Text style={[styles.planTitle, pendingPlan === "base" && styles.planTitleSelected]}>
+                      Recepify Base
                     </Text>
-                  </Pressable>
+                    <Text style={styles.planPrice}>{pendingBasePrice}</Text>
+                    <Text style={styles.planSubtitle}>{pendingBaseAlt}</Text>
+                  </View>
+                  <View style={styles.planHeaderRight}>
+                    <View style={styles.billingToggle}>
+                      {(["yearly", "monthly"] as const).map((period) => (
+                        <Pressable
+                          key={period}
+                          onPress={() => setPendingBaseBilling(period)}
+                          style={[styles.billingChip, pendingBaseBilling === period && styles.billingChipActive]}
+                        >
+                          <Text
+                            style={[
+                              styles.billingChipText,
+                              pendingBaseBilling === period && styles.billingChipTextActive,
+                            ]}
+                          >
+                            {period === "yearly" ? "Yearly" : "Monthly"}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
                 </View>
-              );
-            })}
-          </View>
-          {plan === "paid" && (
-            <Text style={styles.planNote}>
-              Changes or cancellations apply at the end of your current billing period.
-            </Text>
+                <View style={styles.planIncludes}>
+                  {["Add recipes manually", "Collections & favorites", "Cooking mode", "Shopping list"].map((item) => (
+                    <View key={item} style={styles.planIncludeRow}>
+                      <Ionicons name="checkmark" size={12} color={colors.gray500} />
+                      <Text style={styles.planIncludeText}>{item}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.planNoteText}>
+                  After 14 days, the Base subscription starts and trial credits expire. You can buy credits whenever you need imports, scanning, or the AI cooking assistant.
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.planCard,
+                  pendingPlan === "subscription" && styles.planCardSelected,
+                ]}
+                onPress={() => setPendingPlan("subscription")}
+              >
+                <View style={styles.planCardHeader}>
+                  <View style={styles.planHeaderLeft}>
+                    <Text style={[styles.planTitle, pendingPlan === "subscription" && styles.planTitleSelected]}>
+                      Recepify Premium
+                    </Text>
+                    <Text style={styles.planPrice}>{pendingSubscriptionPrice}</Text>
+                    <Text style={styles.planSubtitle}>
+                      {pendingSubscriptionBilling === "yearly" ? "Best price overall" : "More flexibility"}
+                    </Text>
+                  </View>
+                  <View style={styles.planHeaderRight}>
+                    <View style={styles.billingToggle}>
+                      {(["yearly", "monthly"] as const).map((period) => (
+                        <Pressable
+                          key={period}
+                          onPress={() => setPendingSubscriptionBilling(period)}
+                          style={[
+                            styles.billingChip,
+                            pendingSubscriptionBilling === period && styles.billingChipActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.billingChipText,
+                              pendingSubscriptionBilling === period && styles.billingChipTextActive,
+                            ]}
+                          >
+                            {period === "yearly" ? "Yearly" : "Monthly"}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.planIncludes}>
+                  {["40 recipe imports", "200k AI credits", "AI assistant (ChefGPT)"].map((item) => (
+                    <View key={item} style={styles.planIncludeRow}>
+                      <Ionicons name="checkmark" size={12} color={colors.gray500} />
+                      <Text style={styles.planIncludeText}>{item}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.planNoteText}>Everything from Recepify Base included.</Text>
+                <Text style={[styles.planNoteText, { marginTop: spacing.xs }]}>
+                  Unused imports or AI credits do not roll over.
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
+          {showPlanOptions && (
+            <Pressable
+              style={styles.planUpgradeButton}
+              onPress={() => {
+                if (!canSwitchPlans) {
+                  Alert.alert(
+                    "Manage subscription",
+                    "Plan changes are handled in the App Store.",
+                    [{ text: "Open App Store", onPress: openSubscriptionSettings }, { text: "Close" }]
+                  );
+                  return;
+                }
+                const nextPlan = pendingPlan === "subscription" ? "paid" : "free";
+                const nextBilling =
+                  pendingPlan === "subscription" ? pendingSubscriptionBilling : pendingBaseBilling;
+                if (plan === "paid" && nextPlan === "free") {
+                  Alert.alert(
+                    "Downgrade plan?",
+                    "Downgrades take effect at the end of your current billing period.",
+                    [
+                      { text: "Keep current plan", style: "cancel" },
+                      {
+                        text: "Continue",
+                        onPress: () => {
+                          void safePlanChange(nextPlan).then(() => {
+                            onSubscriptionPeriodChange(nextBilling);
+                            setShowPlanOptions(false);
+                            Alert.alert("Plan updated", "Your changes have been saved.");
+                          });
+                        },
+                      },
+                    ]
+                  );
+                  return;
+                }
+                void safePlanChange(nextPlan).then(() => {
+                  onSubscriptionPeriodChange(nextBilling);
+                  setShowPlanOptions(false);
+                  Alert.alert("Plan updated", "Your changes have been saved.");
+                });
+              }}
+            >
+              <Text style={styles.planUpgradeText}>Save changes</Text>
+            </Pressable>
           )}
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Pay per Use</Text>
+        {!showPlanOptions && (
+          <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Extra credits</Text>
           <View style={styles.planCard}>
             <View style={styles.planCardHeader}>
               <View>
-                <Text style={styles.planTitle}>Pay per Use</Text>
-                <Text style={styles.planPrice}>CHF 6.90 · one-time</Text>
+                  <Text style={styles.planTitle}>Extra credits</Text>
+                  <Text style={styles.planPrice}>CHF 6 · one-time</Text>
               </View>
             </View>
-            <Text style={styles.planSubtitle}>No subscription</Text>
+            <Text style={styles.planSubtitle}>Buy whenever you need more</Text>
             <View style={styles.planIncludes}>
-              {["15 recipe imports", "75k AI tokens", "All features included", "Credits never expire"].map((item) => (
+                {["15 recipe imports", "75k AI credits", "All features included", "Credits never expire"].map((item) => (
                 <View key={item} style={styles.planIncludeRow}>
                   <Ionicons name="checkmark" size={12} color={colors.gray500} />
                   <Text style={styles.planIncludeText}>{item}</Text>
                 </View>
               ))}
+              </View>
+              <Pressable
+                style={styles.planUpgradeButton}
+                onPress={onBuyCredits}
+              >
+                <Text style={styles.planUpgradeText}>Buy credits</Text>
+              </Pressable>
+              <Text style={styles.planNote}>
+                Pay per Use credits never expire and stack on top of your monthly limits.
+              </Text>
             </View>
-            <Pressable
-              style={styles.planUpgradeButton}
-              onPress={onBuyCredits}
-            >
-              <Text style={styles.planUpgradeText}>Buy credits</Text>
-            </Pressable>
-            <Text style={styles.planNote}>
-              Pay per Use credits never expire and stack on top of your monthly limits.
-            </Text>
           </View>
-        </View>
+        )}
 
         {!isOnboarding && hasDevPlanSwitch && (
           <View style={styles.section}>
@@ -579,6 +703,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: spacing.md,
   },
+  currentPlanHeaderLeft: {
+    flex: 1,
+    gap: 2,
+  },
   currentPlanLabel: {
     fontSize: 12,
     lineHeight: 16,
@@ -602,6 +730,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: colors.gray600,
+  },
+  changePlanButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+    minHeight: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  changePlanText: {
+    ...typography.bodySmall,
+    color: colors.gray900,
+    fontWeight: "600",
   },
   currentPlanIncludes: {
     gap: spacing.xs,
