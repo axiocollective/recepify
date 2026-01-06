@@ -327,10 +327,13 @@ export default function DashboardPage() {
             {
               key: "context",
               header: "Context",
-              render: (row) =>
-                typeof row.metadata === "object" && row.metadata
-                  ? (row.metadata as Record<string, unknown>).usage_context ?? "—"
-                  : "—",
+              render: (row) => {
+                if (typeof row.metadata !== "object" || !row.metadata) {
+                  return "—";
+                }
+                const context = (row.metadata as Record<string, unknown>).usage_context;
+                return context ? String(context) : "—";
+              },
             },
           ]}
         />
