@@ -1065,7 +1065,6 @@ def import_web(
             event_type="import",
             source="web",
             events=_extract_usage_events(recipe_data),
-            import_credits_used=1 if has_data else 0,
         )
     return ImportResponse(recipe=recipe_data)
 
@@ -1094,7 +1093,6 @@ def import_tiktok(
             event_type="import",
             source="tiktok",
             events=_extract_usage_events(recipe_data),
-            import_credits_used=1 if has_data else 0,
         )
     return ImportResponse(recipe=recipe_data, videoPath=video_path)
 
@@ -1123,7 +1121,6 @@ def import_instagram(
             event_type="import",
             source="instagram",
             events=_extract_usage_events(recipe_data),
-            import_credits_used=1 if has_data else 0,
         )
     return ImportResponse(recipe=recipe_data, videoPath=video_path)
 
@@ -1154,7 +1151,6 @@ def import_pinterest(
             event_type="import",
             source="pinterest",
             events=_extract_usage_events(recipe_data),
-            import_credits_used=1 if has_data else 0,
         )
     return ImportResponse(recipe=recipe_data)
 
@@ -1185,7 +1181,6 @@ def import_youtube(
             event_type="import",
             source="youtube",
             events=_extract_usage_events(recipe_data),
-            import_credits_used=1 if has_data else 0,
         )
     return ImportResponse(recipe=recipe_data)
 
@@ -1240,7 +1235,6 @@ async def import_scan(
             event_type="scan",
             source="scan",
             events=_extract_usage_events(recipe_data),
-            import_credits_used=1 if has_data else 0,
         )
     return ImportResponse(recipe=recipe_data)
 
@@ -1517,7 +1511,11 @@ def _apply_token_weight(tokens: int, model_name: Optional[str]) -> int:
     return max(1, int(round(tokens * weight)))
 
 
-def _estimate_openai_cost_usd(model_name: Optional[str], input_tokens: int, output_tokens: int) -> Optional[float]:
+def _estimate_openai_cost_usd(
+    model_name: Optional[str],
+    input_tokens: int,
+    output_tokens: int,
+) -> Optional[float]:
     pricing_per_million = {
         "gpt-4o-mini": {"input": 0.15, "output": 0.60},
         "o4-mini": {"input": 1.0, "output": 4.0},
@@ -1530,6 +1528,13 @@ def _estimate_openai_cost_usd(model_name: Optional[str], input_tokens: int, outp
         return None
     cost = (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
     return round(cost, 6)
+
+
+def _estimate_whisper_cost_usd(audio_seconds: float) -> Optional[float]:
+    if audio_seconds <= 0:
+        return None
+    cost_per_minute = 0.006
+    return round((audio_seconds / 60.0) * cost_per_minute, 6)
 
 
 def _estimate_vision_cost_usd(images: int) -> Optional[float]:
@@ -1548,8 +1553,9 @@ def _log_usage_events(
     event_type: str,
     source: Optional[str],
     events: List[Dict[str, Any]],
-    import_credits_used: int = 0,
+    import_credits_used: Optional[int] = None,
 ) -> None:
+    is_import_flow = event_type in {"import", "scan"}
     for event in events:
         provider = str(event.get("provider") or "")
         model = event.get("model")
@@ -1560,9 +1566,16 @@ def _log_usage_events(
             total_tokens = max(0, input_tokens + output_tokens)
         tokens_weighted = _apply_token_weight(total_tokens, model) if provider == "openai" else 0
         ai_credits_used = tokens_weighted if provider == "openai" else 0
+        import_credits_for_event = 0
+        if is_import_flow and provider == "openai" and model != "whisper-1":
+            import_credits_for_event = tokens_weighted
         cost_usd = None
         if provider == "openai":
-            cost_usd = _estimate_openai_cost_usd(model, input_tokens, output_tokens)
+            if model == "whisper-1":
+                audio_seconds = float(event.get("audio_seconds") or 0)
+                cost_usd = _estimate_whisper_cost_usd(audio_seconds)
+            else:
+                cost_usd = _estimate_openai_cost_usd(model, input_tokens, output_tokens)
         elif provider == "google-vision":
             images = int(event.get("images") or 0)
             cost_usd = _estimate_vision_cost_usd(images)
@@ -1580,7 +1593,7 @@ def _log_usage_events(
                 tokens_total=total_tokens,
                 tokens_weighted=tokens_weighted,
                 ai_credits_used=ai_credits_used,
-                import_credits_used=0,
+                import_credits_used=import_credits_for_event,
                 cost_usd=cost_usd,
                 metadata_={
                     k: v
@@ -1590,7 +1603,7 @@ def _log_usage_events(
             )
         )
 
-    if import_credits_used > 0:
+    if import_credits_used is not None and import_credits_used > 0:
         session.add(
             UsageEvent(
                 owner_id=owner_id,

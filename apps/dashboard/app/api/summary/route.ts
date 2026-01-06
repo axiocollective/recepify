@@ -193,15 +193,16 @@ export async function GET(request: Request) {
       const key = event.source ?? "unknown";
       bySource.set(key, (bySource.get(key) ?? 0) + importCredits);
     }
-    if (aiCredits > 0) {
+    const creditUnits = importCredits > 0 ? importCredits : aiCredits;
+    if (creditUnits > 0) {
       const key = event.model_name ?? "unknown";
-      byModel.set(key, (byModel.get(key) ?? 0) + aiCredits);
+      byModel.set(key, (byModel.get(key) ?? 0) + creditUnits);
     }
 
     if (event.model_name) {
       const key = event.model_name;
       const entry = byModelCost.get(key) ?? { aiCredits: 0, costUsd: 0, events: 0 };
-      entry.aiCredits += aiCredits;
+      entry.aiCredits += creditUnits;
       entry.costUsd += Number(event.cost_usd || 0);
       entry.events += 1;
       byModelCost.set(key, entry);

@@ -188,6 +188,29 @@ def _transcribe_audio(audio_path: Path) -> str:
     return ""
 
 
+def _get_audio_duration_seconds(audio_path: Path) -> Optional[float]:
+    command = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(audio_path),
+    ]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True)
+    except FileNotFoundError:
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        return None
+
+
 def _openai_recipe_from_signals(
     tiktok_url: str,
     oembed: dict[str, Any],
@@ -238,7 +261,7 @@ def _convert_recipe(
     recipe: _TikTokRecipe,
     video_path: Path,
     thumbnail_path: Path,
-    usage_event: Optional[Dict[str, Any]] = None,
+    usage_events: Optional[List[Dict[str, Any]]] = None,
 ) -> ImportedRecipe:
     ingredients: List[ImportedIngredient] = []
     for item in recipe.ingredients:
@@ -275,8 +298,9 @@ def _convert_recipe(
             "confidence": recipe.confidence,
         },
     )
-    if usage_event:
-        append_usage_event(converted.metadata, usage_event)
+    if usage_events:
+        for event in usage_events:
+            append_usage_event(converted.metadata, event)
     return converted
 
 
@@ -286,7 +310,19 @@ def import_tiktok(url: str) -> Tuple[Dict[str, Any], str]:
     thumbnail_path = _capture_thumbnail(video_path)
     audio_path = _extract_audio(video_path)
     transcript = _transcribe_audio(audio_path)
+    whisper_event = None
+    audio_seconds = _get_audio_duration_seconds(audio_path)
+    if audio_seconds:
+        whisper_event = build_usage_event(
+            "openai",
+            model="whisper-1",
+            stage="tiktok_whisper",
+            extra={"audio_seconds": round(audio_seconds, 3)},
+        )
     recipe, usage_event = _openai_recipe_from_signals(url, oembed, transcript)
-    converted = _convert_recipe(recipe, video_path, thumbnail_path, usage_event)
+    usage_events = [usage_event]
+    if whisper_event:
+        usage_events.append(whisper_event)
+    converted = _convert_recipe(recipe, video_path, thumbnail_path, usage_events)
     sync_recipe_media_to_supabase(converted)
     return converted.model_dump_recipe(), converted.media_video_url or str(video_path)

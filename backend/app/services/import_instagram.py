@@ -155,6 +155,29 @@ def _transcribe_audio(audio_path: Path) -> str:
     return ""
 
 
+def _get_audio_duration_seconds(audio_path: Path) -> Optional[float]:
+    command = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(audio_path),
+    ]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True)
+    except FileNotFoundError:
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        return None
+
+
 def _html_meta(html: str) -> Dict[str, Optional[str]]:
     soup = BeautifulSoup(html, "html.parser")
 
@@ -426,14 +449,25 @@ def import_instagram(url: str) -> Tuple[Dict[str, Any], Optional[str]]:
     oembed = _fetch_instagram_oembed(url)
 
     transcript: Optional[str] = None
+    whisper_event: Optional[Dict[str, Any]] = None
     video_path = _download_instagram_video(url)
     if video_path:
         audio_path = _extract_audio(video_path)
         if audio_path:
             transcript = _transcribe_audio(audio_path)
+            audio_seconds = _get_audio_duration_seconds(audio_path)
+            if audio_seconds:
+                whisper_event = build_usage_event(
+                    "openai",
+                    model="whisper-1",
+                    stage="instagram_whisper",
+                    extra={"audio_seconds": round(audio_seconds, 3)},
+                )
 
     rescue = _playwright_rescue(url)
     usage_events: List[Dict[str, Any]] = []
+    if whisper_event:
+        usage_events.append(whisper_event)
     recipe, usage_event = _openai_recipe_from_signals(
         instagram_url=url,
         oembed=oembed,

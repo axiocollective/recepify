@@ -372,9 +372,9 @@ export default function DashboardPage() {
               key: "credits",
               header: "Credits",
               render: (row) =>
-                row.ai_credits_used || row.import_credits_used
-                  ? formatNumber((row.ai_credits_used ?? 0) + (row.import_credits_used ?? 0))
-                  : "0",
+                row.import_credits_used
+                  ? formatNumber(row.import_credits_used)
+                  : formatNumber(row.ai_credits_used ?? 0),
             },
             {
               key: "cost",

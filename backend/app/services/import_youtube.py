@@ -571,6 +571,15 @@ def import_youtube(url: str) -> Dict[str, Any]:
                             break
                 except Exception:
                     continue
+            if used > 0:
+                usage_events.append(
+                    build_usage_event(
+                        "openai",
+                        model="whisper-1",
+                        stage="youtube_whisper",
+                        extra={"audio_seconds": used},
+                    )
+                )
 
         disclaimer = None
         if len(steps_override) < 4:
@@ -620,6 +629,18 @@ def import_youtube(url: str) -> Dict[str, Any]:
             except Exception:
                 continue
         transcript_text = "\n".join(chunks_collected)
+        if used > 0:
+            usage_event = build_usage_event(
+                "openai",
+                model="whisper-1",
+                stage="youtube_whisper",
+                extra={"audio_seconds": used},
+            )
+            recipe_metadata_events = [usage_event]
+        else:
+            recipe_metadata_events = []
+    else:
+        recipe_metadata_events = []
 
     signals = {
         "title": title,
@@ -635,5 +656,5 @@ def import_youtube(url: str) -> Dict[str, Any]:
         recipe,
         disclaimer=None,
         thumbnail_url=thumbnail_url,
-        usage_events=[usage_event],
+        usage_events=recipe_metadata_events + [usage_event],
     ).model_dump_recipe()
