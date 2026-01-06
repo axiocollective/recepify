@@ -18,8 +18,13 @@ const formatNumber = (value: number) => value.toLocaleString("en-US");
 const formatCurrency = (value: number) =>
   `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const formatDate = (value: string) => new Date(value).toLocaleString();
-const formatModelName = (value: string | null | undefined) =>
-  value && String(value).trim() ? String(value) : "No model";
+const formatModelName = (value: string | null | undefined) => {
+  const trimmed = value && String(value).trim() ? String(value) : "No model";
+  if (trimmed === "document-text-detection") {
+    return "Google Vision (text detection)";
+  }
+  return trimmed;
+};
 const formatUsageCredits = (row: UsageEvent) => {
   const model = formatModelName(row.model_name);
   if (
