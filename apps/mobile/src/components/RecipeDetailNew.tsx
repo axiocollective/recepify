@@ -56,8 +56,8 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
   const aiLimitMessage = aiDisabled
     ? "AI features are disabled on your plan. Upgrade to re-enable ChefGPT."
     : getAiLimitMessage(plan, trialActive);
-  const showPremiumBadge = !isPremium;
-  const showCreditsBadge = creditsExhausted;
+  const showPremiumBadge = !isPremium && creditsExhausted;
+  const showCreditsBadge = isPremium && creditsExhausted;
   const [currentServings, setCurrentServings] = useState((recipe.servingsOverride ?? recipe.servings) || 1);
   const [isVideoMuted, setIsVideoMuted] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -448,7 +448,10 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
                         </LinearGradient>
                       )}
                       <Pressable
-                        style={styles.importOptimizeButton}
+                        style={[
+                          styles.importOptimizeButton,
+                          aiUsageBlocked && styles.importOptimizeButtonDisabled,
+                        ]}
                         onPress={() => {
                           if (aiUsageBlocked) {
                             Alert.alert("AI unavailable", aiLimitMessage);
@@ -456,15 +459,30 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
                           }
                           onOptimizeWithAI?.();
                         }}
+                        disabled={aiUsageBlocked}
                       >
                         <LinearGradient
-                          colors={["#a855f7", "#9333ea"]}
+                          colors={aiUsageBlocked ? [colors.gray200, colors.gray200] : ["#a855f7", "#9333ea"]}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 0 }}
-                          style={styles.importOptimizeButtonInner}
+                          style={[
+                            styles.importOptimizeButtonInner,
+                            aiUsageBlocked && styles.importOptimizeButtonInnerDisabled,
+                          ]}
                         >
-                          <Ionicons name="sparkles" size={16} color={colors.white} />
-                          <Text style={styles.importOptimizeText}>Optimize with AI</Text>
+                          <Ionicons
+                            name="sparkles"
+                            size={16}
+                            color={aiUsageBlocked ? colors.gray500 : colors.white}
+                          />
+                          <Text
+                            style={[
+                              styles.importOptimizeText,
+                              aiUsageBlocked && styles.importOptimizeTextDisabled,
+                            ]}
+                          >
+                            Optimize with AI
+                          </Text>
                         </LinearGradient>
                       </Pressable>
                     </>
@@ -985,6 +1003,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     overflow: "hidden",
   },
+  importOptimizeButtonDisabled: {
+    opacity: 0.85,
+  },
   importOptimizeButtonInner: {
     flexDirection: "row",
     alignItems: "center",
@@ -993,10 +1014,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     minHeight: 48,
   },
+  importOptimizeButtonInnerDisabled: {
+    backgroundColor: colors.gray200,
+  },
   importOptimizeText: {
     ...typography.bodySmall,
     color: colors.white,
     fontWeight: "600",
+  },
+  importOptimizeTextDisabled: {
+    color: colors.gray500,
   },
   importDeleteButton: {
     borderRadius: radius.xl,

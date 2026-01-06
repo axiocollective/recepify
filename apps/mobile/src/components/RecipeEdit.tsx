@@ -57,8 +57,8 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   const isPremium = plan === "paid" || plan === "premium";
   const creditsExhausted = aiLimitReached;
   const isAIDisabled = aiDisabled || creditsExhausted;
-  const showPremiumBadge = !isPremium;
-  const showCreditsBadge = creditsExhausted;
+  const showPremiumBadge = !isPremium && creditsExhausted;
+  const showCreditsBadge = isPremium && creditsExhausted;
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const disclaimerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pulseAnim = useRef(new Animated.Value(0)).current;
@@ -349,10 +349,12 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     label,
     disabled,
     onPress,
+    showPremiumLabel,
   }: {
     label: string;
     disabled: boolean;
     onPress: () => void;
+    showPremiumLabel?: boolean;
   }) => (
     <Pressable
       onPress={onPress}
@@ -370,6 +372,11 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
       >
         <Ionicons name="sparkles" size={14} color={disabled ? colors.gray500 : colors.white} />
         <Text style={[styles.aiInlineText, disabled && styles.aiInlineTextDisabled]}>{label}</Text>
+        {showPremiumLabel ? (
+          <View style={styles.inlineBadge}>
+            <Text style={styles.inlineBadgeText}>Premium</Text>
+          </View>
+        ) : null}
       </LinearGradient>
     </Pressable>
   );
@@ -392,7 +399,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
           end={{ x: 1, y: 1 }}
           style={styles.badgePremium}
         >
-          <Ionicons name="star" size={11} color={colors.white} />
+          <Ionicons name="star" size={9} color={colors.white} />
           <Text style={styles.badgeText}>Premium</Text>
         </LinearGradient>
       );
@@ -1410,11 +1417,12 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               <View style={styles.labelRow}>
                 <Text style={styles.label}>Description</Text>
                 {!hideAi &&
-                  renderInlineAiPill({
-                    label: isGeneratingDescription ? "Writing..." : "Write",
-                    disabled: !canGenerateDescription || isGeneratingDescription || aiButtonDisabled,
-                    onPress: () => runAiAction(() => void handleGenerateDescription()),
-                  })}
+                renderInlineAiPill({
+                  label: isGeneratingDescription ? "Writing..." : "Write",
+                  disabled: !canGenerateDescription || isGeneratingDescription || aiButtonDisabled,
+                  onPress: () => runAiAction(() => void handleGenerateDescription()),
+                  showPremiumLabel: creditsExhausted,
+                })}
               </View>
               <TextInput
                 value={formData.description || ""}
@@ -1467,6 +1475,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
                 label: isEstimatingTotalTime ? "Estimating..." : "Estimate",
                 disabled: !canEstimateTotalTime || isEstimatingTotalTime || aiButtonDisabled,
                 onPress: () => runAiAction(() => void handleEstimateTotalTime()),
+                showPremiumLabel: creditsExhausted,
               })}
           </View>
         </View>
@@ -1508,6 +1517,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
                 label: isOptimizingIngredients ? "Optimizing..." : "Optimize",
                 disabled: !canOptimizeIngredients || isOptimizingIngredients || aiButtonDisabled,
                 onPress: () => runAiAction(() => void handleOptimizeIngredients()),
+                showPremiumLabel: creditsExhausted,
               })}
             <Pressable style={styles.addButton} onPress={addIngredient}>
               <Ionicons name="add" size={16} color={colors.gray700} />
@@ -1555,6 +1565,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
                 label: isGeneratingSteps ? "Improving..." : "Improve",
                 disabled: !canGenerateSteps || isGeneratingSteps || aiButtonDisabled,
                 onPress: () => runAiAction(() => void handleImproveSteps()),
+                showPremiumLabel: creditsExhausted,
               })}
             <Pressable style={styles.addButton} onPress={addStep}>
               <Ionicons name="add" size={16} color={colors.gray700} />
@@ -1593,6 +1604,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
                 label: isCalculatingNutrition ? "Calculating..." : "Calculate",
                 disabled: !canCalculateNutrition || isCalculatingNutrition || aiButtonDisabled,
                 onPress: () => runAiAction(() => void handleCalculateNutrition()),
+                showPremiumLabel: creditsExhausted,
               })}
           </View>
         </View>
@@ -1658,6 +1670,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
                 label: isSuggestingTags ? "Suggesting..." : "Suggest",
                 disabled: !canSuggestTags || isSuggestingTags || aiButtonDisabled,
                 onPress: () => runAiAction(() => void handleSuggestTags()),
+                showPremiumLabel: creditsExhausted,
               })}
             <Pressable style={styles.addButton} onPress={addTag}>
               <Ionicons name="add" size={16} color={colors.gray700} />
@@ -1782,43 +1795,62 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
             </View>
             <View style={styles.sheetActions}>
               <Pressable
-                style={styles.sheetActionButton}
+                style={[styles.sheetActionButton, aiButtonDisabled && styles.sheetActionButtonDisabled]}
+                disabled={aiButtonDisabled}
                 onPress={() => {
                   closeAIMenu();
                   setTimeout(() => handleOptimize(), 50);
                 }}
               >
                 <LinearGradient
-                  colors={["#a855f7", "#9333ea"]}
+                  colors={aiButtonDisabled ? [colors.gray200, colors.gray200] : ["#a855f7", "#9333ea"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={styles.sheetActionPrimary}
+                  style={[styles.sheetActionPrimary, aiButtonDisabled && styles.sheetActionPrimaryDisabled]}
                 >
-                  <View style={styles.sheetActionIconPrimary}>
-                    <Ionicons name="sparkles" size={20} color={colors.white} />
+                  <View style={[styles.sheetActionIconPrimary, aiButtonDisabled && styles.sheetActionIconPrimaryDisabled]}>
+                    <Ionicons name="sparkles" size={20} color={aiButtonDisabled ? colors.gray500 : colors.white} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.sheetActionTitlePrimary}>Optimize with AI</Text>
-                    <Text style={styles.sheetActionTextPrimary}>
+                    <Text style={[styles.sheetActionTitlePrimary, aiButtonDisabled && styles.sheetActionTitleDisabled]}>
+                      Optimize with AI
+                    </Text>
+                    <Text style={[styles.sheetActionTextPrimary, aiButtonDisabled && styles.sheetActionTextDisabled]}>
                       Let AI improve and complete your recipe
                     </Text>
                   </View>
+                  {creditsExhausted && <Text style={styles.sheetPremiumTag}>Premium</Text>}
                 </LinearGradient>
               </Pressable>
               <Pressable
-                style={styles.sheetActionButton}
+                style={[styles.sheetActionButton, aiButtonDisabled && styles.sheetActionButtonDisabled]}
+                disabled={aiButtonDisabled}
                 onPress={() => {
                   closeAIMenu();
                   setTimeout(() => handleTranslate(), 50);
                 }}
               >
-                <View style={styles.sheetActionIconWrap}>
-                  <Ionicons name="language-outline" size={20} color={colors.purple600} />
+                <View
+                  style={[
+                    styles.sheetActionIconWrap,
+                    aiButtonDisabled && styles.sheetActionIconWrapDisabled,
+                  ]}
+                >
+                  <Ionicons
+                    name="language-outline"
+                    size={20}
+                    color={aiButtonDisabled ? colors.gray500 : colors.purple600}
+                  />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.sheetActionTitle}>Translate Recipe</Text>
-                  <Text style={styles.sheetActionText}>Translate to {preferredLanguageLabel}</Text>
+                  <Text style={[styles.sheetActionTitle, aiButtonDisabled && styles.sheetActionTitleDisabled]}>
+                    Translate Recipe
+                  </Text>
+                  <Text style={[styles.sheetActionText, aiButtonDisabled && styles.sheetActionTextDisabled]}>
+                    Translate to {preferredLanguageLabel}
+                  </Text>
                 </View>
+                {creditsExhausted && <Text style={styles.sheetPremiumTag}>Premium</Text>}
               </Pressable>
             </View>
             <Pressable style={styles.sheetCancel} onPress={closeAIMenu}>
@@ -2301,6 +2333,19 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: radius.full,
   },
+  inlineBadge: {
+    marginLeft: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(255,255,255,0.25)",
+  },
+  inlineBadgeText: {
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "700",
+    color: colors.white,
+  },
   aiInlineText: {
     fontSize: 13,
     lineHeight: 18,
@@ -2366,11 +2411,11 @@ const styles = StyleSheet.create({
   },
   badgePremium: {
     position: "absolute",
-    top: -6,
-    right: -6,
+    top: -4,
+    right: -4,
     zIndex: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
     borderRadius: radius.full,
     borderWidth: 2,
     borderColor: colors.white,
@@ -2394,8 +2439,8 @@ const styles = StyleSheet.create({
     ...shadow.md,
   },
   badgeText: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 9,
+    lineHeight: 12,
     fontWeight: "700",
     color: colors.white,
   },
@@ -2484,6 +2529,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
   },
+  sheetActionButtonDisabled: {
+    opacity: 0.85,
+  },
   sheetActionIconWrap: {
     width: 40,
     height: 40,
@@ -2491,6 +2539,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.purple100,
     alignItems: "center",
     justifyContent: "center",
+  },
+  sheetActionIconWrapDisabled: {
+    backgroundColor: colors.gray200,
   },
   sheetActionTitle: {
     fontSize: 17,
@@ -2512,6 +2563,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
   },
+  sheetActionPrimaryDisabled: {
+    backgroundColor: colors.gray200,
+  },
   sheetActionIconPrimary: {
     width: 40,
     height: 40,
@@ -2519,6 +2573,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  sheetActionIconPrimaryDisabled: {
+    backgroundColor: "rgba(255,255,255,0.6)",
   },
   sheetActionTitlePrimary: {
     fontSize: 17,
@@ -2530,6 +2587,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: "rgba(255,255,255,0.85)",
+  },
+  sheetActionTitleDisabled: {
+    color: colors.gray600,
+  },
+  sheetActionTextDisabled: {
+    color: colors.gray500,
+  },
+  sheetPremiumTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(255,255,255,0.3)",
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.white,
   },
   sheetCancel: {
     marginTop: spacing.lg,
