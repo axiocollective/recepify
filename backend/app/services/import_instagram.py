@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import os
 import re
 import shutil
@@ -169,13 +170,30 @@ def _get_audio_duration_seconds(audio_path: Path) -> Optional[float]:
     try:
         result = subprocess.run(command, capture_output=True, text=True)
     except FileNotFoundError:
-        return None
+        result = None
     if result.returncode != 0:
+        result = None
+    if result:
+        try:
+            return float(result.stdout.strip())
+        except ValueError:
+            pass
+    # Fallback: parse ffmpeg output if ffprobe is unavailable.
+    command = ["ffmpeg", "-i", str(audio_path)]
+    try:
+        fallback = subprocess.run(command, capture_output=True, text=True)
+    except FileNotFoundError:
+        return None
+    match = re.search(r"Duration:\s(\d+):(\d+):(\d+\.?\d*)", fallback.stderr or "")
+    if not match:
         return None
     try:
-        return float(result.stdout.strip())
+        hours = float(match.group(1))
+        minutes = float(match.group(2))
+        seconds = float(match.group(3))
     except ValueError:
         return None
+    return hours * 3600 + minutes * 60 + seconds
 
 
 def _html_meta(html: str) -> Dict[str, Optional[str]]:
