@@ -21,7 +21,7 @@ const formatAxisValue = (value: number) => {
 
 export function StackedBarChart({ title, series, height = 180, yLabel }: StackedBarChartProps) {
   const width = 640;
-  const padding = 24;
+  const padding = 36;
   const labels = series[0]?.data.map((point) => point.label) ?? [];
   const totals = labels.map((_, index) =>
     series.reduce((sum, current) => sum + (current.data[index]?.value ?? 0), 0)
@@ -117,11 +117,11 @@ export function StackedBarChart({ title, series, height = 180, yLabel }: Stacked
             );
           });
         })}
-        <text x={padding - 6} y={padding + 4} textAnchor="end" className="chartAxisLabel">
+        <text x={padding - 8} y={padding + 6} textAnchor="end" className="chartAxisLabel">
           {formatAxisValue(rawMaxValue === 0 ? 0 : maxValue)}
         </text>
         <text
-          x={padding - 6}
+          x={padding - 8}
           y={(height - padding + padding) / 2}
           textAnchor="end"
           className="chartAxisLabel"
@@ -129,7 +129,7 @@ export function StackedBarChart({ title, series, height = 180, yLabel }: Stacked
           {formatAxisValue(rawMaxValue === 0 ? 0 : maxValue / 2)}
         </text>
         <text
-          x={padding - 6}
+          x={padding - 8}
           y={height - padding + 4}
           textAnchor="end"
           className="chartAxisLabel"
@@ -138,7 +138,7 @@ export function StackedBarChart({ title, series, height = 180, yLabel }: Stacked
         </text>
         {tickLabels.length === 3 ? (
           <>
-            <text x={padding} y={height - 6} textAnchor="start" className="chartAxisLabel">
+            <text x={padding} y={height - 8} textAnchor="start" className="chartAxisLabel">
               {tickLabels[0]}
             </text>
             <text x={width / 2} y={height - 6} textAnchor="middle" className="chartAxisLabel">
@@ -146,7 +146,7 @@ export function StackedBarChart({ title, series, height = 180, yLabel }: Stacked
             </text>
             <text
               x={width - padding}
-              y={height - 6}
+              y={height - 8}
               textAnchor="end"
               className="chartAxisLabel"
             >
@@ -156,11 +156,11 @@ export function StackedBarChart({ title, series, height = 180, yLabel }: Stacked
         ) : null}
         {yLabel ? (
           <text
-            x={6}
+            x={14}
             y={height / 2}
             textAnchor="middle"
             className="chartAxisTitle"
-            transform={`rotate(-90 6 ${height / 2})`}
+            transform={`rotate(-90 14 ${height / 2})`}
           >
             {yLabel}
           </text>

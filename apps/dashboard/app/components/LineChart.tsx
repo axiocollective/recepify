@@ -30,7 +30,7 @@ const buildPoints = (data: LineChartPoint[], width: number, height: number, maxV
 
 export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineChartProps) {
   const width = 640;
-  const padding = 24;
+  const padding = 36;
   const hasData = series.some((item) => item.data.length > 0);
   const rawMaxValue = Math.max(
     ...series.flatMap((item) => item.data.map((point) => point.value)),
@@ -106,11 +106,11 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
               })}
             </g>
           ))}
-          <text x={padding - 6} y={padding + 4} textAnchor="end" className="chartAxisLabel">
+          <text x={padding - 8} y={padding + 6} textAnchor="end" className="chartAxisLabel">
             {formatAxisValue(rawMaxValue === 0 ? 0 : maxValue)}
           </text>
           <text
-            x={padding - 6}
+            x={padding - 8}
             y={(height - padding + padding) / 2}
             textAnchor="end"
             className="chartAxisLabel"
@@ -118,7 +118,7 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
             {formatAxisValue(rawMaxValue === 0 ? 0 : maxValue / 2)}
           </text>
           <text
-            x={padding - 6}
+            x={padding - 8}
             y={height - padding + 4}
             textAnchor="end"
             className="chartAxisLabel"
@@ -127,12 +127,12 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
           </text>
           {xLabels.length === 3 ? (
             <>
-              <text x={padding} y={height - 6} textAnchor="start" className="chartAxisLabel">
+              <text x={padding} y={height - 8} textAnchor="start" className="chartAxisLabel">
                 {xLabels[0]}
               </text>
               <text
                 x={width / 2}
-                y={height - 6}
+                y={height - 8}
                 textAnchor="middle"
                 className="chartAxisLabel"
               >
@@ -140,7 +140,7 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
               </text>
               <text
                 x={width - padding}
-                y={height - 6}
+                y={height - 8}
                 textAnchor="end"
                 className="chartAxisLabel"
               >
@@ -150,11 +150,11 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
           ) : null}
           {yLabel ? (
             <text
-              x={6}
+              x={14}
               y={height / 2}
               textAnchor="middle"
               className="chartAxisTitle"
-              transform={`rotate(-90 6 ${height / 2})`}
+              transform={`rotate(-90 14 ${height / 2})`}
             >
               {yLabel}
             </text>
