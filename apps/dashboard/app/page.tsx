@@ -33,10 +33,13 @@ const formatUsageCredits = (row: UsageEvent) => {
     return `${Math.round(seconds)}s`;
   }
   if (row.event_type === "import_credit") {
-    return formatNumber(row.import_credits_used ?? 0);
+    return `-${formatNumber(row.import_credits_used ?? 0)}`;
   }
   return formatNumber(row.ai_credits_used ?? 0);
 };
+
+const formatEventModel = (row: UsageEvent) =>
+  row.event_type === "import_credit" ? "import credit" : formatModelName(row.model_name);
 
 const defaultRange = () => {
   const end = new Date();
@@ -425,7 +428,7 @@ export default function DashboardPage() {
             {
               key: "model",
               header: "Model",
-              render: (row) => formatModelName(row.model_name),
+              render: (row) => formatEventModel(row),
             },
             {
               key: "credits",
