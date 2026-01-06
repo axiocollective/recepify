@@ -51,6 +51,7 @@ export default function DashboardPage() {
     const params = new URLSearchParams();
     if (filters.start) params.set("start", filters.start);
     if (filters.end) params.set("end", filters.end);
+    if (filters.userId) params.set("userId", filters.userId);
     const response = await fetch(`/api/summary?${params.toString()}`);
     if (!response.ok) return;
     const data = (await response.json()) as UsageSummary;

@@ -20,6 +20,7 @@ const getDateRange = (start?: string | null, end?: string | null) => {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const userId = searchParams.get("userId");
   const { startDate, endDate } = getDateRange(
     searchParams.get("start"),
     searchParams.get("end")
@@ -27,35 +28,42 @@ export async function GET(request: Request) {
   const startIso = startDate.toISOString();
   const endIso = endDate.toISOString();
 
+  let profilesQuery = supabaseAdmin
+    .from("profiles")
+    .select(
+      "id, name, plan, subscription_period, trial_ends_at, bonus_imports, bonus_tokens, trial_imports, trial_tokens, trial_imports_used, trial_tokens_used"
+    );
+  let eventsQuery = supabaseAdmin
+    .from("usage_events")
+    .select(
+      "owner_id, event_type, source, model_name, ai_credits_used, import_credits_used, cost_usd, created_at"
+    )
+    .gte("created_at", startIso)
+    .lte("created_at", endIso);
+  let monthlyQuery = supabaseAdmin
+    .from("usage_monthly")
+    .select("owner_id, period_start, import_count, ai_tokens")
+    .gte("period_start", startIso.slice(0, 10))
+    .lte("period_start", endIso.slice(0, 10));
+  let monthlyImportsQuery = supabaseAdmin
+    .from("import_usage_monthly")
+    .select("owner_id, source, import_count")
+    .gte("period_start", startIso.slice(0, 10))
+    .lte("period_start", endIso.slice(0, 10));
+
+  if (userId) {
+    profilesQuery = profilesQuery.eq("id", userId);
+    eventsQuery = eventsQuery.eq("owner_id", userId);
+    monthlyQuery = monthlyQuery.eq("owner_id", userId);
+    monthlyImportsQuery = monthlyImportsQuery.eq("owner_id", userId);
+  }
+
   const [
     { data: profiles, error: profileError },
     { data: events, error: eventsError },
     { data: monthlyUsage, error: monthlyError },
     { data: monthlyImports, error: monthlyImportsError },
-  ] = await Promise.all([
-    supabaseAdmin
-      .from("profiles")
-      .select(
-        "id, name, plan, subscription_period, trial_ends_at, bonus_imports, bonus_tokens, trial_imports, trial_tokens, trial_imports_used, trial_tokens_used"
-      ),
-    supabaseAdmin
-      .from("usage_events")
-      .select(
-        "owner_id, event_type, source, model_name, ai_credits_used, import_credits_used, cost_usd, created_at"
-      )
-      .gte("created_at", startIso)
-      .lte("created_at", endIso),
-    supabaseAdmin
-      .from("usage_monthly")
-      .select("owner_id, period_start, import_count, ai_tokens")
-      .gte("period_start", startIso.slice(0, 10))
-      .lte("period_start", endIso.slice(0, 10)),
-    supabaseAdmin
-      .from("import_usage_monthly")
-      .select("source, import_count")
-      .gte("period_start", startIso.slice(0, 10))
-      .lte("period_start", endIso.slice(0, 10)),
-  ]);
+  ] = await Promise.all([profilesQuery, eventsQuery, monthlyQuery, monthlyImportsQuery]);
 
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
@@ -79,6 +87,7 @@ export async function GET(request: Request) {
     ai_tokens: number;
   }>;
   const safeMonthlyImports = (monthlyImports ?? []) as Array<{
+    owner_id?: string;
     source: string | null;
     import_count: number;
   }>;
