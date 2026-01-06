@@ -47,12 +47,13 @@ export async function GET(request: Request) {
   const minCredits = parseNumber(searchParams.get("minCredits"));
   const maxCredits = parseNumber(searchParams.get("maxCredits"));
   const limit = Math.min(parseNumber(searchParams.get("limit")) ?? 250, 1000);
+  const offset = Math.max(parseNumber(searchParams.get("offset")) ?? 0, 0);
 
   let query = supabaseAdmin
     .from("usage_events")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
 
   if (userId) query = query.eq("owner_id", userId);
   if (eventType) query = query.eq("event_type", eventType);
@@ -100,10 +101,14 @@ export async function GET(request: Request) {
     );
   }
 
+  const hasMore = events.length === limit;
+  const nextOffset = offset + events.length;
   return NextResponse.json({
     events: events.map((event) => ({
       ...event,
       user_email: emailByOwner.get(event.owner_id) ?? null,
     })),
+    hasMore,
+    nextOffset,
   });
 }

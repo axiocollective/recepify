@@ -1065,6 +1065,7 @@ def import_web(
             event_type="import",
             source="web",
             events=_extract_usage_events(recipe_data),
+            import_credits_used=1 if has_data else 0,
         )
     return ImportResponse(recipe=recipe_data)
 
@@ -1093,6 +1094,7 @@ def import_tiktok(
             event_type="import",
             source="tiktok",
             events=_extract_usage_events(recipe_data),
+            import_credits_used=1 if has_data else 0,
         )
     return ImportResponse(recipe=recipe_data, videoPath=video_path)
 
@@ -1121,6 +1123,7 @@ def import_instagram(
             event_type="import",
             source="instagram",
             events=_extract_usage_events(recipe_data),
+            import_credits_used=1 if has_data else 0,
         )
     return ImportResponse(recipe=recipe_data, videoPath=video_path)
 
@@ -1151,6 +1154,7 @@ def import_pinterest(
             event_type="import",
             source="pinterest",
             events=_extract_usage_events(recipe_data),
+            import_credits_used=1 if has_data else 0,
         )
     return ImportResponse(recipe=recipe_data)
 
@@ -1181,6 +1185,7 @@ def import_youtube(
             event_type="import",
             source="youtube",
             events=_extract_usage_events(recipe_data),
+            import_credits_used=1 if has_data else 0,
         )
     return ImportResponse(recipe=recipe_data)
 
@@ -1235,6 +1240,7 @@ async def import_scan(
             event_type="scan",
             source="scan",
             events=_extract_usage_events(recipe_data),
+            import_credits_used=1 if has_data else 0,
         )
     return ImportResponse(recipe=recipe_data)
 

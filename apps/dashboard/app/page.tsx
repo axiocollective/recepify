@@ -36,6 +36,9 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<UsageEvent[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(false);
+  const [eventsOffset, setEventsOffset] = useState(0);
+  const [hasMoreEvents, setHasMoreEvents] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const initialRange = defaultRange();
   const [filters, setFilters] = useState({
@@ -72,7 +75,7 @@ export default function DashboardPage() {
     setUsers(data.users ?? []);
   };
 
-  const fetchEvents = async () => {
+  const fetchEvents = async (mode: "replace" | "append" = "replace") => {
     const params = new URLSearchParams();
     if (filters.userId) params.set("userId", filters.userId);
     if (filters.eventType) params.set("eventType", filters.eventType);
@@ -81,11 +84,21 @@ export default function DashboardPage() {
     if (filters.usageContext) params.set("usageContext", filters.usageContext);
     if (filters.start) params.set("start", filters.start);
     if (filters.end) params.set("end", filters.end);
+    const offset = mode === "append" ? eventsOffset : 0;
     params.set("limit", "300");
+    params.set("offset", String(offset));
     const response = await fetch(`/api/events?${params.toString()}`);
     if (!response.ok) return;
     const data = await response.json();
-    setEvents(data.events ?? []);
+    const nextEvents = data.events ?? [];
+    if (mode === "append") {
+      setEvents((prev) => [...prev, ...nextEvents]);
+      setEventsOffset((prev) => prev + nextEvents.length);
+    } else {
+      setEvents(nextEvents);
+      setEventsOffset(nextEvents.length);
+    }
+    setHasMoreEvents(Boolean(data.hasMore));
   };
 
   useEffect(() => {
@@ -94,8 +107,19 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchSummary(), fetchEvents()]).finally(() => setLoading(false));
+    setEventsOffset(0);
+    Promise.all([fetchSummary(), fetchEvents("replace")]).finally(() => setLoading(false));
   }, [filters]);
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMoreEvents) return;
+    setLoadingMore(true);
+    try {
+      await fetchEvents("append");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const dailySeries = summary?.dailySeries ?? [];
   const chartSeries = useMemo(
@@ -407,6 +431,11 @@ export default function DashboardPage() {
             },
           ]}
         />
+        {hasMoreEvents ? (
+          <button className="tableLoadMore" onClick={handleLoadMore} disabled={loadingMore}>
+            {loadingMore ? "Loading..." : "Load more"}
+          </button>
+        ) : null}
       </section>
 
       <section className="tablesGrid">

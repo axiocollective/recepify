@@ -326,6 +326,22 @@ a {
   box-shadow: var(--shadow);
 }
 
+.tableLoadMore {
+  margin: 12px auto 0;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  background: rgba(124, 58, 237, 0.08);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tableLoadMore:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .tableHeader {
   padding: 18px 20px;
   display: flex;
