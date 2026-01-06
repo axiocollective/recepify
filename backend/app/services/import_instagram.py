@@ -326,6 +326,41 @@ def _ocr_from_image(image_path: str) -> str:
         return ""
 
 
+def _ocr_video_frames(video_path: Path) -> tuple[str, int]:
+    frame_dir = ensure_storage_path("instagram", "frames", is_file=False)
+    timestamps = [1.0, 3.0, 5.0]
+    ocr_lines: List[str] = []
+    frames_used = 0
+    for idx, ts in enumerate(timestamps, start=1):
+        frame_path = frame_dir / f"frame_{uuid.uuid4().hex[:8]}_{idx}.jpg"
+        command = [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            str(ts),
+            "-i",
+            str(video_path),
+            "-frames:v",
+            "1",
+            str(frame_path),
+        ]
+        try:
+            result = subprocess.run(command, capture_output=True, text=True)
+        except FileNotFoundError:
+            break
+        if result.returncode != 0 or not frame_path.exists():
+            continue
+        frames_used += 1
+        text = _ocr_from_image(str(frame_path))
+        if text:
+            ocr_lines.append(text)
+        try:
+            frame_path.unlink()
+        except OSError:
+            pass
+    return _clean_ws("\n".join(ocr_lines)), frames_used
+
+
 def _openai_recipe_from_signals(
     instagram_url: str,
     oembed: dict[str, Any],
@@ -468,6 +503,8 @@ def import_instagram(url: str) -> Tuple[Dict[str, Any], Optional[str]]:
 
     transcript: Optional[str] = None
     whisper_event: Optional[Dict[str, Any]] = None
+    ocr_text: Optional[str] = None
+    ocr_event: Optional[Dict[str, Any]] = None
     video_path = _download_instagram_video(url)
     if video_path:
         audio_path = _extract_audio(video_path)
@@ -481,17 +518,28 @@ def import_instagram(url: str) -> Tuple[Dict[str, Any], Optional[str]]:
                     stage="instagram_whisper",
                     extra={"audio_seconds": round(audio_seconds, 3)},
                 )
+        if transcript is not None and len(transcript.strip()) < 120:
+            ocr_text, frames_used = _ocr_video_frames(video_path)
+            if ocr_text and frames_used > 0:
+                ocr_event = build_usage_event(
+                    "local-ocr",
+                    model="tesseract",
+                    stage="instagram_ocr_frames",
+                    extra={"frames": frames_used, "characters": len(ocr_text)},
+                )
 
     rescue = _playwright_rescue(url)
     usage_events: List[Dict[str, Any]] = []
     if whisper_event:
         usage_events.append(whisper_event)
+    if ocr_event:
+        usage_events.append(ocr_event)
     recipe, usage_event = _openai_recipe_from_signals(
         instagram_url=url,
         oembed=oembed,
         rescue=rescue,
         transcript=transcript,
-        ocr_text=None,
+        ocr_text=ocr_text,
     )
     usage_events.append(usage_event)
 
@@ -499,6 +547,15 @@ def import_instagram(url: str) -> Tuple[Dict[str, Any], Optional[str]]:
     if _needs_ocr(recipe) and screenshot_path:
         ocr_text = _ocr_from_image(screenshot_path)
         if ocr_text:
+            if ocr_event is None:
+                usage_events.append(
+                    build_usage_event(
+                        "local-ocr",
+                        model="tesseract",
+                        stage="instagram_ocr_screenshot",
+                        extra={"characters": len(ocr_text)},
+                    )
+                )
             recipe_ocr, ocr_event = _openai_recipe_from_signals(
                 instagram_url=url,
                 oembed=oembed,

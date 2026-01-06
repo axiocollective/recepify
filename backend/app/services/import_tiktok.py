@@ -233,6 +233,7 @@ def _openai_recipe_from_signals(
     tiktok_url: str,
     oembed: dict[str, Any],
     transcript: str,
+    ocr_text: Optional[str] = None,
 ) -> tuple[_TikTokRecipe, Dict[str, Any]]:
     client = get_openai_client()
     payload = {
@@ -242,9 +243,10 @@ def _openai_recipe_from_signals(
         "oembed_provider": oembed.get("provider_name"),
         "oembed_raw": {k: v for k, v in oembed.items() if k != "html"},
         "transcript": transcript,
+        "ocr_text": ocr_text or "",
     }
     system_prompt = (
-        "You extract cooking recipes from TikTok metadata and audio transcripts. "
+        "You extract cooking recipes from TikTok metadata, audio transcripts, and on-screen text. "
         "Return ONLY JSON that matches the provided schema. "
         "If a value is unknown set it to null and list the field inside missing_fields. "
         "Do not invent extra steps or ingredients beyond what the transcript/title clearly implies."
@@ -273,6 +275,56 @@ def _openai_recipe_from_signals(
     recipe.source_domain = ensure_domain(tiktok_url)
     recipe.extracted_via = "yt-dlp+whisper+openai"
     return recipe, usage_event
+
+
+def _ocr_from_image(image_path: Path) -> str:
+    try:
+        from PIL import Image
+        import pytesseract
+
+        if not shutil.which("tesseract"):
+            return ""
+
+        image = Image.open(image_path).convert("L")
+        text = pytesseract.image_to_string(image)
+        return clean_text(text)
+    except Exception:
+        return ""
+
+
+def _ocr_video_frames(video_path: Path) -> tuple[str, int]:
+    frame_dir = ensure_storage_path("tiktok", "frames", is_file=False)
+    timestamps = [1.0, 3.0, 5.0]
+    ocr_lines: List[str] = []
+    frames_used = 0
+    for idx, ts in enumerate(timestamps, start=1):
+        frame_path = frame_dir / f"frame_{uuid.uuid4().hex[:8]}_{idx}.jpg"
+        command = [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            str(ts),
+            "-i",
+            str(video_path),
+            "-frames:v",
+            "1",
+            str(frame_path),
+        ]
+        try:
+            result = subprocess.run(command, capture_output=True, text=True)
+        except FileNotFoundError:
+            break
+        if result.returncode != 0 or not frame_path.exists():
+            continue
+        frames_used += 1
+        text = _ocr_from_image(frame_path)
+        if text:
+            ocr_lines.append(text)
+        try:
+            frame_path.unlink()
+        except OSError:
+            pass
+    return clean_text("\n".join(ocr_lines)), frames_used
 
 
 def _convert_recipe(
@@ -328,6 +380,17 @@ def import_tiktok(url: str) -> Tuple[Dict[str, Any], str]:
     thumbnail_path = _capture_thumbnail(video_path)
     audio_path = _extract_audio(video_path)
     transcript = _transcribe_audio(audio_path)
+    ocr_text = None
+    ocr_event = None
+    if len(transcript.strip()) < 120:
+        ocr_text, frames_used = _ocr_video_frames(video_path)
+        if ocr_text and frames_used > 0:
+            ocr_event = build_usage_event(
+                "local-ocr",
+                model="tesseract",
+                stage="tiktok_ocr_frames",
+                extra={"frames": frames_used, "characters": len(ocr_text)},
+            )
     whisper_event = None
     audio_seconds = _get_audio_duration_seconds(audio_path)
     if audio_seconds:
@@ -337,10 +400,12 @@ def import_tiktok(url: str) -> Tuple[Dict[str, Any], str]:
             stage="tiktok_whisper",
             extra={"audio_seconds": round(audio_seconds, 3)},
         )
-    recipe, usage_event = _openai_recipe_from_signals(url, oembed, transcript)
+    recipe, usage_event = _openai_recipe_from_signals(url, oembed, transcript, ocr_text=ocr_text)
     usage_events = [usage_event]
     if whisper_event:
         usage_events.append(whisper_event)
+    if ocr_event:
+        usage_events.append(ocr_event)
     converted = _convert_recipe(recipe, video_path, thumbnail_path, usage_events)
     sync_recipe_media_to_supabase(converted)
     return converted.model_dump_recipe(), converted.media_video_url or str(video_path)

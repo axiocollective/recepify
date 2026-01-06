@@ -30,6 +30,7 @@ MAX_SUBTITLES_CHARS = 14000
 MAX_TRANSCRIPT_CHARS = 12000
 WHISPER_CHUNKS = [(0, 90), (90, 90), (300, 90), (600, 90)]
 WHISPER_MAX_TOTAL_SECONDS = 240
+OCR_MIN_TEXT_CHARS = 120
 
 UNIT_WORDS = [
     "g",
@@ -402,6 +403,7 @@ def _openai_build_recipe(
     client = get_openai_client()
     system_msg = (
         "You extract cooking recipes from YouTube signals. "
+        "Signals may include OCR text extracted from on-screen video frames. "
         "Return ONLY a JSON object matching the schema exactly. "
         "Do not invent ingredients or steps. "
         "If ingredients exist in description, use them. "
@@ -431,6 +433,40 @@ def _openai_build_recipe(
     recipe.source_domain = ensure_domain(youtube_url)
     recipe.source_platform = "youtube"
     return recipe, usage_event
+
+
+def _ocr_from_image_url(image_url: Optional[str]) -> tuple[str, Optional[Dict[str, Any]]]:
+    if not image_url:
+        return "", None
+    try:
+        from PIL import Image
+        import pytesseract
+
+        if not shutil.which("tesseract"):
+            return "", None
+
+        frame_dir = ensure_storage_path("youtube", "frames", is_file=False)
+        image_path = frame_dir / f"thumb_{uuid.uuid4().hex[:8]}.jpg"
+        with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+            response = client.get(image_url)
+            response.raise_for_status()
+            image_path.write_bytes(response.content)
+        image = Image.open(image_path).convert("L")
+        text = clean_text(pytesseract.image_to_string(image))
+        try:
+            image_path.unlink()
+        except OSError:
+            pass
+        if not text:
+            return "", None
+        return text, build_usage_event(
+            "local-ocr",
+            model="tesseract",
+            stage="youtube_thumbnail_ocr",
+            extra={"characters": len(text)},
+        )
+    except Exception:
+        return "", None
 
 
 def _convert_recipe(
@@ -588,6 +624,12 @@ def import_youtube(url: str) -> Dict[str, Any]:
                 "within the cost-safe transcription budget."
             )
 
+        ocr_text = ""
+        if not subs_text and len(transcript_text.strip()) < OCR_MIN_TEXT_CHARS:
+            ocr_text, ocr_event = _ocr_from_image_url(thumbnail_url)
+            if ocr_event:
+                usage_events.append(ocr_event)
+
         signals = {
             "title": title,
             "description": description[:30000],
@@ -595,6 +637,7 @@ def import_youtube(url: str) -> Dict[str, Any]:
             "duration_seconds": duration_s,
             "steps_override": steps_override,
             "subtitles_or_transcript": (subs_text or transcript_text)[:MAX_TRANSCRIPT_CHARS],
+            "ocr_text": ocr_text,
         }
         recipe, usage_event = _openai_build_recipe(url, signals)
         if subs_text and len(steps_override) >= 4:
@@ -642,6 +685,12 @@ def import_youtube(url: str) -> Dict[str, Any]:
     else:
         recipe_metadata_events = []
 
+    ocr_text = ""
+    if len(transcript_text.strip()) < OCR_MIN_TEXT_CHARS and len(clean_text(description)) < OCR_MIN_TEXT_CHARS:
+        ocr_text, ocr_event = _ocr_from_image_url(thumbnail_url)
+        if ocr_event:
+            recipe_metadata_events.append(ocr_event)
+
     signals = {
         "title": title,
         "description": description[:30000],
@@ -649,6 +698,7 @@ def import_youtube(url: str) -> Dict[str, Any]:
         "duration_seconds": duration_s,
         "steps_override": None,
         "subtitles_or_transcript": transcript_text[:MAX_TRANSCRIPT_CHARS],
+        "ocr_text": ocr_text,
     }
     recipe, usage_event = _openai_build_recipe(url, signals)
     recipe.extracted_via = subs_via or "subtitles_or_whisper_chunks+openai"
