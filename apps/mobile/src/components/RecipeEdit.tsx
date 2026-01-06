@@ -43,6 +43,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   const [isSuggestingTags, setIsSuggestingTags] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const optimizeFlowRef = useRef(false);
   const [showCreditsTooltip, setShowCreditsTooltip] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [disclaimerDetail, setDisclaimerDetail] = useState<string | null>(null);
@@ -694,7 +695,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               `Estimate the total time in minutes based on the ingredients and steps. Respond ONLY in JSON like {"totalTimeMinutes": 25}. Do not include words or units.`,
           },
         ],
-        usage_context: "estimate_time",
+        usage_context: optimizeFlowRef.current ? "optimized_with_ai" : "estimate_time",
       });
       const normalized = cleanJsonText(response.reply ?? "");
       const parsed = extractJsonObject(normalized);
@@ -809,7 +810,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               `Write at most two crisp sentences (maximum 200 characters total) in ${snapshotLanguageLabel} that capture this recipe's key flavors and cooking style. Keep it punchy, no emojis, no lists—plain text only.`,
           },
         ],
-        usage_context: "generate_description",
+        usage_context: optimizeFlowRef.current ? "optimized_with_ai" : "generate_description",
       });
       const summary = limitToTwoSentences(response.reply ?? "");
       if (!summary) {
@@ -866,7 +867,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               `Clean up and normalize the ingredient list so it is easy to read. Keep the same number of ingredients and order. Fix wording, add missing amounts when possible, and normalize units. Respond ONLY with JSON array like [{"index":1,"name":"tomatoes","amount":"200 g"}] written in ${snapshotLanguageLabel}. If amount is "to taste", use the full phrase (e.g. "nach Geschmack"). Ingredients:\n${ingredientList}`,
           },
         ],
-        usage_context: "optimize_ingredients",
+        usage_context: optimizeFlowRef.current ? "optimized_with_ai" : "optimize_ingredients",
       });
       const normalized = cleanJsonText(response.reply ?? "");
       let updates: Array<{ index?: number; amount?: string; name?: string }> = [];
@@ -928,7 +929,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               `Generate a clear, logically ordered list of cooking steps for this recipe in ${snapshotLanguageLabel}. Each step should be 1–3 sentences, detailed enough to cook without being verbose. Do NOT prefix steps with "Step 1" or numbers. Respond ONLY in JSON with the shape {"steps": ["Sentence...", "Sentence..."]}.`,
           },
         ],
-        usage_context: "generate_steps",
+        usage_context: optimizeFlowRef.current ? "optimized_with_ai" : "generate_steps",
       });
       const steps = parseStepsFromReply(response.reply ?? "");
       if (!steps.length) {
@@ -965,7 +966,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               `Estimate the per-serving nutrition for this recipe (calories, protein grams, carbs grams, fat grams) based on the ingredient list and their amounts. Respond ONLY in JSON like {"calories": number, "protein": "10g", "carbs": "25g", "fat": "12g"} using whole numbers, and write any units in ${snapshotLanguageLabel}.`,
           },
         ],
-        usage_context: "calculate_nutrition",
+        usage_context: optimizeFlowRef.current ? "optimized_with_ai" : "calculate_nutrition",
       });
       const nutrition = parseNutritionFromReply(response.reply ?? "");
       if (!nutrition) {
@@ -1007,7 +1008,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
               )}. Respond strictly in JSON like {"tags":["tag1","tag2"]} using the exact casing provided.`,
           },
         ],
-        usage_context: "suggest_tags",
+        usage_context: optimizeFlowRef.current ? "optimized_with_ai" : "suggest_tags",
       });
       const tags = parseTagsFromReply(response.reply ?? "")
         .map((tag) => tag.toLowerCase())
@@ -1089,7 +1090,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
             `Create a short, clear recipe title in ${snapshotLanguageLabel} using the available ingredients, steps, or description. Return plain text only, no quotes.`,
         },
       ],
-      usage_context: "improve_title",
+      usage_context: optimizeFlowRef.current ? "optimized_with_ai" : "improve_title",
     });
     const suggestion = (response.reply ?? "").split("\n")[0]?.trim();
     if (!suggestion) {
@@ -1112,7 +1113,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
             `Infer the ingredient list for this recipe in ${snapshotLanguageLabel} from the description and steps. Respond ONLY with JSON array like [{"name":"ingredient","amount":"200 g"}]. Use empty string for unknown amounts.`,
         },
       ],
-      usage_context: "infer_ingredients",
+      usage_context: optimizeFlowRef.current ? "optimized_with_ai" : "infer_ingredients",
     });
     const inferred = parseIngredientsFromReply(response.reply ?? "");
     if (!inferred.length) {
@@ -1159,6 +1160,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
       return;
     }
     setIsOptimizing(true);
+    optimizeFlowRef.current = true;
     try {
       const skipped: string[] = [];
       await runWithMinimumDuration(3000, async () => {
@@ -1272,6 +1274,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
       Alert.alert("AI unavailable", message);
     } finally {
       setIsOptimizing(false);
+      optimizeFlowRef.current = false;
     }
   };
 

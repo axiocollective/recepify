@@ -167,7 +167,6 @@ export default function DashboardPage() {
               <option value="import">Import</option>
               <option value="scan">Scan</option>
               <option value="ai_assistant">AI assistant</option>
-              <option value="ai_finder">AI finder</option>
               <option value="import_credit">Import credit</option>
             </select>
           </label>
@@ -184,8 +183,6 @@ export default function DashboardPage() {
               <option value="pinterest">Pinterest</option>
               <option value="youtube">YouTube</option>
               <option value="scan">Scan</option>
-              <option value="assistant">Assistant</option>
-              <option value="finder">Finder</option>
             </select>
           </label>
           <label>
@@ -196,6 +193,7 @@ export default function DashboardPage() {
             >
               <option value="">All contexts</option>
               <option value="chat">Chat</option>
+              <option value="optimized_with_ai">Optimized with AI</option>
               <option value="translate_recipe">Translate</option>
               <option value="improve_title">Improve title</option>
               <option value="infer_ingredients">Infer ingredients</option>
