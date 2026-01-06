@@ -45,6 +45,19 @@ const toDayKey = (date: Date) => date.toISOString().slice(0, 10);
 const normalizeModelName = (value: string | null | undefined) =>
   value && String(value).trim() ? String(value) : "No model";
 
+const resolveOwnerIdsByEmail = async (emailQuery: string) => {
+  const normalized = emailQuery.trim().toLowerCase();
+  if (!normalized) return [];
+  const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  if (error || !data?.users) return [];
+  return data.users
+    .filter((user) => user.email && user.email.toLowerCase().includes(normalized))
+    .map((user) => user.id);
+};
+
 const getDateRange = (start?: string | null, end?: string | null) => {
   const endDate = parseDate(end, "end") ?? new Date();
   const startDate =
@@ -58,6 +71,7 @@ const normalizeDay = (value: string) => value.slice(0, 10);
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get("userId");
+  const email = searchParams.get("email");
   const eventType = searchParams.get("eventType");
   const source = searchParams.get("source");
   const model = searchParams.get("model");
@@ -77,7 +91,7 @@ export async function GET(request: Request) {
   let eventsQuery = supabaseAdmin
     .from("usage_events")
     .select(
-      "owner_id, event_type, source, model_name, ai_credits_used, import_credits_used, cost_usd, created_at, metadata"
+      "owner_id, event_type, source, model_provider, model_name, ai_credits_used, import_credits_used, cost_usd, created_at, metadata"
     )
     .gte("created_at", startIso)
     .lte("created_at", endIso);
@@ -92,6 +106,35 @@ export async function GET(request: Request) {
     .gte("period_start", startIso.slice(0, 10))
     .lte("period_start", endIso.slice(0, 10));
 
+  if (email) {
+    const ownerIds = await resolveOwnerIdsByEmail(email);
+    if (ownerIds.length === 0) {
+      return NextResponse.json({
+        totalUsers: 0,
+        baseUsers: 0,
+        premiumUsers: 0,
+        trialUsers: 0,
+        totalImports: 0,
+        totalAiCredits: 0,
+        totalCostUsd: 0,
+        totalWhisperSeconds: 0,
+        activeUsers: 0,
+        dailySeries: [],
+        bySource: [],
+        byModel: [],
+        modelBreakdown: [],
+        actionModelBreakdown: [],
+        importBreakdown: [],
+        actionSeries: [],
+        sourceSeries: [],
+        contextSeries: [],
+      } satisfies UsageSummary);
+    }
+    profilesQuery = profilesQuery.in("id", ownerIds);
+    eventsQuery = eventsQuery.in("owner_id", userId ? [userId] : ownerIds);
+    monthlyQuery = monthlyQuery.in("owner_id", ownerIds);
+    monthlyImportsQuery = monthlyImportsQuery.in("owner_id", ownerIds);
+  }
   if (userId) {
     profilesQuery = profilesQuery.eq("id", userId);
     eventsQuery = eventsQuery.eq("owner_id", userId);
@@ -204,6 +247,16 @@ export async function GET(request: Request) {
     const importCredits = Number(event.import_credits_used || 0);
     const aiCredits = Number(event.ai_credits_used || 0);
     const isImportCredit = event.event_type === "import_credit";
+    const meta = typeof event.metadata === "object" && event.metadata ? event.metadata : null;
+    const modelProvider = event.model_provider ?? "";
+    const audioSeconds = meta ? Number((meta as Record<string, unknown>).audio_seconds || 0) : 0;
+    const visionImages = meta ? Number((meta as Record<string, unknown>).images || 0) : 0;
+    const usageUnits =
+      modelProvider === "google-vision"
+        ? visionImages
+        : event.model_name === "whisper-1"
+          ? audioSeconds
+          : aiCredits;
     if (isImportCredit) {
       totalImports += importCredits;
     }
@@ -219,14 +272,14 @@ export async function GET(request: Request) {
       const key = event.source ?? "unknown";
       bySource.set(key, (bySource.get(key) ?? 0) + importCredits);
     }
-    if (aiCredits > 0) {
+    if (usageUnits > 0) {
       const key = normalizeModelName(event.model_name);
-      byModel.set(key, (byModel.get(key) ?? 0) + aiCredits);
+      byModel.set(key, (byModel.get(key) ?? 0) + usageUnits);
     }
 
     const modelKey = normalizeModelName(event.model_name);
     const entry = byModelCost.get(modelKey) ?? { aiCredits: 0, costUsd: 0, events: 0 };
-    entry.aiCredits += aiCredits;
+    entry.aiCredits += usageUnits;
     entry.costUsd += Number(event.cost_usd || 0);
     entry.events += 1;
     byModelCost.set(modelKey, entry);
@@ -240,7 +293,7 @@ export async function GET(request: Request) {
       costUsd: 0,
       events: 0,
     };
-    actionEntry.credits += isImportCredit ? importCredits : aiCredits;
+    actionEntry.credits += isImportCredit ? importCredits : usageUnits;
     actionEntry.costUsd += Number(event.cost_usd || 0);
     actionEntry.events += 1;
     actionModelBreakdown.set(actionModelKey, actionEntry);
@@ -281,21 +334,14 @@ export async function GET(request: Request) {
       if (event.created_at < entry.createdAt) {
         entry.createdAt = event.created_at;
       }
-      entry.credits += isImportCredit ? importCredits : aiCredits;
+      entry.credits += isImportCredit ? importCredits : usageUnits;
       entry.costUsd += Number(event.cost_usd || 0);
       entry.events += 1;
       importBreakdown.set(key, entry);
     }
 
-    if (
-      modelKey === "whisper-1" &&
-      typeof event.metadata === "object" &&
-      event.metadata &&
-      (event.metadata as Record<string, unknown>).audio_seconds
-    ) {
-      totalWhisperSeconds += Number(
-        (event.metadata as Record<string, unknown>).audio_seconds || 0
-      );
+    if (modelKey === "whisper-1" && audioSeconds > 0) {
+      totalWhisperSeconds += audioSeconds;
     }
   }
 

@@ -7,6 +7,19 @@ const parseNumber = (value: string | null) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const resolveOwnerIdsByEmail = async (emailQuery: string) => {
+  const normalized = emailQuery.trim().toLowerCase();
+  if (!normalized) return [];
+  const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  if (error || !data?.users) return [];
+  return data.users
+    .filter((user) => user.email && user.email.toLowerCase().includes(normalized))
+    .map((user) => user.id);
+};
+
 const normalizeDate = (value: string | null, fallback: "start" | "end") => {
   if (!value) return null;
   const trimmed = value.trim();
@@ -38,6 +51,7 @@ const normalizeDate = (value: string | null, fallback: "start" | "end") => {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get("userId");
+  const email = searchParams.get("email");
   const eventType = searchParams.get("eventType");
   const source = searchParams.get("source");
   const model = searchParams.get("model");
@@ -55,7 +69,18 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
-  if (userId) query = query.eq("owner_id", userId);
+  if (email) {
+    const ownerIds = await resolveOwnerIdsByEmail(email);
+    if (ownerIds.length === 0) {
+      return NextResponse.json({ events: [], hasMore: false, nextOffset: offset });
+    }
+    if (userId && !ownerIds.includes(userId)) {
+      return NextResponse.json({ events: [], hasMore: false, nextOffset: offset });
+    }
+    query = query.in("owner_id", userId ? [userId] : ownerIds);
+  } else if (userId) {
+    query = query.eq("owner_id", userId);
+  }
   if (eventType) query = query.eq("event_type", eventType);
   if (source) query = query.eq("source", source);
   if (model) query = query.eq("model_name", model);

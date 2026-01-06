@@ -11,5 +11,17 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ users: data ?? [] });
+  const profiles = data ?? [];
+  const { data: authData } = await supabaseAdmin.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  const emailById = new Map(
+    (authData?.users ?? []).map((user) => [user.id, user.email ?? null])
+  );
+  const users = profiles.map((profile) => ({
+    ...profile,
+    email: emailById.get(profile.id) ?? null,
+  }));
+  return NextResponse.json({ users });
 }

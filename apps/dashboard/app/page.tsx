@@ -13,6 +13,7 @@ type UserOption = {
   plan: string | null;
   subscription_period: string | null;
   trial_ends_at: string | null;
+  email?: string | null;
 };
 
 const formatNumber = (value: number) => value.toLocaleString("en-US");
@@ -65,11 +66,14 @@ export default function DashboardPage() {
     start: initialRange.start,
     end: initialRange.end,
     userId: "",
+    email: "",
     eventType: "",
     source: "",
     model: "",
     usageContext: "",
   });
+  const [pendingUserId, setPendingUserId] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
 
   const activeUser = users.find((user) => user.id === filters.userId);
 
@@ -78,6 +82,7 @@ export default function DashboardPage() {
     if (filters.start) params.set("start", filters.start);
     if (filters.end) params.set("end", filters.end);
     if (filters.userId) params.set("userId", filters.userId);
+    if (filters.email) params.set("email", filters.email);
     if (filters.eventType) params.set("eventType", filters.eventType);
     if (filters.source) params.set("source", filters.source);
     if (filters.model) params.set("model", filters.model);
@@ -98,6 +103,7 @@ export default function DashboardPage() {
   const fetchEvents = async (mode: "replace" | "append" = "replace") => {
     const params = new URLSearchParams();
     if (filters.userId) params.set("userId", filters.userId);
+    if (filters.email) params.set("email", filters.email);
     if (filters.eventType) params.set("eventType", filters.eventType);
     if (filters.source) params.set("source", filters.source);
     if (filters.model) params.set("model", filters.model);
@@ -130,6 +136,11 @@ export default function DashboardPage() {
     setEventsOffset(0);
     Promise.all([fetchSummary(), fetchEvents("replace")]).finally(() => setLoading(false));
   }, [filters, eventsLimit]);
+
+  useEffect(() => {
+    setPendingUserId(filters.userId);
+    setPendingEmail(filters.email);
+  }, [filters.userId, filters.email]);
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMoreEvents) return;
@@ -215,8 +226,8 @@ export default function DashboardPage() {
           <label>
             User
             <select
-              value={filters.userId}
-              onChange={(event) => setFilters((prev) => ({ ...prev, userId: event.target.value }))}
+              value={pendingUserId}
+              onChange={(event) => setPendingUserId(event.target.value)}
             >
               <option value="">All users</option>
               {users.map((user) => (
@@ -226,6 +237,27 @@ export default function DashboardPage() {
               ))}
             </select>
           </label>
+          <label>
+            Email
+            <input
+              type="text"
+              placeholder="Search email"
+              value={pendingEmail}
+              onChange={(event) => setPendingEmail(event.target.value)}
+            />
+          </label>
+          <button
+            className="filterSearch"
+            onClick={() =>
+              setFilters((prev) => ({
+                ...prev,
+                userId: pendingUserId,
+                email: pendingEmail.trim(),
+              }))
+            }
+          >
+            Search
+          </button>
           <label>
             Action
             <select
@@ -342,18 +374,27 @@ export default function DashboardPage() {
 
       <section className="chartGrid">
         <LineChart
-          title="Daily imports vs AI credits"
+          title="Events by action (daily)"
+          series={actionSeries}
+          xLabel="Day"
+          yLabel="Events"
+        />
+        <LineChart
+          title="Credits used over time"
           series={chartSeries}
           xLabel="Day"
           yLabel="Credits"
         />
+      </section>
+
+      <section className="chartGrid">
         <BarChart
-          title="Imports by source"
+          title="Recipe imports by source"
           data={summary?.bySource ?? []}
           color="#7c3aed"
         />
         <BarChart
-          title="AI credits by model"
+          title="Usage by model (credits / seconds / images)"
           data={summary?.byModel ?? []}
           color="#f97316"
         />
@@ -361,7 +402,7 @@ export default function DashboardPage() {
 
       <section className="tablesGrid">
         <DataTable
-          title="AI credits & cost by model"
+          title="Usage & cost by model"
           rows={summary?.modelBreakdown ?? []}
           emptyLabel="No model usage for this filter."
           columns={[
@@ -372,7 +413,7 @@ export default function DashboardPage() {
             },
             {
               key: "credits",
-              header: "AI credits",
+              header: "Usage",
               render: (row) => formatNumber(row.aiCredits),
             },
             {
@@ -390,9 +431,8 @@ export default function DashboardPage() {
       </section>
 
       <section className="chartGrid">
-        <LineChart title="Usage by action (daily)" series={actionSeries} xLabel="Day" yLabel="Credits" />
-        <LineChart title="Usage by source (daily)" series={sourceSeries} xLabel="Day" yLabel="Credits" />
-        <LineChart title="Usage by context (daily)" series={contextSeries} xLabel="Day" yLabel="Credits" />
+        <LineChart title="Usage by source (daily)" series={sourceSeries} xLabel="Day" yLabel="Events" />
+        <LineChart title="Usage by context (daily)" series={contextSeries} xLabel="Day" yLabel="Events" />
       </section>
 
       <section className="tablesGrid">
