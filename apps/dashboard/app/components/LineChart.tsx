@@ -150,11 +150,11 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
           ) : null}
           {yLabel ? (
             <text
-              x={12}
+              x={6}
               y={height / 2}
               textAnchor="middle"
-              className="chartAxisLabel"
-              transform={`rotate(-90 12 ${height / 2})`}
+              className="chartAxisTitle"
+              transform={`rotate(-90 6 ${height / 2})`}
             >
               {yLabel}
             </text>

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { DataTable } from "./components/DataTable";
-import { LineChart } from "./components/LineChart";
 import { StackedBarChart } from "./components/StackedBarChart";
 import type { UsageEvent, UsageSummary } from "./lib/types";
 
@@ -384,39 +383,43 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="sectionBlock">
-        <h2>Usage breakdowns</h2>
-        <div className="chartGrid">
-          <LineChart
-            title="Recipe imports by source"
-            series={importBySourceSeries}
-            xLabel="Day"
-            yLabel="Imports"
-            height={220}
-          />
-          <LineChart
-            title="Actions over time"
-            series={actionCountSeries}
-            xLabel="Day"
-            yLabel="Events"
-            height={220}
-          />
-          <LineChart
-            title="Usage context over time"
-            series={contextCountSeries}
-            xLabel="Day"
-            yLabel="Events"
-            height={220}
-          />
-          <LineChart
-            title="Credits used over time"
-            series={actionCreditSeries}
-            xLabel="Day"
-            yLabel="Credits"
-            height={220}
-          />
-        </div>
-      </section>
+      <div className="sectionGrid">
+        <section className="sectionBlock">
+          <h2>Usage breakdowns</h2>
+          <div className="chartGrid">
+            <StackedBarChart
+              title="Recipe imports by source"
+              series={importBySourceSeries}
+              yLabel="Imports"
+              height={220}
+            />
+            <StackedBarChart
+              title="Credits used over time"
+              series={actionCreditSeries}
+              yLabel="Credits"
+              height={220}
+            />
+          </div>
+        </section>
+
+        <section className="sectionBlock">
+          <h2>Actions & context</h2>
+          <div className="chartGrid">
+            <StackedBarChart
+              title="Actions over time"
+              series={actionCountSeries}
+              yLabel="Events"
+              height={220}
+            />
+            <StackedBarChart
+              title="Usage context over time"
+              series={contextCountSeries}
+              yLabel="Events"
+              height={220}
+            />
+          </div>
+        </section>
+      </div>
 
       <section className="tablesGrid">
         <DataTable
@@ -456,30 +459,37 @@ export default function DashboardPage() {
         />
       </section>
 
-      <section className="sectionBlock">
-        <h2>Daily actions</h2>
-        <StackedBarChart
-          title="Actions per day"
-          series={actionCountSeries}
-          yLabel="Events"
-          height={220}
-        />
-      </section>
+      <div className="sectionGrid">
+        <section className="sectionBlock">
+          <h2>Daily actions</h2>
+          <StackedBarChart
+            title="Actions per day"
+            series={actionCountSeries}
+            yLabel="Events"
+            height={220}
+          />
+        </section>
 
-      <section className="sectionBlock">
-        <h2>Credit usage by action</h2>
-        <StackedBarChart
-          title="Credits by action"
-          series={actionCreditSeries}
-          yLabel="Credits"
-          height={220}
-        />
-      </section>
+        <section className="sectionBlock">
+          <h2>Credit usage by action</h2>
+          <StackedBarChart
+            title="Credits by action"
+            series={actionCreditSeries}
+            yLabel="Credits"
+            height={220}
+          />
+        </section>
 
-      <section className="sectionBlock">
-        <h2>Estimated costs by action</h2>
-        <StackedBarChart title="Cost by action" series={actionCostSeries} yLabel="USD" height={220} />
-      </section>
+        <section className="sectionBlock">
+          <h2>Estimated costs by action</h2>
+          <StackedBarChart
+            title="Cost by action"
+            series={actionCostSeries}
+            yLabel="USD"
+            height={220}
+          />
+        </section>
+      </div>
 
       <section className="tablesGrid">
         <DataTable

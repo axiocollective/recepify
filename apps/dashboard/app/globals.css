@@ -332,6 +332,17 @@ a {
   fill: rgba(107, 114, 128, 0.9);
 }
 
+.chartAxisTitle {
+  font-size: 9px;
+  fill: rgba(107, 114, 128, 0.7);
+}
+
+.sectionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  gap: 20px;
+}
+
 .chartTooltip {
   position: absolute;
   pointer-events: none;
@@ -500,6 +511,9 @@ tbody td {
   }
   .filterSummary {
     width: 100%;
+  }
+  .sectionGrid {
+    grid-template-columns: 1fr;
   }
   .barRow {
     grid-template-columns: 90px 1fr 50px;

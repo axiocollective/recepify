@@ -156,11 +156,11 @@ export function StackedBarChart({ title, series, height = 180, yLabel }: Stacked
         ) : null}
         {yLabel ? (
           <text
-            x={12}
+            x={6}
             y={height / 2}
             textAnchor="middle"
-            className="chartAxisLabel"
-            transform={`rotate(-90 12 ${height / 2})`}
+            className="chartAxisTitle"
+            transform={`rotate(-90 6 ${height / 2})`}
           >
             {yLabel}
           </text>
