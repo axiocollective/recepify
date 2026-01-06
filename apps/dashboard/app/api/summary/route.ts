@@ -4,17 +4,50 @@ import type { ProfileRow, UsageEvent, UsageSummary } from "../../lib/types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const parseDate = (value: string | null | undefined) => {
+const parseDate = (value: string | null | undefined, fallback: "start" | "end") => {
   if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(trimmed)) {
+    const [day, month, year] = trimmed.split(".");
+    const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    if (fallback === "start") {
+      date.setUTCHours(0, 0, 0, 0);
+    } else {
+      date.setUTCHours(23, 59, 59, 999);
+    }
+    return date;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [year, month, day] = trimmed.split("-");
+    const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    if (fallback === "start") {
+      date.setUTCHours(0, 0, 0, 0);
+    } else {
+      date.setUTCHours(23, 59, 59, 999);
+    }
+    return date;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (fallback === "start") {
+    parsed.setUTCHours(0, 0, 0, 0);
+  } else {
+    parsed.setUTCHours(23, 59, 59, 999);
+  }
+  return parsed;
 };
 
 const toDayKey = (date: Date) => date.toISOString().slice(0, 10);
 
 const getDateRange = (start?: string | null, end?: string | null) => {
-  const endDate = parseDate(end) ?? new Date();
-  const startDate = parseDate(start) ?? new Date(endDate.getTime() - 29 * DAY_MS);
+  const endDate = parseDate(end, "end") ?? new Date();
+  const startDate =
+    parseDate(start, "start") ?? new Date(endDate.getTime() - 29 * DAY_MS);
+  startDate.setUTCHours(0, 0, 0, 0);
   return { startDate, endDate };
 };
 
@@ -133,6 +166,7 @@ export async function GET(request: Request) {
   const activeUsers = new Set<string>();
   const bySource = new Map<string, number>();
   const byModel = new Map<string, number>();
+  const byModelCost = new Map<string, { aiCredits: number; costUsd: number; events: number }>();
   const dailyMap = new Map<string, { imports: number; aiCredits: number }>();
   const actionDaily = new Map<string, Map<string, number>>();
   const sourceDaily = new Map<string, Map<string, number>>();
@@ -162,6 +196,15 @@ export async function GET(request: Request) {
     if (aiCredits > 0) {
       const key = event.model_name ?? "unknown";
       byModel.set(key, (byModel.get(key) ?? 0) + aiCredits);
+    }
+
+    if (event.model_name) {
+      const key = event.model_name;
+      const entry = byModelCost.get(key) ?? { aiCredits: 0, costUsd: 0, events: 0 };
+      entry.aiCredits += aiCredits;
+      entry.costUsd += Number(event.cost_usd || 0);
+      entry.events += 1;
+      byModelCost.set(key, entry);
     }
 
     const actionKey = event.event_type ?? "unknown";
@@ -218,6 +261,13 @@ export async function GET(request: Request) {
     }
   }
 
+  if (dailySeries.length === 0) {
+    for (let cursor = new Date(startDate); cursor <= endDate; cursor = new Date(cursor.getTime() + DAY_MS)) {
+      const key = toDayKey(cursor);
+      dailySeries.push({ date: key, imports: 0, aiCredits: 0 });
+    }
+  }
+
   const buildSeries = (input: Map<string, Map<string, number>>) => {
     return Array.from(input.entries()).map(([label, values]) => ({
       label,
@@ -240,6 +290,12 @@ export async function GET(request: Request) {
     dailySeries,
     bySource: Array.from(bySource.entries()).map(([label, value]) => ({ label, value })),
     byModel: Array.from(byModel.entries()).map(([label, value]) => ({ label, value })),
+    modelBreakdown: Array.from(byModelCost.entries()).map(([label, entry]) => ({
+      label,
+      aiCredits: entry.aiCredits,
+      costUsd: Number(entry.costUsd.toFixed(4)),
+      events: entry.events,
+    })),
     actionSeries: buildSeries(actionDaily),
     sourceSeries: buildSeries(sourceDaily),
     contextSeries: buildSeries(contextDaily),

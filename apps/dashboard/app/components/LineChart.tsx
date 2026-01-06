@@ -23,6 +23,7 @@ const buildPoints = (data: LineChartPoint[], width: number, height: number) => {
 export function LineChart({ title, series, height = 160 }: LineChartProps) {
   const width = 640;
   const padding = 8;
+  const hasData = series.some((item) => item.data.length > 0);
   return (
     <div className="chartCard">
       <div className="chartHeader">
@@ -36,27 +37,31 @@ export function LineChart({ title, series, height = 160 }: LineChartProps) {
           ))}
         </div>
       </div>
-      <svg viewBox={`0 0 ${width} ${height}`} className="chartSvg">
-        <defs>
-          <linearGradient id="grid" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(124,58,237,0.16)" />
-            <stop offset="100%" stopColor="rgba(124,58,237,0.02)" />
-          </linearGradient>
-        </defs>
-        <rect x="0" y="0" width={width} height={height} fill="url(#grid)" rx="16" />
-        {series.map((item) => (
-          <polyline
-            key={item.name}
-            points={buildPoints(item.data, width - padding * 2, height - padding * 2)}
-            transform={`translate(${padding}, ${padding})`}
-            fill="none"
-            stroke={item.color}
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ))}
-      </svg>
+      {hasData ? (
+        <svg viewBox={`0 0 ${width} ${height}`} className="chartSvg">
+          <defs>
+            <linearGradient id="grid" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(124,58,237,0.16)" />
+              <stop offset="100%" stopColor="rgba(124,58,237,0.02)" />
+            </linearGradient>
+          </defs>
+          <rect x="0" y="0" width={width} height={height} fill="url(#grid)" rx="16" />
+          {series.map((item) => (
+            <polyline
+              key={item.name}
+              points={buildPoints(item.data, width - padding * 2, height - padding * 2)}
+              transform={`translate(${padding}, ${padding})`}
+              fill="none"
+              stroke={item.color}
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ))}
+        </svg>
+      ) : (
+        <div className="chartEmpty">No data for this range.</div>
+      )}
     </div>
   );
 }

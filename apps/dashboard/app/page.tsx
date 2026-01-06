@@ -301,6 +301,36 @@ export default function DashboardPage() {
         />
       </section>
 
+      <section className="tablesGrid">
+        <DataTable
+          title="AI credits & cost by model"
+          rows={summary?.modelBreakdown ?? []}
+          emptyLabel="No model usage for this filter."
+          columns={[
+            {
+              key: "model",
+              header: "Model",
+              render: (row) => row.label,
+            },
+            {
+              key: "credits",
+              header: "AI credits",
+              render: (row) => formatNumber(row.aiCredits),
+            },
+            {
+              key: "cost",
+              header: "Cost",
+              render: (row) => (row.costUsd ? formatCurrency(row.costUsd) : "—"),
+            },
+            {
+              key: "events",
+              header: "Events",
+              render: (row) => formatNumber(row.events),
+            },
+          ]}
+        />
+      </section>
+
       <section className="chartGrid">
         <LineChart title="Usage by action (daily)" series={actionSeries} />
         <LineChart title="Usage by source (daily)" series={sourceSeries} />

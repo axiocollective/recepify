@@ -259,6 +259,16 @@ a {
   height: 180px;
 }
 
+.chartEmpty {
+  height: 180px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.12), rgba(124, 58, 237, 0.02));
+  border-radius: 16px;
+}
+
 .barList {
   display: flex;
   flex-direction: column;

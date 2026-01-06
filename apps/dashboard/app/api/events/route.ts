@@ -9,12 +9,30 @@ const parseNumber = (value: string | null) => {
 
 const normalizeDate = (value: string | null, fallback: "start" | "end") => {
   if (!value) return null;
-  if (value.length === 10) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(trimmed)) {
+    const [day, month, year] = trimmed.split(".");
+    const iso = `${year}-${month}-${day}`;
     return fallback === "start"
-      ? `${value}T00:00:00.000Z`
-      : `${value}T23:59:59.999Z`;
+      ? `${iso}T00:00:00.000Z`
+      : `${iso}T23:59:59.999Z`;
   }
-  return value;
+  if (trimmed.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return fallback === "start"
+      ? `${trimmed}T00:00:00.000Z`
+      : `${trimmed}T23:59:59.999Z`;
+  }
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    if (fallback === "start") {
+      parsed.setUTCHours(0, 0, 0, 0);
+    } else {
+      parsed.setUTCHours(23, 59, 59, 999);
+    }
+    return parsed.toISOString();
+  }
+  return trimmed;
 };
 
 export async function GET(request: Request) {
