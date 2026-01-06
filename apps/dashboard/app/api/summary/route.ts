@@ -100,6 +100,13 @@ export async function GET(request: Request) {
     .select("owner_id, period_start, import_count, ai_tokens")
     .gte("period_start", startIso.slice(0, 10))
     .lte("period_start", endIso.slice(0, 10));
+  const currentPeriodKey = toDayKey(
+    new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1))
+  );
+  let currentUsageQuery = supabaseAdmin
+    .from("usage_monthly")
+    .select("owner_id, import_count, ai_tokens")
+    .eq("period_start", currentPeriodKey);
   let monthlyImportsQuery = supabaseAdmin
     .from("import_usage_monthly")
     .select("owner_id, source, import_count")
@@ -124,6 +131,10 @@ export async function GET(request: Request) {
         totalCostUsd: 0,
         totalWhisperSeconds: 0,
         totalVisionImages: 0,
+        currentPeriodImportsUsed: 0,
+        currentPeriodAiUsed: 0,
+        totalImportCreditsAvailable: 0,
+        totalAiCreditsAvailable: 0,
         activeUsers: 0,
         dailySeries: [],
         bySource: [],
@@ -146,12 +157,14 @@ export async function GET(request: Request) {
     eventsQuery = eventsQuery.in("owner_id", userId ? [userId] : ownerIds);
     monthlyQuery = monthlyQuery.in("owner_id", ownerIds);
     monthlyImportsQuery = monthlyImportsQuery.in("owner_id", ownerIds);
+    currentUsageQuery = currentUsageQuery.in("owner_id", ownerIds);
   }
   if (userId) {
     profilesQuery = profilesQuery.eq("id", userId);
     eventsQuery = eventsQuery.eq("owner_id", userId);
     monthlyQuery = monthlyQuery.eq("owner_id", userId);
     monthlyImportsQuery = monthlyImportsQuery.eq("owner_id", userId);
+    currentUsageQuery = currentUsageQuery.eq("owner_id", userId);
   }
   if (eventType) {
     eventsQuery = eventsQuery.eq("event_type", eventType);
@@ -171,7 +184,14 @@ export async function GET(request: Request) {
     { data: events, error: eventsError },
     { data: monthlyUsage, error: monthlyError },
     { data: monthlyImports, error: monthlyImportsError },
-  ] = await Promise.all([profilesQuery, eventsQuery, monthlyQuery, monthlyImportsQuery]);
+    { data: currentUsage, error: currentUsageError },
+  ] = await Promise.all([
+    profilesQuery,
+    eventsQuery,
+    monthlyQuery,
+    monthlyImportsQuery,
+    currentUsageQuery,
+  ]);
 
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
@@ -184,6 +204,9 @@ export async function GET(request: Request) {
   }
   if (monthlyImportsError) {
     return NextResponse.json({ error: monthlyImportsError.message }, { status: 500 });
+  }
+  if (currentUsageError) {
+    return NextResponse.json({ error: currentUsageError.message }, { status: 500 });
   }
 
   const safeProfiles = (profiles ?? []) as ProfileRow[];
@@ -199,6 +222,11 @@ export async function GET(request: Request) {
     source: string | null;
     import_count: number;
   }>;
+  const safeCurrentUsage = (currentUsage ?? []) as Array<{
+    owner_id?: string;
+    import_count: number;
+    ai_tokens: number;
+  }>;
 
   const now = Date.now();
   let baseUsers = 0;
@@ -210,6 +238,7 @@ export async function GET(request: Request) {
   let premiumYearlyUsers = 0;
   safeProfiles.forEach((profile) => {
     const plan = profile.plan ?? "base";
+    const normalizedPlan = plan === "paid" ? "premium" : plan;
     if (plan === "premium") {
       premiumUsers += 1;
       if (profile.subscription_period === "monthly") {
@@ -229,13 +258,32 @@ export async function GET(request: Request) {
     if (trialEnds && trialEnds > now) {
       trialUsers += 1;
     }
+    const planLimits =
+      normalizedPlan === "premium"
+        ? { imports: 40, tokens: 200000 }
+        : { imports: 0, tokens: 0 };
+    totalImportCreditsAvailable += planLimits.imports + Math.max(0, profile.bonus_imports ?? 0);
+    totalAiCreditsAvailable += planLimits.tokens + Math.max(0, profile.bonus_tokens ?? 0);
+    if (userId && trialEnds && trialEnds > now) {
+      totalImportCreditsAvailable += Math.max(0, profile.trial_imports ?? 0);
+      totalAiCreditsAvailable += Math.max(0, profile.trial_tokens ?? 0);
+    }
   });
+
+  for (const entry of safeCurrentUsage) {
+    currentPeriodImportsUsed += Number(entry.import_count || 0);
+    currentPeriodAiUsed += Number(entry.ai_tokens || 0);
+  }
 
   let totalImports = 0;
   let totalAiCredits = 0;
   let totalCostUsd = 0;
   let totalWhisperSeconds = 0;
   let totalVisionImages = 0;
+  let totalImportCreditsAvailable = 0;
+  let totalAiCreditsAvailable = 0;
+  let currentPeriodImportsUsed = 0;
+  let currentPeriodAiUsed = 0;
   const activeUsers = new Set<string>();
   const bySource = new Map<string, number>();
   const byModel = new Map<string, number>();
@@ -519,6 +567,10 @@ export async function GET(request: Request) {
     totalCostUsd: Number(totalCostUsd.toFixed(4)),
     totalWhisperSeconds: Number(totalWhisperSeconds.toFixed(2)),
     totalVisionImages: Number(totalVisionImages.toFixed(2)),
+    currentPeriodImportsUsed,
+    currentPeriodAiUsed,
+    totalImportCreditsAvailable,
+    totalAiCreditsAvailable,
     activeUsers: activeUsers.size,
     dailySeries,
     bySource: Array.from(bySource.entries()).map(([label, value]) => ({ label, value })),

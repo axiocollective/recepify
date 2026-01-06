@@ -50,6 +50,10 @@ export type UsageSummary = {
   totalCostUsd: number;
   totalWhisperSeconds: number;
   totalVisionImages: number;
+  currentPeriodImportsUsed: number;
+  currentPeriodAiUsed: number;
+  totalImportCreditsAvailable: number;
+  totalAiCreditsAvailable: number;
   activeUsers: number;
   dailySeries: Array<{ date: string; imports: number; aiCredits: number }>;
   bySource: Array<{ label: string; value: number }>;

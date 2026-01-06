@@ -207,6 +207,89 @@ a {
   color: var(--muted-2);
 }
 
+.usageSection {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.usageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.usageEyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+  color: var(--muted-2);
+  margin: 0;
+}
+
+.usageSub {
+  margin: 0;
+  color: var(--muted);
+}
+
+.usageGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.usageCard {
+  background: #fff;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.usageIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.12);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+
+.usageValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.usageLabel {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.usageSubLabel {
+  color: var(--muted-2);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.usageBar {
+  margin-top: 10px;
+  height: 8px;
+  background: rgba(124, 58, 237, 0.12);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.usageBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #9333ea);
+  border-radius: 999px;
+}
+
 .overviewGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));

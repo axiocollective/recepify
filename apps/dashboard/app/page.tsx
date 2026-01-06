@@ -218,6 +218,13 @@ export default function DashboardPage() {
     data: series.points.map((point) => ({ label: point.date, value: point.value })),
   }));
 
+  const importsUsed = summary?.currentPeriodImportsUsed ?? 0;
+  const importsAvailable = summary?.totalImportCreditsAvailable ?? 0;
+  const aiUsed = summary?.currentPeriodAiUsed ?? 0;
+  const aiAvailable = summary?.totalAiCreditsAvailable ?? 0;
+  const importsProgress = importsAvailable > 0 ? Math.min(importsUsed / importsAvailable, 1) : 0;
+  const aiProgress = aiAvailable > 0 ? Math.min(aiUsed / aiAvailable, 1) : 0;
+
   return (
     <div className="dashboardRoot">
       <header className="dashboardHeader">
@@ -359,6 +366,41 @@ export default function DashboardPage() {
 
         <div className="filterSummary">
           {loading ? "Refreshing..." : activeUser ? `${activeUser.name ?? "User"} selected` : "All users"}
+        </div>
+      </section>
+
+      <section className="usageSection">
+        <div className="usageHeader">
+          <p className="usageEyebrow">Usage</p>
+          <p className="usageSub">Credits used and remaining balance (Guthaben).</p>
+        </div>
+        <div className="usageGrid">
+          <div className="usageCard">
+            <div className="usageIcon">📥</div>
+            <div>
+              <div className="usageValue">{formatNumber(importsUsed)}</div>
+              <div className="usageLabel">Recipe imports used</div>
+              <div className="usageSubLabel">
+                Guthaben {formatNumber(importsAvailable)} total imports
+              </div>
+              <div className="usageBar">
+                <div className="usageBarFill" style={{ width: `${importsProgress * 100}%` }} />
+              </div>
+            </div>
+          </div>
+          <div className="usageCard">
+            <div className="usageIcon">✨</div>
+            <div>
+              <div className="usageValue">{formatNumber(aiUsed)}</div>
+              <div className="usageLabel">AI credits used</div>
+              <div className="usageSubLabel">
+                Guthaben {formatNumber(aiAvailable)} AI credits
+              </div>
+              <div className="usageBar">
+                <div className="usageBarFill" style={{ width: `${aiProgress * 100}%` }} />
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
