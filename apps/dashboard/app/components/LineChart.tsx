@@ -11,6 +11,13 @@ type LineChartProps = {
   yLabel?: string;
 };
 
+const formatAxisValue = (value: number) => {
+  if (value === 0) return "0";
+  if (value < 1) return value.toFixed(2);
+  if (value < 10) return value.toFixed(1);
+  return value.toLocaleString("en-US");
+};
+
 const buildPoints = (data: LineChartPoint[], width: number, height: number, maxValue: number) => {
   return data
     .map((point, index) => {
@@ -25,10 +32,11 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
   const width = 640;
   const padding = 24;
   const hasData = series.some((item) => item.data.length > 0);
-  const maxValue = Math.max(
+  const rawMaxValue = Math.max(
     ...series.flatMap((item) => item.data.map((point) => point.value)),
-    1
+    0
   );
+  const maxValue = rawMaxValue === 0 ? 1 : rawMaxValue;
   const xSeries = series[0]?.data ?? [];
   const xLabels =
     xSeries.length > 0
@@ -77,19 +85,29 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
             strokeWidth="1"
           />
           {series.map((item) => (
-            <polyline
-              key={item.name}
-              points={buildPoints(item.data, width - padding * 2, height - padding * 2, maxValue)}
-              transform={`translate(${padding}, ${padding})`}
-              fill="none"
-              stroke={item.color}
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <g key={item.name}>
+              <polyline
+                points={buildPoints(item.data, width - padding * 2, height - padding * 2, maxValue)}
+                transform={`translate(${padding}, ${padding})`}
+                fill="none"
+                stroke={item.color}
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {item.data.map((point, index) => {
+                const x = padding + (index / Math.max(item.data.length - 1, 1)) * (width - padding * 2);
+                const y = padding + (height - padding * 2) - (point.value / maxValue) * (height - padding * 2);
+                return (
+                  <circle key={`${item.name}-${point.label}`} cx={x} cy={y} r="3.5" fill={item.color}>
+                    <title>{`${item.name} · ${point.label}: ${point.value.toLocaleString("en-US")}`}</title>
+                  </circle>
+                );
+              })}
+            </g>
           ))}
           <text x={padding - 6} y={padding + 4} textAnchor="end" className="chartAxisLabel">
-            {maxValue.toLocaleString("en-US")}
+            {formatAxisValue(rawMaxValue === 0 ? 0 : maxValue)}
           </text>
           <text
             x={padding - 6}
@@ -97,7 +115,7 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
             textAnchor="end"
             className="chartAxisLabel"
           >
-            {Math.round(maxValue / 2).toLocaleString("en-US")}
+            {formatAxisValue(rawMaxValue === 0 ? 0 : maxValue / 2)}
           </text>
           <text
             x={padding - 6}

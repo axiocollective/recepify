@@ -277,7 +277,7 @@ a {
 
 .chartGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
   gap: 20px;
 }
 
@@ -287,6 +287,7 @@ a {
   padding: 18px;
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
+  position: relative;
 }
 
 .chartHeader {
@@ -329,6 +330,26 @@ a {
 .chartAxisLabel {
   font-size: 10px;
   fill: rgba(107, 114, 128, 0.9);
+}
+
+.chartTooltip {
+  position: absolute;
+  pointer-events: none;
+  background: #1f1b2e;
+  color: #fff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 10px 20px rgba(17, 11, 29, 0.2);
+  transform: translateY(-50%);
+  z-index: 2;
+}
+
+.chartTooltip strong {
+  font-size: 12px;
 }
 
 .chartEmpty {
@@ -484,3 +505,6 @@ tbody td {
     grid-template-columns: 90px 1fr 50px;
   }
 }
+  .chartGrid {
+    grid-template-columns: 1fr;
+  }

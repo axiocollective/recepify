@@ -80,8 +80,8 @@ export default function DashboardPage() {
     model: "",
     usageContext: "",
   });
-  const [pendingUserId, setPendingUserId] = useState("");
-  const [pendingEmail, setPendingEmail] = useState("");
+  const [searchMode, setSearchMode] = useState<"user" | "email">("user");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const activeUser = users.find((user) => user.id === filters.userId);
 
@@ -146,9 +146,33 @@ export default function DashboardPage() {
   }, [filters, eventsLimit]);
 
   useEffect(() => {
-    setPendingUserId(filters.userId);
-    setPendingEmail(filters.email);
-  }, [filters.userId, filters.email]);
+    if (filters.userId && searchMode === "user") {
+      const matchedUser = users.find((user) => user.id === filters.userId);
+      setSearchTerm(matchedUser?.name ?? filters.userId);
+    }
+    if (filters.email && searchMode === "email") {
+      setSearchTerm(filters.email);
+    }
+  }, [filters.userId, filters.email, searchMode, users]);
+
+  const handleSearch = () => {
+    const term = searchTerm.trim();
+    if (!term) {
+      setFilters((prev) => ({ ...prev, userId: "", email: "" }));
+      return;
+    }
+    if (searchMode === "email") {
+      setFilters((prev) => ({ ...prev, email: term, userId: "" }));
+      return;
+    }
+    const normalized = term.toLowerCase();
+    const matchedUser =
+      users.find((user) => user.id.toLowerCase().startsWith(normalized)) ??
+      users.find((user) => (user.name ?? "").toLowerCase().includes(normalized));
+    if (matchedUser) {
+      setFilters((prev) => ({ ...prev, userId: matchedUser.id, email: "" }));
+    }
+  };
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMoreEvents) return;
@@ -229,38 +253,25 @@ export default function DashboardPage() {
 
         <div className="filterGroup">
           <label>
-            User
+            Search by
             <select
-              value={pendingUserId}
-              onChange={(event) => setPendingUserId(event.target.value)}
+              value={searchMode}
+              onChange={(event) => setSearchMode(event.target.value as "user" | "email")}
             >
-              <option value="">All users</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {(user.name ?? "User").trim() || "User"} · {user.id.slice(0, 8)}
-                </option>
-              ))}
+              <option value="user">User</option>
+              <option value="email">Email</option>
             </select>
           </label>
           <label>
-            Email
+            Search
             <input
               type="text"
-              placeholder="Search email"
-              value={pendingEmail}
-              onChange={(event) => setPendingEmail(event.target.value)}
+              placeholder={searchMode === "email" ? "Search email" : "Search user name or ID"}
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
             />
           </label>
-          <button
-            className="filterSearch"
-            onClick={() =>
-              setFilters((prev) => ({
-                ...prev,
-                userId: pendingUserId,
-                email: pendingEmail.trim(),
-              }))
-            }
-          >
+          <button className="filterSearch" onClick={handleSearch}>
             Search
           </button>
           <label>
@@ -381,24 +392,28 @@ export default function DashboardPage() {
             series={importBySourceSeries}
             xLabel="Day"
             yLabel="Imports"
+            height={220}
           />
           <LineChart
             title="Actions over time"
             series={actionCountSeries}
             xLabel="Day"
             yLabel="Events"
+            height={220}
           />
           <LineChart
             title="Usage context over time"
             series={contextCountSeries}
             xLabel="Day"
             yLabel="Events"
+            height={220}
           />
           <LineChart
             title="Credits used over time"
             series={actionCreditSeries}
             xLabel="Day"
             yLabel="Credits"
+            height={220}
           />
         </div>
       </section>
@@ -443,17 +458,27 @@ export default function DashboardPage() {
 
       <section className="sectionBlock">
         <h2>Daily actions</h2>
-        <StackedBarChart title="Actions per day" series={actionCountSeries} yLabel="Events" />
+        <StackedBarChart
+          title="Actions per day"
+          series={actionCountSeries}
+          yLabel="Events"
+          height={220}
+        />
       </section>
 
       <section className="sectionBlock">
         <h2>Credit usage by action</h2>
-        <StackedBarChart title="Credits by action" series={actionCreditSeries} yLabel="Credits" />
+        <StackedBarChart
+          title="Credits by action"
+          series={actionCreditSeries}
+          yLabel="Credits"
+          height={220}
+        />
       </section>
 
       <section className="sectionBlock">
         <h2>Estimated costs by action</h2>
-        <StackedBarChart title="Cost by action" series={actionCostSeries} yLabel="USD" />
+        <StackedBarChart title="Cost by action" series={actionCostSeries} yLabel="USD" height={220} />
       </section>
 
       <section className="tablesGrid">

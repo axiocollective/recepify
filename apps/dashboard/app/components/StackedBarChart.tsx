@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 type StackedSeriesPoint = {
   label: string;
   value: number;
@@ -10,6 +12,13 @@ type StackedBarChartProps = {
   yLabel?: string;
 };
 
+const formatAxisValue = (value: number) => {
+  if (value === 0) return "0";
+  if (value < 1) return value.toFixed(2);
+  if (value < 10) return value.toFixed(1);
+  return value.toLocaleString("en-US");
+};
+
 export function StackedBarChart({ title, series, height = 180, yLabel }: StackedBarChartProps) {
   const width = 640;
   const padding = 24;
@@ -17,12 +26,20 @@ export function StackedBarChart({ title, series, height = 180, yLabel }: Stacked
   const totals = labels.map((_, index) =>
     series.reduce((sum, current) => sum + (current.data[index]?.value ?? 0), 0)
   );
-  const maxValue = Math.max(...totals, 1);
+  const rawMaxValue = Math.max(...totals, 0);
+  const maxValue = rawMaxValue === 0 ? 1 : rawMaxValue;
   const barWidth = (width - padding * 2) / Math.max(labels.length, 1);
   const tickLabels =
     labels.length > 0
       ? [labels[0], labels[Math.floor(labels.length / 2)], labels[labels.length - 1]]
       : [];
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    label: string;
+    value: number;
+    name: string;
+  } | null>(null);
 
   return (
     <div className="chartCard">
@@ -37,7 +54,11 @@ export function StackedBarChart({ title, series, height = 180, yLabel }: Stacked
           ))}
         </div>
       </div>
-      <svg viewBox={`0 0 ${width} ${height}`} className="chartSvg">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="chartSvg"
+        onMouseLeave={() => setTooltip(null)}
+      >
         <defs>
           <linearGradient id="barGrid" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="rgba(124,58,237,0.12)" />
@@ -78,12 +99,26 @@ export function StackedBarChart({ title, series, height = 180, yLabel }: Stacked
                 height={barHeight}
                 fill={item.color}
                 rx={4}
-              />
+                onMouseMove={(event) => {
+                  const svg = event.currentTarget.ownerSVGElement;
+                  if (!svg) return;
+                  const bounds = svg.getBoundingClientRect();
+                  setTooltip({
+                    x: event.clientX - bounds.left,
+                    y: event.clientY - bounds.top,
+                    label: labels[index] ?? "",
+                    value,
+                    name: item.name,
+                  });
+                }}
+              >
+                <title>{`${item.name} · ${labels[index] ?? ""}: ${value.toLocaleString("en-US")}`}</title>
+              </rect>
             );
           });
         })}
         <text x={padding - 6} y={padding + 4} textAnchor="end" className="chartAxisLabel">
-          {maxValue.toLocaleString("en-US")}
+          {formatAxisValue(rawMaxValue === 0 ? 0 : maxValue)}
         </text>
         <text
           x={padding - 6}
@@ -91,7 +126,7 @@ export function StackedBarChart({ title, series, height = 180, yLabel }: Stacked
           textAnchor="end"
           className="chartAxisLabel"
         >
-          {Math.round(maxValue / 2).toLocaleString("en-US")}
+          {formatAxisValue(rawMaxValue === 0 ? 0 : maxValue / 2)}
         </text>
         <text
           x={padding - 6}
@@ -131,6 +166,16 @@ export function StackedBarChart({ title, series, height = 180, yLabel }: Stacked
           </text>
         ) : null}
       </svg>
+      {tooltip ? (
+        <div
+          className="chartTooltip"
+          style={{ left: tooltip.x + 12, top: Math.max(tooltip.y - 28, 12) }}
+        >
+          <strong>{tooltip.name}</strong>
+          <span>{tooltip.label}</span>
+          <span>{tooltip.value.toLocaleString("en-US")}</span>
+        </div>
+      ) : null}
     </div>
   );
 }
