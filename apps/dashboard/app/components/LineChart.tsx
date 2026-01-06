@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 type LineChartPoint = {
   label: string;
   value: number;
@@ -46,6 +48,13 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
           xSeries[xSeries.length - 1]?.label ?? "",
         ]
       : [];
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    label: string;
+    value: number;
+    name: string;
+  } | null>(null);
   return (
     <div className="chartCard">
       <div className="chartHeader">
@@ -60,7 +69,11 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
         </div>
       </div>
       {hasData ? (
-        <svg viewBox={`0 0 ${width} ${height}`} className="chartSvg">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="chartSvg"
+          onMouseLeave={() => setTooltip(null)}
+        >
           <defs>
             <linearGradient id="grid" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="rgba(124,58,237,0.16)" />
@@ -99,7 +112,25 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
                 const x = padding + (index / Math.max(item.data.length - 1, 1)) * (width - padding * 2);
                 const y = padding + (height - padding * 2) - (point.value / maxValue) * (height - padding * 2);
                 return (
-                  <circle key={`${item.name}-${point.label}`} cx={x} cy={y} r="3.5" fill={item.color}>
+                  <circle
+                    key={`${item.name}-${point.label}`}
+                    cx={x}
+                    cy={y}
+                    r="3.5"
+                    fill={item.color}
+                    onMouseMove={(event) => {
+                      const svg = event.currentTarget.ownerSVGElement;
+                      if (!svg) return;
+                      const bounds = svg.getBoundingClientRect();
+                      setTooltip({
+                        x: event.clientX - bounds.left,
+                        y: event.clientY - bounds.top,
+                        label: point.label,
+                        value: point.value,
+                        name: item.name,
+                      });
+                    }}
+                  >
                     <title>{`${item.name} · ${point.label}: ${point.value.toLocaleString("en-US")}`}</title>
                   </circle>
                 );
@@ -165,6 +196,16 @@ export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineC
             </text>
           ) : null}
         </svg>
+        {tooltip ? (
+          <div
+            className="chartTooltip"
+            style={{ left: tooltip.x + 12, top: Math.max(tooltip.y - 28, 12) }}
+          >
+            <strong>{tooltip.name}</strong>
+            <span>{tooltip.label}</span>
+            <span>{tooltip.value.toLocaleString("en-US")}</span>
+          </div>
+        ) : null}
       ) : (
         <div className="chartEmpty">No data for this range.</div>
       )}
