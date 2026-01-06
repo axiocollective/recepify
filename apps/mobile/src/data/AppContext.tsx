@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { Alert, AppState, Linking } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { BottomTab, ImportItem, Ingredient, PlanTier, Recipe, RecipeCollection, Screen, ShoppingListItem, UsageSummary } from "./types";
-import { getImportLimitMessage, getPlanLimits, isImportLimitReached } from "./usageLimits";
+import { getImportLimitMessage, getImportLimitTitle, getPlanLimits, isImportLimitReached } from "./usageLimits";
 import {
   addShoppingListItems,
   addPayPerUseCredits,
@@ -836,12 +836,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
         if (importLimitReached) {
           const limitMessage = getImportLimitMessage(plan, trialActive);
-          const limitTitle =
-            plan === "paid" || plan === "premium"
-              ? "Monthly imports used up"
-              : trialActive
-              ? "Trial imports used up"
-              : "Imports require credits";
+          const limitTitle = getImportLimitTitle(plan);
           Alert.alert(limitTitle, limitMessage, [
             { text: "Buy credits", onPress: () => navigateTo("planBilling") },
             { text: "Cancel", style: "cancel" },

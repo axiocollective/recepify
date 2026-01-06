@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, spacing, typography, shadow } from "../theme/theme";
 import { Screen } from "../data/types";
 import { useApp } from "../data/AppContext";
-import { getImportLimitMessage, isImportLimitReached } from "../data/usageLimits";
+import { getImportLimitMessage, getImportLimitTitle, isImportLimitReached } from "../data/usageLimits";
 import { Alert } from "react-native";
 
 interface ImportQuickActionsProps {
@@ -31,12 +31,7 @@ export const ImportQuickActions: React.FC<ImportQuickActionsProps> = ({
   const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports, trialImportsRemaining);
   const limitMessage = getImportLimitMessage(plan, trialActive);
   const openPlans = () => navigateTo("planBilling");
-  const limitTitle =
-    plan === "paid" || plan === "premium"
-      ? "Monthly imports used up"
-      : trialActive
-      ? "Trial imports used up"
-      : "Imports require credits";
+  const limitTitle = getImportLimitTitle(plan);
 
   const handleAction = (id: Screen | "manual" | "inbox") => {
     if (id === "manual") {

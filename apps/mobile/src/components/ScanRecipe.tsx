@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { colors, radius, spacing, typography } from "../theme/theme";
 import { useApp } from "../data/AppContext";
-import { getImportLimitMessage, isImportLimitReached } from "../data/usageLimits";
+import { getImportLimitMessage, getImportLimitTitle, isImportLimitReached } from "../data/usageLimits";
 
 interface ScanRecipeProps {
   onBack: () => void;
@@ -19,12 +19,7 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
   const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports, trialImportsRemaining);
   const limitMessage = getImportLimitMessage(plan, trialActive);
   const openPlans = () => navigateTo("planBilling");
-  const limitTitle =
-    plan === "paid" || plan === "premium"
-      ? "Monthly imports used up"
-      : trialActive
-      ? "Trial imports used up"
-      : "Imports require credits";
+  const limitTitle = getImportLimitTitle(plan);
   const showLimitAlert = () => {
     if (plan === "paid" || plan === "premium") {
       Alert.alert(limitTitle, limitMessage, [

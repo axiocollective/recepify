@@ -9,7 +9,7 @@ import { RecipeThumbnail } from "./RecipeThumbnail";
 import { RecipeAssistantChat } from "./RecipeAssistantChat";
 import { AddToCollectionModal } from "./AddToCollectionModal";
 import { useApp } from "../data/AppContext";
-import { getAiLimitMessage, isAiLimitReached } from "../data/usageLimits";
+import { getAiLimitMessage, getAiLimitTitle, isAiLimitReached } from "../data/usageLimits";
 
 interface RecipeDetailProps {
   recipe: Recipe;
@@ -56,8 +56,9 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
   const aiLimitMessage = aiDisabled
     ? "AI features are disabled on your plan. Upgrade to re-enable ChefGPT."
     : getAiLimitMessage(plan, trialActive);
-  const showPremiumBadge = !isPremium && creditsExhausted;
-  const showCreditsBadge = isPremium && creditsExhausted;
+  const showPremiumBadge = false;
+  const showCreditsBadge = creditsExhausted;
+  const aiLimitTitle = getAiLimitTitle(plan);
   const [currentServings, setCurrentServings] = useState((recipe.servingsOverride ?? recipe.servings) || 1);
   const [isVideoMuted, setIsVideoMuted] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -454,7 +455,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
                         ]}
                         onPress={() => {
                           if (aiUsageBlocked) {
-                            Alert.alert("AI unavailable", aiLimitMessage);
+                          Alert.alert(aiLimitTitle, aiLimitMessage);
                             return;
                           }
                           onOptimizeWithAI?.();
@@ -809,7 +810,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
               style={[styles.floatingAssistant, shadow.lg, aiUsageBlocked && styles.floatingAssistantDisabled]}
               onPress={() => {
                 if (aiUsageBlocked) {
-                  Alert.alert("AI unavailable", aiLimitMessage);
+                  Alert.alert(aiLimitTitle, aiLimitMessage);
                   return;
                 }
                 setAssistantOpen(true);
@@ -817,14 +818,14 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
             >
               <Ionicons name="sparkles" size={22} color={aiUsageBlocked ? colors.gray500 : colors.white} />
             </Pressable>
-            {!isPremium && (
+            {creditsExhausted && (
               <LinearGradient
-                colors={["#fbbf24", "#f59e0b", "#d97706"]}
+                colors={["#fb923c", "#f97316"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={[styles.premiumBadge, shadow.md]}
               >
-                <Ionicons name="star" size={10} color={colors.white} />
+                <Ionicons name="alert-circle" size={10} color={colors.white} />
               </LinearGradient>
             )}
           </View>

@@ -27,23 +27,23 @@ export const getEffectiveTokenLimit = (plan: PlanTier, bonusTokens = 0, trialTok
 
 export const getImportLimitMessage = (plan: PlanTier, trialActive = false) => {
   if (plan === "paid" || plan === "premium") {
-    return "You’ve reached your monthly recipe import limit. Buy extra credits in the Subscription section. Monthly credits reset automatically.";
+    return "You’ve run out of your monthly recipe imports. Buy additional credits or wait until your next billing period.";
   }
-  if (trialActive) {
-    return "Your free trial imports are used up. Buy extra credits in the Subscription section to keep importing.";
-  }
-  return "Your free trial has ended. Recepify Base is active, but imports require extra credits from the Subscription section.";
+  return "You’ve run out of recipe imports. Buy additional credits or upgrade to Recepify Premium.";
 };
 
 export const getAiLimitMessage = (plan: PlanTier, trialActive = false) => {
   if (plan === "paid" || plan === "premium") {
-    return "You’ve used all your AI credits for this month. You can buy extra credits in the Subscription section.";
+    return "You’ve run out of your monthly AI credits. Buy additional credits or wait until your next billing period.";
   }
-  if (trialActive) {
-    return "Your free trial AI credits are used up. Buy extra credits in the Subscription section to keep using AI.";
-  }
-  return "Your free trial has ended. Recepify Base is active, but AI requires extra credits from the Subscription section.";
+  return "You’ve run out of AI credits. Buy additional credits or upgrade to Recepify Premium.";
 };
+
+export const getImportLimitTitle = (plan: PlanTier) =>
+  plan === "paid" || plan === "premium" ? "Monthly recipe imports used up" : "Recipe imports used up";
+
+export const getAiLimitTitle = (plan: PlanTier) =>
+  plan === "paid" || plan === "premium" ? "Monthly AI credits used up" : "AI credits used up";
 
 export const isImportLimitReached = (
   plan: PlanTier,

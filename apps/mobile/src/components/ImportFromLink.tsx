@@ -4,7 +4,7 @@ import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, spacing, typography } from "../theme/theme";
 import { useApp } from "../data/AppContext";
-import { getImportLimitMessage, isImportLimitReached } from "../data/usageLimits";
+import { getImportLimitMessage, getImportLimitTitle, isImportLimitReached } from "../data/usageLimits";
 
 interface ImportFromLinkProps {
   onBack: () => void;
@@ -18,12 +18,7 @@ export const ImportFromLink: React.FC<ImportFromLinkProps> = ({ onBack, onImport
   const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports, trialImportsRemaining);
   const limitMessage = getImportLimitMessage(plan, trialActive);
   const openPlans = () => navigateTo("planBilling");
-  const limitTitle =
-    plan === "paid" || plan === "premium"
-      ? "Monthly imports used up"
-      : trialActive
-      ? "Trial imports used up"
-      : "Imports require credits";
+  const limitTitle = getImportLimitTitle(plan);
   const showLimitAlert = () => {
     if (plan === "paid" || plan === "premium") {
       Alert.alert(limitTitle, limitMessage, [
