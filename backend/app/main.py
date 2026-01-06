@@ -39,6 +39,7 @@ def on_startup() -> None:
         f"prefix={settings.supabase_storage_prefix}",
         flush=True,
     )
+    print("Backend build: dashboard hotfix", flush=True)
 
 
 @app.get("/health")
