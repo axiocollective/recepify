@@ -159,6 +159,23 @@ CHEFGPT_MODEL_CANDIDATES: tuple[str, ...] = _build_model_priority(
 )
 
 
+def _resolve_assistant_models(
+    usage_context: Optional[str],
+    messages: List[RecipeAssistantMessage],
+) -> tuple[str, ...]:
+    high_quality = {"infer_ingredients", "generate_steps", "calculate_nutrition", "optimized_with_ai"}
+    low_quality = {"improve_title", "suggest_tags", "estimate_time", "translate_recipe", "generate_description"}
+    if usage_context in high_quality:
+        return ("gpt-4o", "gpt-4o-mini")
+    if usage_context in low_quality:
+        return ("gpt-4o-mini", "gpt-4o")
+
+    total_chars = sum(len(message.content or "") for message in messages)
+    if total_chars >= 900 or len(messages) >= 6:
+        return ("gpt-4o", "gpt-4o-mini")
+    return ("gpt-4o-mini", "gpt-4o")
+
+
 class AssistantSectionPayload(BaseModel):
     title: str
     bullets: List[str] = Field(default_factory=list)
@@ -780,7 +797,9 @@ def _parse_structured_reply(raw_text: str) -> Optional[AssistantStructuredRespon
 
 
 def _generate_structured_sections_response(
-    client: Any, conversation: List[Dict[str, str]]
+    client: Any,
+    conversation: List[Dict[str, str]],
+    model_candidates: tuple[str, ...],
 ) -> tuple[AssistantStructuredResponse, Dict[str, int], Optional[str]]:
     last_error: Optional[Exception] = None
 
@@ -798,8 +817,10 @@ def _generate_structured_sections_response(
             logger.warning("ChefGPT model %s failed to respond: %s", model_name, exc)
             return None, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
-    def try_models(messages: List[Dict[str, str]]) -> tuple[Optional[AssistantStructuredResponse], Dict[str, int], Optional[str]]:
-        for model_name in CHEFGPT_MODEL_CANDIDATES:
+    def try_models(
+        messages: List[Dict[str, str]],
+    ) -> tuple[Optional[AssistantStructuredResponse], Dict[str, int], Optional[str]]:
+        for model_name in model_candidates:
             structured, usage = invoke(messages, model_name)
             if structured:
                 return structured, usage, model_name
@@ -832,10 +853,12 @@ def _generate_structured_sections_response(
 
 
 def _generate_plain_assistant_response(
-    client: Any, conversation: List[Dict[str, str]]
+    client: Any,
+    conversation: List[Dict[str, str]],
+    model_candidates: tuple[str, ...],
 ) -> tuple[str, Dict[str, int], Optional[str]]:
     last_error: Optional[Exception] = None
-    for model_name in CHEFGPT_MODEL_CANDIDATES or ("gpt-4o-mini",):
+    for model_name in model_candidates or ("gpt-4o-mini",):
         try:
             response = client.responses.create(
                 model=model_name,
@@ -1319,12 +1342,17 @@ def recipe_assistant(
     usage_details = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
     tokens_weighted = 0
     model_name = None
+    model_candidates = _resolve_assistant_models(payload.usage_context, payload.messages)
     if payload.structured:
-        structured_response, usage_details, model_name = _generate_structured_sections_response(client, conversation)
+        structured_response, usage_details, model_name = _generate_structured_sections_response(
+            client, conversation, model_candidates
+        )
         tokens_weighted = _apply_token_weight(usage_details["total_tokens"], model_name)
         reply_payload = json.dumps(structured_response.model_dump())
     else:
-        reply_payload, usage_details, model_name = _generate_plain_assistant_response(client, conversation)
+        reply_payload, usage_details, model_name = _generate_plain_assistant_response(
+            client, conversation, model_candidates
+        )
         tokens_weighted = _apply_token_weight(usage_details["total_tokens"], model_name)
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
