@@ -114,10 +114,16 @@ export async function GET(request: Request) {
         baseUsers: 0,
         premiumUsers: 0,
         trialUsers: 0,
+        baseMonthlyUsers: 0,
+        baseYearlyUsers: 0,
+        premiumMonthlyUsers: 0,
+        premiumYearlyUsers: 0,
+        freeUsers: 0,
         totalImports: 0,
         totalAiCredits: 0,
         totalCostUsd: 0,
         totalWhisperSeconds: 0,
+        totalVisionImages: 0,
         activeUsers: 0,
         dailySeries: [],
         bySource: [],
@@ -125,6 +131,12 @@ export async function GET(request: Request) {
         modelBreakdown: [],
         actionModelBreakdown: [],
         importBreakdown: [],
+        sourceImportSeries: [],
+        actionCountSeries: [],
+        actionCreditSeries: [],
+        actionCostSeries: [],
+        contextCountSeries: [],
+        costByUser: [],
         actionSeries: [],
         sourceSeries: [],
         contextSeries: [],
@@ -192,12 +204,26 @@ export async function GET(request: Request) {
   let baseUsers = 0;
   let premiumUsers = 0;
   let trialUsers = 0;
+  let baseMonthlyUsers = 0;
+  let baseYearlyUsers = 0;
+  let premiumMonthlyUsers = 0;
+  let premiumYearlyUsers = 0;
   safeProfiles.forEach((profile) => {
     const plan = profile.plan ?? "base";
     if (plan === "premium") {
       premiumUsers += 1;
+      if (profile.subscription_period === "monthly") {
+        premiumMonthlyUsers += 1;
+      } else if (profile.subscription_period === "yearly") {
+        premiumYearlyUsers += 1;
+      }
     } else {
       baseUsers += 1;
+      if (profile.subscription_period === "monthly") {
+        baseMonthlyUsers += 1;
+      } else if (profile.subscription_period === "yearly") {
+        baseYearlyUsers += 1;
+      }
     }
     const trialEnds = profile.trial_ends_at ? Date.parse(profile.trial_ends_at) : null;
     if (trialEnds && trialEnds > now) {
@@ -209,6 +235,7 @@ export async function GET(request: Request) {
   let totalAiCredits = 0;
   let totalCostUsd = 0;
   let totalWhisperSeconds = 0;
+  let totalVisionImages = 0;
   const activeUsers = new Set<string>();
   const bySource = new Map<string, number>();
   const byModel = new Map<string, number>();
@@ -232,9 +259,23 @@ export async function GET(request: Request) {
     }
   >();
   const dailyMap = new Map<string, { imports: number; aiCredits: number }>();
-  const actionDaily = new Map<string, Map<string, number>>();
-  const sourceDaily = new Map<string, Map<string, number>>();
-  const contextDaily = new Map<string, Map<string, number>>();
+  const actionDailyCounts = new Map<string, Map<string, number>>();
+  const actionDailyCredits = new Map<string, Map<string, number>>();
+  const actionDailyCosts = new Map<string, Map<string, number>>();
+  const sourceImportDaily = new Map<string, Map<string, number>>();
+  const contextDailyCounts = new Map<string, Map<string, number>>();
+  const costByUser = new Map<
+    string,
+    {
+      ownerId: string;
+      importCredits: number;
+      gptMiniCredits: number;
+      gpt4oCredits: number;
+      visionImages: number;
+      whisperSeconds: number;
+      totalCostUsd: number;
+    }
+  >();
 
   for (const event of safeEvents) {
     if (event.owner_id) activeUsers.add(event.owner_id);
@@ -262,6 +303,9 @@ export async function GET(request: Request) {
     }
     totalAiCredits += aiCredits;
     totalCostUsd += Number(event.cost_usd || 0);
+    if (modelProvider === "google-vision" && visionImages > 0) {
+      totalVisionImages += visionImages;
+    }
 
     if (isImportCredit) {
       dayEntry.imports += importCredits;
@@ -271,6 +315,10 @@ export async function GET(request: Request) {
     if (isImportCredit && importCredits > 0) {
       const key = event.source ?? "unknown";
       bySource.set(key, (bySource.get(key) ?? 0) + importCredits);
+      if (!sourceImportDaily.has(key)) {
+        sourceImportDaily.set(key, new Map());
+      }
+      sourceImportDaily.get(key)!.set(dayKey, (sourceImportDaily.get(key)!.get(dayKey) ?? 0) + importCredits);
     }
     if (usageUnits > 0) {
       const key = normalizeModelName(event.model_name);
@@ -298,25 +346,31 @@ export async function GET(request: Request) {
     actionEntry.events += 1;
     actionModelBreakdown.set(actionModelKey, actionEntry);
 
-    if (!actionDaily.has(actionKey)) {
-      actionDaily.set(actionKey, new Map());
+    if (!actionDailyCounts.has(actionKey)) {
+      actionDailyCounts.set(actionKey, new Map());
     }
-    actionDaily.get(actionKey)!.set(dayKey, (actionDaily.get(actionKey)!.get(dayKey) ?? 0) + aiCredits + importCredits);
+    actionDailyCounts.get(actionKey)!.set(dayKey, (actionDailyCounts.get(actionKey)!.get(dayKey) ?? 0) + 1);
 
-    const sourceKey = event.source ?? "unknown";
-    if (!sourceDaily.has(sourceKey)) {
-      sourceDaily.set(sourceKey, new Map());
+    const creditsForAction = isImportCredit ? importCredits : usageUnits;
+    if (!actionDailyCredits.has(actionKey)) {
+      actionDailyCredits.set(actionKey, new Map());
     }
-    sourceDaily.get(sourceKey)!.set(dayKey, (sourceDaily.get(sourceKey)!.get(dayKey) ?? 0) + aiCredits + importCredits);
+    actionDailyCredits.get(actionKey)!.set(dayKey, (actionDailyCredits.get(actionKey)!.get(dayKey) ?? 0) + creditsForAction);
 
-    const contextKey =
-      typeof event.metadata === "object" && event.metadata
-        ? String((event.metadata as Record<string, unknown>).usage_context ?? "unknown")
-        : "unknown";
-    if (!contextDaily.has(contextKey)) {
-      contextDaily.set(contextKey, new Map());
+    if (!actionDailyCosts.has(actionKey)) {
+      actionDailyCosts.set(actionKey, new Map());
     }
-    contextDaily.get(contextKey)!.set(dayKey, (contextDaily.get(contextKey)!.get(dayKey) ?? 0) + aiCredits);
+    actionDailyCosts.get(actionKey)!.set(dayKey, (actionDailyCosts.get(actionKey)!.get(dayKey) ?? 0) + Number(event.cost_usd || 0));
+
+    if (event.metadata && typeof event.metadata === "object") {
+      const contextKey = String((event.metadata as Record<string, unknown>).usage_context ?? "");
+      if (contextKey) {
+        if (!contextDailyCounts.has(contextKey)) {
+          contextDailyCounts.set(contextKey, new Map());
+        }
+        contextDailyCounts.get(contextKey)!.set(dayKey, (contextDailyCounts.get(contextKey)!.get(dayKey) ?? 0) + 1);
+      }
+    }
 
     if (event.request_id && ["import", "scan", "import_credit"].includes(actionKey)) {
       const key = `${event.request_id}|${modelKey}|${actionKey}`;
@@ -343,9 +397,38 @@ export async function GET(request: Request) {
     if (modelKey === "whisper-1" && audioSeconds > 0) {
       totalWhisperSeconds += audioSeconds;
     }
+
+    if (event.owner_id) {
+      const entry = costByUser.get(event.owner_id) ?? {
+        ownerId: event.owner_id,
+        importCredits: 0,
+        gptMiniCredits: 0,
+        gpt4oCredits: 0,
+        visionImages: 0,
+        whisperSeconds: 0,
+        totalCostUsd: 0,
+      };
+      if (isImportCredit) {
+        entry.importCredits += importCredits;
+      }
+      if (event.model_name === "gpt-4o-mini") {
+        entry.gptMiniCredits += aiCredits;
+      }
+      if (event.model_name === "gpt-4o") {
+        entry.gpt4oCredits += aiCredits;
+      }
+      if (modelProvider === "google-vision") {
+        entry.visionImages += visionImages;
+      }
+      if (event.model_name === "whisper-1") {
+        entry.whisperSeconds += audioSeconds;
+      }
+      entry.totalCostUsd += Number(event.cost_usd || 0);
+      costByUser.set(event.owner_id, entry);
+    }
   }
 
-  const hasEventFilters = Boolean(eventType || source || model || usageContext);
+  const hasEventFilters = Boolean(email || eventType || source || model || usageContext);
   if (safeEvents.length === 0 && safeMonthly.length > 0 && !hasEventFilters) {
     for (const entry of safeMonthly) {
       activeUsers.add(entry.owner_id);
@@ -394,16 +477,48 @@ export async function GET(request: Request) {
     }));
   };
 
-  const hasFilters = Boolean(userId || eventType || source || model || usageContext);
+  const actionCountSeries = buildSeries(actionDailyCounts);
+  const actionCreditSeries = buildSeries(actionDailyCredits);
+  const actionCostSeries = buildSeries(actionDailyCosts);
+  const sourceImportSeries = buildSeries(sourceImportDaily);
+  const contextCountSeries = buildSeries(contextDailyCounts);
+
+  const hasFilters = Boolean(userId || email || eventType || source || model || usageContext);
+  const { data: authData } = await supabaseAdmin.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  const emailById = new Map(
+    (authData?.users ?? []).map((user) => [user.id, user.email ?? null])
+  );
+  const costByUserRows = Array.from(costByUser.values())
+    .map((entry) => ({
+      ownerId: entry.ownerId,
+      email: emailById.get(entry.ownerId) ?? null,
+      importCredits: entry.importCredits,
+      gptMiniCredits: entry.gptMiniCredits,
+      gpt4oCredits: entry.gpt4oCredits,
+      visionImages: entry.visionImages,
+      whisperSeconds: entry.whisperSeconds,
+      totalCostUsd: Number(entry.totalCostUsd.toFixed(4)),
+    }))
+    .sort((a, b) => b.totalCostUsd - a.totalCostUsd);
+
   const summary: UsageSummary = {
     totalUsers: hasFilters ? activeUsers.size : safeProfiles.length,
     baseUsers,
     premiumUsers,
     trialUsers,
+    baseMonthlyUsers,
+    baseYearlyUsers,
+    premiumMonthlyUsers,
+    premiumYearlyUsers,
+    freeUsers: trialUsers,
     totalImports,
     totalAiCredits,
     totalCostUsd: Number(totalCostUsd.toFixed(4)),
     totalWhisperSeconds: Number(totalWhisperSeconds.toFixed(2)),
+    totalVisionImages: Number(totalVisionImages.toFixed(2)),
     activeUsers: activeUsers.size,
     dailySeries,
     bySource: Array.from(bySource.entries()).map(([label, value]) => ({ label, value })),
@@ -436,9 +551,15 @@ export async function GET(request: Request) {
         events: entry.events,
       }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    actionSeries: buildSeries(actionDaily),
-    sourceSeries: buildSeries(sourceDaily),
-    contextSeries: buildSeries(contextDaily),
+    sourceImportSeries,
+    actionCountSeries,
+    actionCreditSeries,
+    actionCostSeries,
+    contextCountSeries,
+    costByUser: costByUserRows,
+    actionSeries: actionCountSeries,
+    sourceSeries: sourceImportSeries,
+    contextSeries: contextCountSeries,
   };
 
   return NextResponse.json(summary);

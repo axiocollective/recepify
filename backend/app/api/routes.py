@@ -959,7 +959,12 @@ def get_recipe(recipe_id: UUID, session: Session = Depends(get_db_session)) -> R
 
 
 @router.post("/recipes", response_model=RecipeReadDTO, status_code=status.HTTP_201_CREATED)
-def create_recipe(payload: RecipeCreateDTO, session: Session = Depends(get_db_session)) -> RecipeReadDTO:
+def create_recipe(
+    payload: RecipeCreateDTO,
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> RecipeReadDTO:
     recipe = Recipe(
         title=payload.title,
         description=payload.description,
@@ -989,6 +994,26 @@ def create_recipe(payload: RecipeCreateDTO, session: Session = Depends(get_db_se
     session.add(recipe)
     session.commit()
     session.refresh(recipe)
+    if x_user_email or x_user_id:
+        source = (payload.source_platform or "").lower().strip()
+        manual_sources = {"", "manual", "user", "local"}
+        if source in manual_sources:
+            owner_id = _resolve_user_id(x_user_email, x_user_id)
+            _log_usage_events(
+                session,
+                owner_id,
+                request_id=uuid4(),
+                event_type="manual_add",
+                source="manual",
+                events=[
+                    {
+                        "provider": "system",
+                        "model": None,
+                        "stage": "manual_add",
+                    }
+                ],
+                import_credits_used=0,
+            )
     return _recipe_to_dto(recipe)
 
 

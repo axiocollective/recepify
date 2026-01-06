@@ -40,10 +40,16 @@ export type UsageSummary = {
   baseUsers: number;
   premiumUsers: number;
   trialUsers: number;
+  baseMonthlyUsers: number;
+  baseYearlyUsers: number;
+  premiumMonthlyUsers: number;
+  premiumYearlyUsers: number;
+  freeUsers: number;
   totalImports: number;
   totalAiCredits: number;
   totalCostUsd: number;
   totalWhisperSeconds: number;
+  totalVisionImages: number;
   activeUsers: number;
   dailySeries: Array<{ date: string; imports: number; aiCredits: number }>;
   bySource: Array<{ label: string; value: number }>;
@@ -66,6 +72,21 @@ export type UsageSummary = {
     credits: number;
     costUsd: number;
     events: number;
+  }>;
+  sourceImportSeries: Array<{ label: string; points: Array<{ date: string; value: number }> }>;
+  actionCountSeries: Array<{ label: string; points: Array<{ date: string; value: number }> }>;
+  actionCreditSeries: Array<{ label: string; points: Array<{ date: string; value: number }> }>;
+  actionCostSeries: Array<{ label: string; points: Array<{ date: string; value: number }> }>;
+  contextCountSeries: Array<{ label: string; points: Array<{ date: string; value: number }> }>;
+  costByUser: Array<{
+    ownerId: string;
+    email: string | null;
+    importCredits: number;
+    gptMiniCredits: number;
+    gpt4oCredits: number;
+    visionImages: number;
+    whisperSeconds: number;
+    totalCostUsd: number;
   }>;
   actionSeries: Array<{ label: string; points: Array<{ date: string; value: number }> }>;
   sourceSeries: Array<{ label: string; points: Array<{ date: string; value: number }> }>;

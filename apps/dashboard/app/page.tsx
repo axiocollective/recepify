@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BarChart } from "./components/BarChart";
 import { DataTable } from "./components/DataTable";
 import { LineChart } from "./components/LineChart";
-import { StatCard } from "./components/StatCard";
+import { StackedBarChart } from "./components/StackedBarChart";
 import type { UsageEvent, UsageSummary } from "./lib/types";
 
 type UserOption = {
@@ -32,6 +31,15 @@ const formatUsageCredits = (row: UsageEvent) => {
   ) {
     const seconds = Number((row.metadata as Record<string, unknown>).audio_seconds || 0);
     return `${Math.round(seconds)}s`;
+  }
+  if (
+    row.model_provider === "google-vision" &&
+    row.metadata &&
+    typeof row.metadata === "object" &&
+    (row.metadata as Record<string, unknown>).images
+  ) {
+    const images = Number((row.metadata as Record<string, unknown>).images || 0);
+    return `${formatNumber(images)} img`;
   }
   if (row.event_type === "import_credit") {
     return `-${formatNumber(row.import_credits_used ?? 0)}`;
@@ -152,38 +160,35 @@ export default function DashboardPage() {
     }
   };
 
-  const dailySeries = summary?.dailySeries ?? [];
-  const chartSeries = useMemo(
-    () => [
-      {
-        name: "Recipe imports",
-        color: "#7c3aed",
-        data: dailySeries.map((item) => ({ label: item.date, value: item.imports })),
-      },
-      {
-        name: "AI credits used",
-        color: "#f97316",
-        data: dailySeries.map((item) => ({ label: item.date, value: item.aiCredits })),
-      },
-    ],
-    [dailySeries]
-  );
+  const palette = ["#7c3aed", "#f97316", "#16a34a", "#0ea5e9", "#9333ea", "#f43f5e"];
 
-  const actionSeries = (summary?.actionSeries ?? []).map((series, index) => ({
+  const importBySourceSeries = (summary?.sourceImportSeries ?? []).map((series, index) => ({
     name: series.label,
-    color: ["#7c3aed", "#f97316", "#16a34a", "#0ea5e9", "#9333ea"][index % 5],
+    color: palette[index % palette.length],
     data: series.points.map((point) => ({ label: point.date, value: point.value })),
   }));
 
-  const sourceSeries = (summary?.sourceSeries ?? []).map((series, index) => ({
-    name: series.label,
-    color: ["#7c3aed", "#f97316", "#16a34a", "#0ea5e9", "#9333ea"][index % 5],
+  const actionCountSeries = (summary?.actionCountSeries ?? []).map((series, index) => ({
+    name: series.label.replaceAll("_", " "),
+    color: palette[index % palette.length],
     data: series.points.map((point) => ({ label: point.date, value: point.value })),
   }));
 
-  const contextSeries = (summary?.contextSeries ?? []).map((series, index) => ({
-    name: series.label,
-    color: ["#7c3aed", "#f97316", "#16a34a", "#0ea5e9", "#9333ea"][index % 5],
+  const contextCountSeries = (summary?.contextCountSeries ?? []).map((series, index) => ({
+    name: series.label.replaceAll("_", " "),
+    color: palette[index % palette.length],
+    data: series.points.map((point) => ({ label: point.date, value: point.value })),
+  }));
+
+  const actionCreditSeries = (summary?.actionCreditSeries ?? []).map((series, index) => ({
+    name: series.label.replaceAll("_", " "),
+    color: palette[index % palette.length],
+    data: series.points.map((point) => ({ label: point.date, value: point.value })),
+  }));
+
+  const actionCostSeries = (summary?.actionCostSeries ?? []).map((series, index) => ({
+    name: series.label.replaceAll("_", " "),
+    color: palette[index % palette.length],
     data: series.points.map((point) => ({ label: point.date, value: point.value })),
   }));
 
@@ -267,6 +272,7 @@ export default function DashboardPage() {
               <option value="">All actions</option>
               <option value="import">Import</option>
               <option value="scan">Scan</option>
+              <option value="manual_add">Manual add</option>
               <option value="ai_assistant">AI assistant</option>
               <option value="import_credit">Import credit</option>
             </select>
@@ -313,91 +319,88 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="statGrid">
-        <StatCard
-          label="Active users"
-          value={formatNumber(summary?.activeUsers ?? 0)}
-          sub="Last 30 days"
-          accent="purple"
-        />
-        <StatCard
-          label="Recipe imports"
-          value={formatNumber(summary?.totalImports ?? 0)}
-          sub="Credits consumed"
-          accent="orange"
-        />
-        <StatCard
-          label="AI credits used"
-          value={formatNumber(summary?.totalAiCredits ?? 0)}
-          sub="Weighted tokens"
-          accent="green"
-        />
-        <StatCard
-          label="Whisper seconds"
-          value={formatNumber(Math.round(summary?.totalWhisperSeconds ?? 0))}
-          sub="Audio transcriptions"
-          accent="purple"
-        />
-        <StatCard
-          label="Estimated cost"
-          value={formatCurrency(summary?.totalCostUsd ?? 0)}
-          sub="OpenAI + Vision"
-          accent="purple"
-        />
-      </section>
-
-      <section className="planGrid">
-        <div className="planCard">
-          <h3>Plan mix</h3>
-          <div className="planRow">
-            <span>Recepify Base</span>
-            <strong>{formatNumber(summary?.baseUsers ?? 0)}</strong>
+      <section className="overviewGrid">
+        <div className="overviewCard">
+          <h3>User details</h3>
+          <div className="overviewRow">
+            <span>Total users</span>
+            <strong>{formatNumber(summary?.totalUsers ?? 0)}</strong>
           </div>
-          <div className="planRow">
-            <span>Recepify Premium</span>
-            <strong>{formatNumber(summary?.premiumUsers ?? 0)}</strong>
+          <div className="overviewRow">
+            <span>Base · monthly</span>
+            <strong>{formatNumber(summary?.baseMonthlyUsers ?? 0)}</strong>
           </div>
-          <div className="planRow">
-            <span>Trials active</span>
-            <strong>{formatNumber(summary?.trialUsers ?? 0)}</strong>
+          <div className="overviewRow">
+            <span>Base · yearly</span>
+            <strong>{formatNumber(summary?.baseYearlyUsers ?? 0)}</strong>
+          </div>
+          <div className="overviewRow">
+            <span>Premium · monthly</span>
+            <strong>{formatNumber(summary?.premiumMonthlyUsers ?? 0)}</strong>
+          </div>
+          <div className="overviewRow">
+            <span>Premium · yearly</span>
+            <strong>{formatNumber(summary?.premiumYearlyUsers ?? 0)}</strong>
+          </div>
+          <div className="overviewRow">
+            <span>Free plan (trial)</span>
+            <strong>{formatNumber(summary?.freeUsers ?? 0)}</strong>
           </div>
         </div>
-        <div className="planCard highlight">
-          <h3>Focus list</h3>
-          <ul>
-            <li>Spot power users by AI credits/day.</li>
-            <li>Identify sources with the highest cost per import.</li>
-            <li>Track conversion: trial → base → premium.</li>
-          </ul>
+
+        <div className="overviewCard">
+          <h3>Credits & costs</h3>
+          <div className="overviewRow">
+            <span>Total recipe imports</span>
+            <strong>{formatNumber(summary?.totalImports ?? 0)}</strong>
+          </div>
+          <div className="overviewRow">
+            <span>Total GPT tokens</span>
+            <strong>{formatNumber(summary?.totalAiCredits ?? 0)}</strong>
+          </div>
+          <div className="overviewRow">
+            <span>Total Whisper seconds</span>
+            <strong>{formatNumber(Math.round(summary?.totalWhisperSeconds ?? 0))}s</strong>
+          </div>
+          <div className="overviewRow">
+            <span>Total Vision images</span>
+            <strong>{formatNumber(summary?.totalVisionImages ?? 0)}</strong>
+          </div>
+          <div className="overviewRow">
+            <span>Total estimated costs</span>
+            <strong>{formatCurrency(summary?.totalCostUsd ?? 0)}</strong>
+          </div>
         </div>
       </section>
 
-      <section className="chartGrid">
-        <LineChart
-          title="Events by action (daily)"
-          series={actionSeries}
-          xLabel="Day"
-          yLabel="Events"
-        />
-        <LineChart
-          title="Credits used over time"
-          series={chartSeries}
-          xLabel="Day"
-          yLabel="Credits"
-        />
-      </section>
-
-      <section className="chartGrid">
-        <BarChart
-          title="Recipe imports by source"
-          data={summary?.bySource ?? []}
-          color="#7c3aed"
-        />
-        <BarChart
-          title="Usage by model (credits / seconds / images)"
-          data={summary?.byModel ?? []}
-          color="#f97316"
-        />
+      <section className="sectionBlock">
+        <h2>Usage breakdowns</h2>
+        <div className="chartGrid">
+          <LineChart
+            title="Recipe imports by source"
+            series={importBySourceSeries}
+            xLabel="Day"
+            yLabel="Imports"
+          />
+          <LineChart
+            title="Actions over time"
+            series={actionCountSeries}
+            xLabel="Day"
+            yLabel="Events"
+          />
+          <LineChart
+            title="Usage context over time"
+            series={contextCountSeries}
+            xLabel="Day"
+            yLabel="Events"
+          />
+          <LineChart
+            title="Credits used over time"
+            series={actionCreditSeries}
+            xLabel="Day"
+            yLabel="Credits"
+          />
+        </div>
       </section>
 
       <section className="tablesGrid">
@@ -414,7 +417,15 @@ export default function DashboardPage() {
             {
               key: "credits",
               header: "Usage",
-              render: (row) => formatNumber(row.aiCredits),
+              render: (row) => {
+                if (row.label === "whisper-1") {
+                  return `${formatNumber(Math.round(row.aiCredits))}s`;
+                }
+                if (row.label === "document-text-detection") {
+                  return `${formatNumber(row.aiCredits)} img`;
+                }
+                return formatNumber(row.aiCredits);
+              },
             },
             {
               key: "cost",
@@ -430,9 +441,99 @@ export default function DashboardPage() {
         />
       </section>
 
-      <section className="chartGrid">
-        <LineChart title="Usage by source (daily)" series={sourceSeries} xLabel="Day" yLabel="Events" />
-        <LineChart title="Usage by context (daily)" series={contextSeries} xLabel="Day" yLabel="Events" />
+      <section className="sectionBlock">
+        <h2>Daily actions</h2>
+        <StackedBarChart title="Actions per day" series={actionCountSeries} yLabel="Events" />
+      </section>
+
+      <section className="sectionBlock">
+        <h2>Credit usage by action</h2>
+        <StackedBarChart title="Credits by action" series={actionCreditSeries} yLabel="Credits" />
+      </section>
+
+      <section className="sectionBlock">
+        <h2>Estimated costs by action</h2>
+        <StackedBarChart title="Cost by action" series={actionCostSeries} yLabel="USD" />
+      </section>
+
+      <section className="tablesGrid">
+        <DataTable
+          title="Credits & costs by action + model"
+          rows={summary?.actionModelBreakdown ?? []}
+          emptyLabel="No action breakdown for this filter."
+          columns={[
+            {
+              key: "action",
+              header: "Action",
+              render: (row) => row.action.replaceAll("_", " "),
+            },
+            {
+              key: "model",
+              header: "Model",
+              render: (row) => formatModelName(row.model),
+            },
+            {
+              key: "credits",
+              header: "Credits",
+              render: (row) => formatNumber(row.credits),
+            },
+            {
+              key: "cost",
+              header: "Cost",
+              render: (row) => (row.costUsd ? formatCurrency(row.costUsd) : "—"),
+            },
+            {
+              key: "events",
+              header: "Events",
+              render: (row) => formatNumber(row.events),
+            },
+          ]}
+        />
+      </section>
+
+      <section className="tablesGrid">
+        <DataTable
+          title="Costs per user"
+          rows={summary?.costByUser ?? []}
+          emptyLabel="No cost data for this filter."
+          columns={[
+            {
+              key: "email",
+              header: "Email",
+              render: (row) => row.email ?? "—",
+            },
+            {
+              key: "imports",
+              header: "Imports",
+              render: (row) => formatNumber(row.importCredits),
+            },
+            {
+              key: "mini",
+              header: "GPT-4o-mini",
+              render: (row) => formatNumber(row.gptMiniCredits),
+            },
+            {
+              key: "gpt4o",
+              header: "GPT-4o",
+              render: (row) => formatNumber(row.gpt4oCredits),
+            },
+            {
+              key: "vision",
+              header: "Vision",
+              render: (row) => `${formatNumber(row.visionImages)} img`,
+            },
+            {
+              key: "whisper",
+              header: "Whisper",
+              render: (row) => `${formatNumber(Math.round(row.whisperSeconds))}s`,
+            },
+            {
+              key: "total",
+              header: "Total cost",
+              render: (row) => formatCurrency(row.totalCostUsd),
+            },
+          ]}
+        />
       </section>
 
       <section className="tablesGrid">
@@ -514,91 +615,6 @@ export default function DashboardPage() {
             </button>
           ) : null}
         </div>
-      </section>
-
-      <section className="tablesGrid">
-        <DataTable
-          title="Action × Model breakdown"
-          rows={summary?.actionModelBreakdown ?? []}
-          emptyLabel="No action breakdown for this filter."
-          columns={[
-            {
-              key: "action",
-              header: "Action",
-              render: (row) => row.action.replaceAll("_", " "),
-            },
-            {
-              key: "model",
-              header: "Model",
-              render: (row) => formatModelName(row.model),
-            },
-            {
-              key: "credits",
-              header: "Credits",
-              render: (row) => formatNumber(row.credits),
-            },
-            {
-              key: "cost",
-              header: "Cost",
-              render: (row) => (row.costUsd ? formatCurrency(row.costUsd) : "—"),
-            },
-            {
-              key: "events",
-              header: "Events",
-              render: (row) => formatNumber(row.events),
-            },
-          ]}
-        />
-      </section>
-
-      <section className="tablesGrid">
-        <DataTable
-          title="Import breakdown (per request)"
-          rows={summary?.importBreakdown ?? []}
-          emptyLabel="No imports for this filter."
-          columns={[
-            {
-              key: "time",
-              header: "Time",
-              render: (row) => formatDate(row.createdAt),
-            },
-            {
-              key: "user",
-              header: "User",
-              render: (row) => row.ownerId?.slice(0, 8) ?? "—",
-            },
-            {
-              key: "source",
-              header: "Source",
-              render: (row) => row.source ?? "—",
-            },
-            {
-              key: "action",
-              header: "Action",
-              render: (row) => row.action.replaceAll("_", " "),
-            },
-            {
-              key: "model",
-              header: "Model",
-              render: (row) => formatModelName(row.model),
-            },
-            {
-              key: "credits",
-              header: "Credits",
-              render: (row) => formatNumber(row.credits),
-            },
-            {
-              key: "cost",
-              header: "Cost",
-              render: (row) => (row.costUsd ? formatCurrency(row.costUsd) : "—"),
-            },
-            {
-              key: "request",
-              header: "Request",
-              render: (row) => row.requestId.slice(0, 8),
-            },
-          ]}
-        />
       </section>
     </div>
   );
