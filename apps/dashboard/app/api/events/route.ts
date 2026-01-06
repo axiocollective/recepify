@@ -7,6 +7,16 @@ const parseNumber = (value: string | null) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const normalizeDate = (value: string | null, fallback: "start" | "end") => {
+  if (!value) return null;
+  if (value.length === 10) {
+    return fallback === "start"
+      ? `${value}T00:00:00.000Z`
+      : `${value}T23:59:59.999Z`;
+  }
+  return value;
+};
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get("userId");
@@ -14,8 +24,8 @@ export async function GET(request: Request) {
   const source = searchParams.get("source");
   const model = searchParams.get("model");
   const usageContext = searchParams.get("usageContext");
-  const start = searchParams.get("start");
-  const end = searchParams.get("end");
+  const start = normalizeDate(searchParams.get("start"), "start");
+  const end = normalizeDate(searchParams.get("end"), "end");
   const minCredits = parseNumber(searchParams.get("minCredits"));
   const maxCredits = parseNumber(searchParams.get("maxCredits"));
   const limit = Math.min(parseNumber(searchParams.get("limit")) ?? 250, 1000);
