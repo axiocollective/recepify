@@ -70,5 +70,40 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ events: data ?? [] });
+  const events = data ?? [];
+  const ownerIds = Array.from(
+    new Set(
+      events
+        .map((event) => event.owner_id)
+        .filter((ownerId): ownerId is string => Boolean(ownerId))
+    )
+  );
+
+  let emailByOwner = new Map<string, string>();
+  if (ownerIds.length > 0) {
+    const results = await Promise.all(
+      ownerIds.map(async (ownerId) => {
+        try {
+          const { data: userData, error: userError } =
+            await supabaseAdmin.auth.admin.getUserById(ownerId);
+          if (userError || !userData?.user?.email) {
+            return null;
+          }
+          return { ownerId, email: userData.user.email };
+        } catch {
+          return null;
+        }
+      })
+    );
+    emailByOwner = new Map(
+      results.filter(Boolean).map((entry) => [entry!.ownerId, entry!.email])
+    );
+  }
+
+  return NextResponse.json({
+    events: events.map((event) => ({
+      ...event,
+      user_email: emailByOwner.get(event.owner_id) ?? null,
+    })),
+  });
 }

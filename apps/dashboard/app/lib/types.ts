@@ -3,6 +3,7 @@ export type PlanTier = "base" | "premium" | "ai_disabled" | string;
 export type UsageEvent = {
   id: string;
   owner_id: string;
+  user_email?: string | null;
   request_id: string | null;
   event_type: string;
   source: string | null;

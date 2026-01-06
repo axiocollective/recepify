@@ -360,6 +360,11 @@ export default function DashboardPage() {
               render: (row) => row.owner_id.slice(0, 8),
             },
             {
+              key: "email",
+              header: "Email",
+              render: (row) => row.user_email ?? "—",
+            },
+            {
               key: "action",
               header: "Action",
               render: (row) => row.event_type.replaceAll("_", " "),
