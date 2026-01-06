@@ -16,7 +16,8 @@ type UserOption = {
 };
 
 const formatNumber = (value: number) => value.toLocaleString("en-US");
-const formatCurrency = (value: number) => `$${value.toFixed(2)}`;
+const formatCurrency = (value: number) =>
+  `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const formatDate = (value: string) => new Date(value).toLocaleString();
 
 const defaultRange = () => {
@@ -288,7 +289,12 @@ export default function DashboardPage() {
       </section>
 
       <section className="chartGrid">
-        <LineChart title="Daily imports vs AI credits" series={chartSeries} />
+        <LineChart
+          title="Daily imports vs AI credits"
+          series={chartSeries}
+          xLabel="Day"
+          yLabel="Credits"
+        />
         <BarChart
           title="Imports by source"
           data={summary?.bySource ?? []}
@@ -332,9 +338,9 @@ export default function DashboardPage() {
       </section>
 
       <section className="chartGrid">
-        <LineChart title="Usage by action (daily)" series={actionSeries} />
-        <LineChart title="Usage by source (daily)" series={sourceSeries} />
-        <LineChart title="Usage by context (daily)" series={contextSeries} />
+        <LineChart title="Usage by action (daily)" series={actionSeries} xLabel="Day" yLabel="Credits" />
+        <LineChart title="Usage by source (daily)" series={sourceSeries} xLabel="Day" yLabel="Credits" />
+        <LineChart title="Usage by context (daily)" series={contextSeries} xLabel="Day" yLabel="Credits" />
       </section>
 
       <section className="tablesGrid">

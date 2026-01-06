@@ -279,8 +279,9 @@ export async function GET(request: Request) {
     }));
   };
 
+  const hasFilters = Boolean(userId || eventType || source || model || usageContext);
   const summary: UsageSummary = {
-    totalUsers: safeProfiles.length,
+    totalUsers: hasFilters ? activeUsers.size : safeProfiles.length,
     baseUsers,
     premiumUsers,
     trialUsers,

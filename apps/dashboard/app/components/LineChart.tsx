@@ -7,10 +7,11 @@ type LineChartProps = {
   title: string;
   series: Array<{ name: string; color: string; data: LineChartPoint[] }>;
   height?: number;
+  xLabel?: string;
+  yLabel?: string;
 };
 
-const buildPoints = (data: LineChartPoint[], width: number, height: number) => {
-  const maxValue = Math.max(...data.map((d) => d.value), 1);
+const buildPoints = (data: LineChartPoint[], width: number, height: number, maxValue: number) => {
   return data
     .map((point, index) => {
       const x = (index / Math.max(data.length - 1, 1)) * width;
@@ -20,10 +21,23 @@ const buildPoints = (data: LineChartPoint[], width: number, height: number) => {
     .join(" ");
 };
 
-export function LineChart({ title, series, height = 160 }: LineChartProps) {
+export function LineChart({ title, series, height = 160, xLabel, yLabel }: LineChartProps) {
   const width = 640;
-  const padding = 8;
+  const padding = 24;
   const hasData = series.some((item) => item.data.length > 0);
+  const maxValue = Math.max(
+    ...series.flatMap((item) => item.data.map((point) => point.value)),
+    1
+  );
+  const xSeries = series[0]?.data ?? [];
+  const xLabels =
+    xSeries.length > 0
+      ? [
+          xSeries[0]?.label ?? "",
+          xSeries[Math.floor(xSeries.length / 2)]?.label ?? "",
+          xSeries[xSeries.length - 1]?.label ?? "",
+        ]
+      : [];
   return (
     <div className="chartCard">
       <div className="chartHeader">
@@ -46,10 +60,26 @@ export function LineChart({ title, series, height = 160 }: LineChartProps) {
             </linearGradient>
           </defs>
           <rect x="0" y="0" width={width} height={height} fill="url(#grid)" rx="16" />
+          <line
+            x1={padding}
+            y1={height - padding}
+            x2={width - padding}
+            y2={height - padding}
+            stroke="rgba(124,58,237,0.2)"
+            strokeWidth="1"
+          />
+          <line
+            x1={padding}
+            y1={padding}
+            x2={padding}
+            y2={height - padding}
+            stroke="rgba(124,58,237,0.2)"
+            strokeWidth="1"
+          />
           {series.map((item) => (
             <polyline
               key={item.name}
-              points={buildPoints(item.data, width - padding * 2, height - padding * 2)}
+              points={buildPoints(item.data, width - padding * 2, height - padding * 2, maxValue)}
               transform={`translate(${padding}, ${padding})`}
               fill="none"
               stroke={item.color}
@@ -58,6 +88,64 @@ export function LineChart({ title, series, height = 160 }: LineChartProps) {
               strokeLinejoin="round"
             />
           ))}
+          <text x={padding - 6} y={padding + 4} textAnchor="end" className="chartAxisLabel">
+            {maxValue.toLocaleString("en-US")}
+          </text>
+          <text
+            x={padding - 6}
+            y={(height - padding + padding) / 2}
+            textAnchor="end"
+            className="chartAxisLabel"
+          >
+            {Math.round(maxValue / 2).toLocaleString("en-US")}
+          </text>
+          <text
+            x={padding - 6}
+            y={height - padding + 4}
+            textAnchor="end"
+            className="chartAxisLabel"
+          >
+            0
+          </text>
+          {xLabels.length === 3 ? (
+            <>
+              <text x={padding} y={height - 6} textAnchor="start" className="chartAxisLabel">
+                {xLabels[0]}
+              </text>
+              <text
+                x={width / 2}
+                y={height - 6}
+                textAnchor="middle"
+                className="chartAxisLabel"
+              >
+                {xLabels[1]}
+              </text>
+              <text
+                x={width - padding}
+                y={height - 6}
+                textAnchor="end"
+                className="chartAxisLabel"
+              >
+                {xLabels[2]}
+              </text>
+            </>
+          ) : null}
+          {yLabel ? (
+            <text
+              x={12}
+              y={height / 2}
+              textAnchor="middle"
+              className="chartAxisLabel"
+              transform={`rotate(-90 12 ${height / 2})`}
+            >
+              {yLabel}
+            </text>
+          ) : null}
+          {xLabel ? (
+            <text x={width / 2} y={height - 2} textAnchor="middle" className="chartAxisLabel">
+              {xLabel}
+            </text>
+          ) : null}
         </svg>
       ) : (
         <div className="chartEmpty">No data for this range.</div>
