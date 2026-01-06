@@ -472,7 +472,7 @@ export default function DashboardPage() {
                   return `${formatNumber(Math.round(row.aiCredits))}s`;
                 }
                 if (row.label === "document-text-detection") {
-                  return `${formatNumber(row.aiCredits)} img`;
+                  return formatNumber(row.aiCredits);
                 }
                 return formatNumber(row.aiCredits);
               },
@@ -550,7 +550,7 @@ export default function DashboardPage() {
                   return `${formatNumber(Math.round(row.credits))}s`;
                 }
                 if (row.model === "document-text-detection") {
-                  return `${formatNumber(row.credits)} img`;
+                  return formatNumber(row.credits);
                 }
                 return formatNumber(row.credits);
               },
@@ -597,8 +597,8 @@ export default function DashboardPage() {
             },
             {
               key: "vision",
-              header: "Vision",
-              render: (row) => `${formatNumber(row.visionImages)} img`,
+              header: "Vision credits",
+              render: (row) => formatNumber(row.visionImages),
             },
             {
               key: "whisper",
