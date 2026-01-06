@@ -27,21 +27,35 @@ export async function GET(request: Request) {
   const startIso = startDate.toISOString();
   const endIso = endDate.toISOString();
 
-  const [{ data: profiles, error: profileError }, { data: events, error: eventsError }] =
-    await Promise.all([
-      supabaseAdmin
-        .from("profiles")
-        .select(
-          "id, name, plan, subscription_period, trial_ends_at, bonus_imports, bonus_tokens, trial_imports, trial_tokens, trial_imports_used, trial_tokens_used"
-        ),
-      supabaseAdmin
-        .from("usage_events")
-        .select(
-          "owner_id, event_type, source, model_name, ai_credits_used, import_credits_used, cost_usd, created_at"
-        )
-        .gte("created_at", startIso)
-        .lte("created_at", endIso),
-    ]);
+  const [
+    { data: profiles, error: profileError },
+    { data: events, error: eventsError },
+    { data: monthlyUsage, error: monthlyError },
+    { data: monthlyImports, error: monthlyImportsError },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("profiles")
+      .select(
+        "id, name, plan, subscription_period, trial_ends_at, bonus_imports, bonus_tokens, trial_imports, trial_tokens, trial_imports_used, trial_tokens_used"
+      ),
+    supabaseAdmin
+      .from("usage_events")
+      .select(
+        "owner_id, event_type, source, model_name, ai_credits_used, import_credits_used, cost_usd, created_at"
+      )
+      .gte("created_at", startIso)
+      .lte("created_at", endIso),
+    supabaseAdmin
+      .from("usage_monthly")
+      .select("owner_id, period_start, import_count, ai_tokens")
+      .gte("period_start", startIso.slice(0, 10))
+      .lte("period_start", endIso.slice(0, 10)),
+    supabaseAdmin
+      .from("import_usage_monthly")
+      .select("source, import_count")
+      .gte("period_start", startIso.slice(0, 10))
+      .lte("period_start", endIso.slice(0, 10)),
+  ]);
 
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
@@ -49,9 +63,25 @@ export async function GET(request: Request) {
   if (eventsError) {
     return NextResponse.json({ error: eventsError.message }, { status: 500 });
   }
+  if (monthlyError) {
+    return NextResponse.json({ error: monthlyError.message }, { status: 500 });
+  }
+  if (monthlyImportsError) {
+    return NextResponse.json({ error: monthlyImportsError.message }, { status: 500 });
+  }
 
   const safeProfiles = (profiles ?? []) as ProfileRow[];
   const safeEvents = (events ?? []) as UsageEvent[];
+  const safeMonthly = (monthlyUsage ?? []) as Array<{
+    owner_id: string;
+    period_start: string;
+    import_count: number;
+    ai_tokens: number;
+  }>;
+  const safeMonthlyImports = (monthlyImports ?? []) as Array<{
+    source: string | null;
+    import_count: number;
+  }>;
 
   const now = Date.now();
   let baseUsers = 0;
@@ -105,11 +135,35 @@ export async function GET(request: Request) {
     }
   }
 
+  if (safeEvents.length === 0 && safeMonthly.length > 0) {
+    for (const entry of safeMonthly) {
+      activeUsers.add(entry.owner_id);
+      totalImports += Number(entry.import_count || 0);
+      totalAiCredits += Number(entry.ai_tokens || 0);
+      const key = String(entry.period_start);
+      dailyMap.set(key, {
+        imports: Number(entry.import_count || 0),
+        aiCredits: Number(entry.ai_tokens || 0),
+      });
+    }
+    for (const row of safeMonthlyImports) {
+      const key = row.source ?? "unknown";
+      bySource.set(key, (bySource.get(key) ?? 0) + Number(row.import_count || 0));
+    }
+  }
+
   const dailySeries: UsageSummary["dailySeries"] = [];
-  for (let cursor = new Date(startDate); cursor <= endDate; cursor = new Date(cursor.getTime() + DAY_MS)) {
-    const key = toDayKey(cursor);
-    const entry = dailyMap.get(key) ?? { imports: 0, aiCredits: 0 };
-    dailySeries.push({ date: key, imports: entry.imports, aiCredits: entry.aiCredits });
+  if (safeEvents.length > 0) {
+    for (let cursor = new Date(startDate); cursor <= endDate; cursor = new Date(cursor.getTime() + DAY_MS)) {
+      const key = toDayKey(cursor);
+      const entry = dailyMap.get(key) ?? { imports: 0, aiCredits: 0 };
+      dailySeries.push({ date: key, imports: entry.imports, aiCredits: entry.aiCredits });
+    }
+  } else {
+    const monthlyKeys = Array.from(dailyMap.entries()).sort(([a], [b]) => a.localeCompare(b));
+    for (const [key, entry] of monthlyKeys) {
+      dailySeries.push({ date: key, imports: entry.imports, aiCredits: entry.aiCredits });
+    }
   }
 
   const summary: UsageSummary = {
