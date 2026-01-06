@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { DataTable } from "./components/DataTable";
-import { StackedBarChart } from "./components/StackedBarChart";
+import { LineChart } from "./components/LineChart";
 import type { UsageEvent, UsageSummary } from "./lib/types";
 
 type UserOption = {
@@ -283,6 +283,7 @@ export default function DashboardPage() {
               <option value="import">Import</option>
               <option value="scan">Scan</option>
               <option value="manual_add">Manual add</option>
+              <option value="optimize">Optimize with AI</option>
               <option value="ai_assistant">AI assistant</option>
               <option value="import_credit">Import credit</option>
             </select>
@@ -387,15 +388,17 @@ export default function DashboardPage() {
         <section className="sectionBlock">
           <h2>Usage breakdowns</h2>
           <div className="chartGrid">
-            <StackedBarChart
+            <LineChart
               title="Recipe imports by source"
               series={importBySourceSeries}
+              xLabel="Day"
               yLabel="Imports"
               height={220}
             />
-            <StackedBarChart
+            <LineChart
               title="Credits used over time"
               series={actionCreditSeries}
+              xLabel="Day"
               yLabel="Credits"
               height={220}
             />
@@ -405,15 +408,17 @@ export default function DashboardPage() {
         <section className="sectionBlock">
           <h2>Actions & context</h2>
           <div className="chartGrid">
-            <StackedBarChart
+            <LineChart
               title="Actions over time"
               series={actionCountSeries}
+              xLabel="Day"
               yLabel="Events"
               height={220}
             />
-            <StackedBarChart
+            <LineChart
               title="Usage context over time"
               series={contextCountSeries}
+              xLabel="Day"
               yLabel="Events"
               height={220}
             />
@@ -462,9 +467,10 @@ export default function DashboardPage() {
       <div className="sectionGrid">
         <section className="sectionBlock">
           <h2>Daily actions</h2>
-          <StackedBarChart
+          <LineChart
             title="Actions per day"
             series={actionCountSeries}
+            xLabel="Day"
             yLabel="Events"
             height={220}
           />
@@ -472,9 +478,10 @@ export default function DashboardPage() {
 
         <section className="sectionBlock">
           <h2>Credit usage by action</h2>
-          <StackedBarChart
+          <LineChart
             title="Credits by action"
             series={actionCreditSeries}
+            xLabel="Day"
             yLabel="Credits"
             height={220}
           />
@@ -482,9 +489,10 @@ export default function DashboardPage() {
 
         <section className="sectionBlock">
           <h2>Estimated costs by action</h2>
-          <StackedBarChart
+          <LineChart
             title="Cost by action"
             series={actionCostSeries}
+            xLabel="Day"
             yLabel="USD"
             height={220}
           />

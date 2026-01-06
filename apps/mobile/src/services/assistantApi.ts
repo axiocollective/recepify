@@ -39,6 +39,12 @@ type RecipeAssistantResponse = {
   reply: string;
 };
 
+type UsageTrackRequest = {
+  event_type: string;
+  source?: string;
+  usage_context?: string;
+};
+
 export const askRecipeAssistant = async (
   payload: RecipeAssistantRequest
 ): Promise<RecipeAssistantResponse> => {
@@ -63,6 +69,23 @@ export const askRecipeAssistant = async (
   }
 
   return JSON.parse(textPayload) as RecipeAssistantResponse;
+};
+
+export const trackUsageEvent = async (payload: UsageTrackRequest) => {
+  const response = await fetch(`${API_BASE_URL}/api/usage/track`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(currentUserEmail ? { "X-User-Email": currentUserEmail } : {}),
+      ...(currentUserId ? { "X-User-Id": currentUserId } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(errorBody || response.statusText);
+  }
 };
 
 export const setAssistantUserEmail = (email: string | null) => {

@@ -103,6 +103,12 @@ class RecipeAssistantResponse(BaseModel):
     reply: str
 
 
+class UsageTrackRequest(BaseModel):
+    event_type: str
+    source: Optional[str] = None
+    usage_context: Optional[str] = None
+
+
 CHEFGPT_RESPONSE_FORMAT = {
     "type": "json_schema",
     "json_schema": {
@@ -1344,6 +1350,38 @@ def recipe_assistant(
             import_credits_used=0,
         )
     return RecipeAssistantResponse(reply=reply_payload)
+
+
+@router.post("/usage/track")
+def usage_track(
+    payload: UsageTrackRequest,
+    x_user_email: Optional[str] = Header(default=None, alias="X-User-Email"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    session: Session = Depends(get_db_session),
+) -> Dict[str, bool]:
+    if not x_user_email and not x_user_id:
+        return {"ok": False}
+    owner_id = _resolve_user_id(x_user_email, x_user_id)
+    session.add(
+        UsageEvent(
+            owner_id=owner_id,
+            request_id=uuid4(),
+            event_type=payload.event_type,
+            source=payload.source,
+            model_provider=None,
+            model_name=None,
+            tokens_input=0,
+            tokens_output=0,
+            tokens_total=0,
+            tokens_weighted=0,
+            ai_credits_used=0,
+            import_credits_used=0,
+            cost_usd=None,
+            metadata_={"usage_context": payload.usage_context} if payload.usage_context else {},
+        )
+    )
+    session.commit()
+    return {"ok": True}
 
 
 @router.post("/assistant/finder", response_model=RecipeFinderResponse)

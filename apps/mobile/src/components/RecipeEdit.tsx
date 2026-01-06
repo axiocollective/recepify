@@ -5,7 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { Ingredient, Recipe } from "../data/types";
 import { colors, radius, spacing, typography, shadow } from "../theme/theme";
-import { askRecipeAssistant } from "../services/assistantApi";
+import { askRecipeAssistant, trackUsageEvent } from "../services/assistantApi";
 import { POPULAR_RECIPE_TAG_COUNT, RECIPE_TAGS } from "../../../../packages/shared/constants/recipe-tags";
 import { useApp } from "../data/AppContext";
 import { getAiLimitMessage, isAiLimitReached } from "../data/usageLimits";
@@ -1161,6 +1161,15 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     }
     setIsOptimizing(true);
     optimizeFlowRef.current = true;
+    try {
+      await trackUsageEvent({
+        event_type: "optimize",
+        source: "recipe_edit",
+        usage_context: "optimized_with_ai",
+      });
+    } catch {
+      // Tracking failure should not block optimization.
+    }
     try {
       const skipped: string[] = [];
       await runWithMinimumDuration(3000, async () => {
