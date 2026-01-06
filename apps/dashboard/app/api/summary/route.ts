@@ -18,6 +18,8 @@ const getDateRange = (start?: string | null, end?: string | null) => {
   return { startDate, endDate };
 };
 
+const normalizeDay = (value: string) => value.slice(0, 10);
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get("userId");
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
   let eventsQuery = supabaseAdmin
     .from("usage_events")
     .select(
-      "owner_id, event_type, source, model_name, ai_credits_used, import_credits_used, cost_usd, created_at"
+      "owner_id, event_type, source, model_name, ai_credits_used, import_credits_used, cost_usd, created_at, metadata"
     )
     .gte("created_at", startIso)
     .lte("created_at", endIso);
@@ -132,6 +134,9 @@ export async function GET(request: Request) {
   const bySource = new Map<string, number>();
   const byModel = new Map<string, number>();
   const dailyMap = new Map<string, { imports: number; aiCredits: number }>();
+  const actionDaily = new Map<string, Map<string, number>>();
+  const sourceDaily = new Map<string, Map<string, number>>();
+  const contextDaily = new Map<string, Map<string, number>>();
 
   for (const event of safeEvents) {
     if (event.owner_id) activeUsers.add(event.owner_id);
@@ -158,6 +163,27 @@ export async function GET(request: Request) {
       const key = event.model_name ?? "unknown";
       byModel.set(key, (byModel.get(key) ?? 0) + aiCredits);
     }
+
+    const actionKey = event.event_type ?? "unknown";
+    if (!actionDaily.has(actionKey)) {
+      actionDaily.set(actionKey, new Map());
+    }
+    actionDaily.get(actionKey)!.set(dayKey, (actionDaily.get(actionKey)!.get(dayKey) ?? 0) + aiCredits + importCredits);
+
+    const sourceKey = event.source ?? "unknown";
+    if (!sourceDaily.has(sourceKey)) {
+      sourceDaily.set(sourceKey, new Map());
+    }
+    sourceDaily.get(sourceKey)!.set(dayKey, (sourceDaily.get(sourceKey)!.get(dayKey) ?? 0) + aiCredits + importCredits);
+
+    const contextKey =
+      typeof event.metadata === "object" && event.metadata
+        ? String((event.metadata as Record<string, unknown>).usage_context ?? "unknown")
+        : "unknown";
+    if (!contextDaily.has(contextKey)) {
+      contextDaily.set(contextKey, new Map());
+    }
+    contextDaily.get(contextKey)!.set(dayKey, (contextDaily.get(contextKey)!.get(dayKey) ?? 0) + aiCredits);
   }
 
   const hasEventFilters = Boolean(eventType || source || model || usageContext);
@@ -166,7 +192,7 @@ export async function GET(request: Request) {
       activeUsers.add(entry.owner_id);
       totalImports += Number(entry.import_count || 0);
       totalAiCredits += Number(entry.ai_tokens || 0);
-      const key = String(entry.period_start);
+      const key = normalizeDay(String(entry.period_start));
       dailyMap.set(key, {
         imports: Number(entry.import_count || 0),
         aiCredits: Number(entry.ai_tokens || 0),
@@ -192,6 +218,16 @@ export async function GET(request: Request) {
     }
   }
 
+  const buildSeries = (input: Map<string, Map<string, number>>) => {
+    return Array.from(input.entries()).map(([label, values]) => ({
+      label,
+      points: dailySeries.map((day) => ({
+        date: day.date,
+        value: values.get(day.date) ?? 0,
+      })),
+    }));
+  };
+
   const summary: UsageSummary = {
     totalUsers: safeProfiles.length,
     baseUsers,
@@ -204,6 +240,9 @@ export async function GET(request: Request) {
     dailySeries,
     bySource: Array.from(bySource.entries()).map(([label, value]) => ({ label, value })),
     byModel: Array.from(byModel.entries()).map(([label, value]) => ({ label, value })),
+    actionSeries: buildSeries(actionDaily),
+    sourceSeries: buildSeries(sourceDaily),
+    contextSeries: buildSeries(contextDaily),
   };
 
   return NextResponse.json(summary);

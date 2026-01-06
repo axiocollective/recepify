@@ -111,6 +111,24 @@ export default function DashboardPage() {
     [dailySeries]
   );
 
+  const actionSeries = (summary?.actionSeries ?? []).map((series, index) => ({
+    name: series.label,
+    color: ["#7c3aed", "#f97316", "#16a34a", "#0ea5e9", "#9333ea"][index % 5],
+    data: series.points.map((point) => ({ label: point.date, value: point.value })),
+  }));
+
+  const sourceSeries = (summary?.sourceSeries ?? []).map((series, index) => ({
+    name: series.label,
+    color: ["#7c3aed", "#f97316", "#16a34a", "#0ea5e9", "#9333ea"][index % 5],
+    data: series.points.map((point) => ({ label: point.date, value: point.value })),
+  }));
+
+  const contextSeries = (summary?.contextSeries ?? []).map((series, index) => ({
+    name: series.label,
+    color: ["#7c3aed", "#f97316", "#16a34a", "#0ea5e9", "#9333ea"][index % 5],
+    data: series.points.map((point) => ({ label: point.date, value: point.value })),
+  }));
+
   return (
     <div className="dashboardRoot">
       <header className="dashboardHeader">
@@ -281,6 +299,12 @@ export default function DashboardPage() {
           data={summary?.byModel ?? []}
           color="#f97316"
         />
+      </section>
+
+      <section className="chartGrid">
+        <LineChart title="Usage by action (daily)" series={actionSeries} />
+        <LineChart title="Usage by source (daily)" series={sourceSeries} />
+        <LineChart title="Usage by context (daily)" series={contextSeries} />
       </section>
 
       <section className="tablesGrid">
