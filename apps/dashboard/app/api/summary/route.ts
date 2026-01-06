@@ -165,6 +165,7 @@ export async function GET(request: Request) {
   let totalImports = 0;
   let totalAiCredits = 0;
   let totalCostUsd = 0;
+  let totalWhisperSeconds = 0;
   const activeUsers = new Set<string>();
   const bySource = new Map<string, number>();
   const byModel = new Map<string, number>();
@@ -202,26 +203,30 @@ export async function GET(request: Request) {
 
     const importCredits = Number(event.import_credits_used || 0);
     const aiCredits = Number(event.ai_credits_used || 0);
-    totalImports += importCredits;
+    const isImportCredit = event.event_type === "import_credit";
+    if (isImportCredit) {
+      totalImports += importCredits;
+    }
     totalAiCredits += aiCredits;
     totalCostUsd += Number(event.cost_usd || 0);
 
-    dayEntry.imports += importCredits;
+    if (isImportCredit) {
+      dayEntry.imports += importCredits;
+    }
     dayEntry.aiCredits += aiCredits;
 
-    if (importCredits > 0) {
+    if (isImportCredit && importCredits > 0) {
       const key = event.source ?? "unknown";
       bySource.set(key, (bySource.get(key) ?? 0) + importCredits);
     }
-    const creditUnits = importCredits > 0 ? importCredits : aiCredits;
-    if (creditUnits > 0) {
+    if (aiCredits > 0) {
       const key = normalizeModelName(event.model_name);
-      byModel.set(key, (byModel.get(key) ?? 0) + creditUnits);
+      byModel.set(key, (byModel.get(key) ?? 0) + aiCredits);
     }
 
     const modelKey = normalizeModelName(event.model_name);
     const entry = byModelCost.get(modelKey) ?? { aiCredits: 0, costUsd: 0, events: 0 };
-    entry.aiCredits += creditUnits;
+    entry.aiCredits += aiCredits;
     entry.costUsd += Number(event.cost_usd || 0);
     entry.events += 1;
     byModelCost.set(modelKey, entry);
@@ -235,7 +240,7 @@ export async function GET(request: Request) {
       costUsd: 0,
       events: 0,
     };
-    actionEntry.credits += creditUnits;
+    actionEntry.credits += isImportCredit ? importCredits : aiCredits;
     actionEntry.costUsd += Number(event.cost_usd || 0);
     actionEntry.events += 1;
     actionModelBreakdown.set(actionModelKey, actionEntry);
@@ -276,10 +281,21 @@ export async function GET(request: Request) {
       if (event.created_at < entry.createdAt) {
         entry.createdAt = event.created_at;
       }
-      entry.credits += creditUnits;
+      entry.credits += isImportCredit ? importCredits : aiCredits;
       entry.costUsd += Number(event.cost_usd || 0);
       entry.events += 1;
       importBreakdown.set(key, entry);
+    }
+
+    if (
+      modelKey === "whisper-1" &&
+      typeof event.metadata === "object" &&
+      event.metadata &&
+      (event.metadata as Record<string, unknown>).audio_seconds
+    ) {
+      totalWhisperSeconds += Number(
+        (event.metadata as Record<string, unknown>).audio_seconds || 0
+      );
     }
   }
 
@@ -341,6 +357,7 @@ export async function GET(request: Request) {
     totalImports,
     totalAiCredits,
     totalCostUsd: Number(totalCostUsd.toFixed(4)),
+    totalWhisperSeconds: Number(totalWhisperSeconds.toFixed(2)),
     activeUsers: activeUsers.size,
     dailySeries,
     bySource: Array.from(bySource.entries()).map(([label, value]) => ({ label, value })),

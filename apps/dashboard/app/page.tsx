@@ -21,6 +21,22 @@ const formatCurrency = (value: number) =>
 const formatDate = (value: string) => new Date(value).toLocaleString();
 const formatModelName = (value: string | null | undefined) =>
   value && String(value).trim() ? String(value) : "No model";
+const formatUsageCredits = (row: UsageEvent) => {
+  const model = formatModelName(row.model_name);
+  if (
+    model === "whisper-1" &&
+    row.metadata &&
+    typeof row.metadata === "object" &&
+    (row.metadata as Record<string, unknown>).audio_seconds
+  ) {
+    const seconds = Number((row.metadata as Record<string, unknown>).audio_seconds || 0);
+    return `${Math.round(seconds)}s`;
+  }
+  if (row.event_type === "import_credit") {
+    return formatNumber(row.import_credits_used ?? 0);
+  }
+  return formatNumber(row.ai_credits_used ?? 0);
+};
 
 const defaultRange = () => {
   const end = new Date();
@@ -281,6 +297,12 @@ export default function DashboardPage() {
           accent="green"
         />
         <StatCard
+          label="Whisper seconds"
+          value={formatNumber(Math.round(summary?.totalWhisperSeconds ?? 0))}
+          sub="Audio transcriptions"
+          accent="purple"
+        />
+        <StatCard
           label="Estimated cost"
           value={formatCurrency(summary?.totalCostUsd ?? 0)}
           sub="OpenAI + Vision"
@@ -408,10 +430,7 @@ export default function DashboardPage() {
             {
               key: "credits",
               header: "Credits",
-              render: (row) =>
-                row.import_credits_used
-                  ? formatNumber(row.import_credits_used)
-                  : formatNumber(row.ai_credits_used ?? 0),
+              render: (row) => formatUsageCredits(row),
             },
             {
               key: "cost",

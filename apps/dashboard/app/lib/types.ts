@@ -43,6 +43,7 @@ export type UsageSummary = {
   totalImports: number;
   totalAiCredits: number;
   totalCostUsd: number;
+  totalWhisperSeconds: number;
   activeUsers: number;
   dailySeries: Array<{ date: string; imports: number; aiCredits: number }>;
   bySource: Array<{ label: string; value: number }>;
