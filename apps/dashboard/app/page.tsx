@@ -58,6 +58,7 @@ export default function DashboardPage() {
   const [eventsOffset, setEventsOffset] = useState(0);
   const [hasMoreEvents, setHasMoreEvents] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [eventsLimit, setEventsLimit] = useState(10);
 
   const initialRange = defaultRange();
   const [filters, setFilters] = useState({
@@ -104,7 +105,7 @@ export default function DashboardPage() {
     if (filters.start) params.set("start", filters.start);
     if (filters.end) params.set("end", filters.end);
     const offset = mode === "append" ? eventsOffset : 0;
-    params.set("limit", "300");
+    params.set("limit", String(eventsLimit));
     params.set("offset", String(offset));
     const response = await fetch(`/api/events?${params.toString()}`);
     if (!response.ok) return;
@@ -128,7 +129,7 @@ export default function DashboardPage() {
     setLoading(true);
     setEventsOffset(0);
     Promise.all([fetchSummary(), fetchEvents("replace")]).finally(() => setLoading(false));
-  }, [filters]);
+  }, [filters, eventsLimit]);
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMoreEvents) return;
@@ -453,11 +454,26 @@ export default function DashboardPage() {
             },
           ]}
         />
-        {hasMoreEvents ? (
-          <button className="tableLoadMore" onClick={handleLoadMore} disabled={loadingMore}>
-            {loadingMore ? "Loading..." : "Load more"}
-          </button>
-        ) : null}
+        <div className="tableControls">
+          <label className="tableSelect">
+            Rows
+            <select
+              value={eventsLimit}
+              onChange={(event) => setEventsLimit(Number(event.target.value))}
+            >
+              {[10, 25, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+          {hasMoreEvents ? (
+            <button className="tableLoadMore" onClick={handleLoadMore} disabled={loadingMore}>
+              {loadingMore ? "Loading..." : "Show more"}
+            </button>
+          ) : null}
+        </div>
       </section>
 
       <section className="tablesGrid">

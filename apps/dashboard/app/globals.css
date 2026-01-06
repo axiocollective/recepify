@@ -342,6 +342,30 @@ a {
   cursor: default;
 }
 
+.tableControls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.tableSelect {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tableSelect select {
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  background: #fff;
+  font-size: 12px;
+}
+
 .tableHeader {
   padding: 18px 20px;
   display: flex;
