@@ -19,6 +19,8 @@ const formatNumber = (value: number) => value.toLocaleString("en-US");
 const formatCurrency = (value: number) =>
   `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const formatDate = (value: string) => new Date(value).toLocaleString();
+const formatModelName = (value: string | null | undefined) =>
+  value && String(value).trim() ? String(value) : "No model";
 
 const defaultRange = () => {
   const end = new Date();
@@ -377,7 +379,7 @@ export default function DashboardPage() {
             {
               key: "model",
               header: "Model",
-              render: (row) => row.model_name ?? "—",
+              render: (row) => formatModelName(row.model_name),
             },
             {
               key: "credits",
@@ -402,6 +404,91 @@ export default function DashboardPage() {
                 const context = (row.metadata as Record<string, unknown>).usage_context;
                 return context ? String(context) : "—";
               },
+            },
+          ]}
+        />
+      </section>
+
+      <section className="tablesGrid">
+        <DataTable
+          title="Action × Model breakdown"
+          rows={summary?.actionModelBreakdown ?? []}
+          emptyLabel="No action breakdown for this filter."
+          columns={[
+            {
+              key: "action",
+              header: "Action",
+              render: (row) => row.action.replaceAll("_", " "),
+            },
+            {
+              key: "model",
+              header: "Model",
+              render: (row) => formatModelName(row.model),
+            },
+            {
+              key: "credits",
+              header: "Credits",
+              render: (row) => formatNumber(row.credits),
+            },
+            {
+              key: "cost",
+              header: "Cost",
+              render: (row) => (row.costUsd ? formatCurrency(row.costUsd) : "—"),
+            },
+            {
+              key: "events",
+              header: "Events",
+              render: (row) => formatNumber(row.events),
+            },
+          ]}
+        />
+      </section>
+
+      <section className="tablesGrid">
+        <DataTable
+          title="Import breakdown (per request)"
+          rows={summary?.importBreakdown ?? []}
+          emptyLabel="No imports for this filter."
+          columns={[
+            {
+              key: "time",
+              header: "Time",
+              render: (row) => formatDate(row.createdAt),
+            },
+            {
+              key: "user",
+              header: "User",
+              render: (row) => row.ownerId?.slice(0, 8) ?? "—",
+            },
+            {
+              key: "source",
+              header: "Source",
+              render: (row) => row.source ?? "—",
+            },
+            {
+              key: "action",
+              header: "Action",
+              render: (row) => row.action.replaceAll("_", " "),
+            },
+            {
+              key: "model",
+              header: "Model",
+              render: (row) => formatModelName(row.model),
+            },
+            {
+              key: "credits",
+              header: "Credits",
+              render: (row) => formatNumber(row.credits),
+            },
+            {
+              key: "cost",
+              header: "Cost",
+              render: (row) => (row.costUsd ? formatCurrency(row.costUsd) : "—"),
+            },
+            {
+              key: "request",
+              header: "Request",
+              render: (row) => row.requestId.slice(0, 8),
             },
           ]}
         />

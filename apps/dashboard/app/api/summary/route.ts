@@ -42,6 +42,8 @@ const parseDate = (value: string | null | undefined, fallback: "start" | "end") 
 };
 
 const toDayKey = (date: Date) => date.toISOString().slice(0, 10);
+const normalizeModelName = (value: string | null | undefined) =>
+  value && String(value).trim() ? String(value) : "No model";
 
 const getDateRange = (start?: string | null, end?: string | null) => {
   const endDate = parseDate(end, "end") ?? new Date();
@@ -167,6 +169,24 @@ export async function GET(request: Request) {
   const bySource = new Map<string, number>();
   const byModel = new Map<string, number>();
   const byModelCost = new Map<string, { aiCredits: number; costUsd: number; events: number }>();
+  const actionModelBreakdown = new Map<
+    string,
+    { action: string; model: string; credits: number; costUsd: number; events: number }
+  >();
+  const importBreakdown = new Map<
+    string,
+    {
+      requestId: string;
+      ownerId: string | null;
+      source: string | null;
+      action: string;
+      model: string;
+      createdAt: string;
+      credits: number;
+      costUsd: number;
+      events: number;
+    }
+  >();
   const dailyMap = new Map<string, { imports: number; aiCredits: number }>();
   const actionDaily = new Map<string, Map<string, number>>();
   const sourceDaily = new Map<string, Map<string, number>>();
@@ -195,20 +215,31 @@ export async function GET(request: Request) {
     }
     const creditUnits = importCredits > 0 ? importCredits : aiCredits;
     if (creditUnits > 0) {
-      const key = event.model_name ?? "unknown";
+      const key = normalizeModelName(event.model_name);
       byModel.set(key, (byModel.get(key) ?? 0) + creditUnits);
     }
 
-    if (event.model_name) {
-      const key = event.model_name;
-      const entry = byModelCost.get(key) ?? { aiCredits: 0, costUsd: 0, events: 0 };
-      entry.aiCredits += creditUnits;
-      entry.costUsd += Number(event.cost_usd || 0);
-      entry.events += 1;
-      byModelCost.set(key, entry);
-    }
+    const modelKey = normalizeModelName(event.model_name);
+    const entry = byModelCost.get(modelKey) ?? { aiCredits: 0, costUsd: 0, events: 0 };
+    entry.aiCredits += creditUnits;
+    entry.costUsd += Number(event.cost_usd || 0);
+    entry.events += 1;
+    byModelCost.set(modelKey, entry);
 
     const actionKey = event.event_type ?? "unknown";
+    const actionModelKey = `${actionKey}|${modelKey}`;
+    const actionEntry = actionModelBreakdown.get(actionModelKey) ?? {
+      action: actionKey,
+      model: modelKey,
+      credits: 0,
+      costUsd: 0,
+      events: 0,
+    };
+    actionEntry.credits += creditUnits;
+    actionEntry.costUsd += Number(event.cost_usd || 0);
+    actionEntry.events += 1;
+    actionModelBreakdown.set(actionModelKey, actionEntry);
+
     if (!actionDaily.has(actionKey)) {
       actionDaily.set(actionKey, new Map());
     }
@@ -228,6 +259,28 @@ export async function GET(request: Request) {
       contextDaily.set(contextKey, new Map());
     }
     contextDaily.get(contextKey)!.set(dayKey, (contextDaily.get(contextKey)!.get(dayKey) ?? 0) + aiCredits);
+
+    if (event.request_id && ["import", "scan", "import_credit"].includes(actionKey)) {
+      const key = `${event.request_id}|${modelKey}|${actionKey}`;
+      const entry = importBreakdown.get(key) ?? {
+        requestId: event.request_id,
+        ownerId: event.owner_id ?? null,
+        source: event.source ?? null,
+        action: actionKey,
+        model: modelKey,
+        createdAt: event.created_at,
+        credits: 0,
+        costUsd: 0,
+        events: 0,
+      };
+      if (event.created_at < entry.createdAt) {
+        entry.createdAt = event.created_at;
+      }
+      entry.credits += creditUnits;
+      entry.costUsd += Number(event.cost_usd || 0);
+      entry.events += 1;
+      importBreakdown.set(key, entry);
+    }
   }
 
   const hasEventFilters = Boolean(eventType || source || model || usageContext);
@@ -298,6 +351,28 @@ export async function GET(request: Request) {
       costUsd: Number(entry.costUsd.toFixed(4)),
       events: entry.events,
     })),
+    actionModelBreakdown: Array.from(actionModelBreakdown.values())
+      .map((entry) => ({
+        action: entry.action,
+        model: entry.model,
+        credits: entry.credits,
+        costUsd: Number(entry.costUsd.toFixed(4)),
+        events: entry.events,
+      }))
+      .sort((a, b) => b.credits - a.credits),
+    importBreakdown: Array.from(importBreakdown.values())
+      .map((entry) => ({
+        requestId: entry.requestId,
+        ownerId: entry.ownerId,
+        source: entry.source,
+        action: entry.action,
+        model: entry.model,
+        createdAt: entry.createdAt,
+        credits: entry.credits,
+        costUsd: Number(entry.costUsd.toFixed(4)),
+        events: entry.events,
+      }))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     actionSeries: buildSeries(actionDaily),
     sourceSeries: buildSeries(sourceDaily),
     contextSeries: buildSeries(contextDaily),

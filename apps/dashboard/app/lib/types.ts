@@ -48,6 +48,24 @@ export type UsageSummary = {
   bySource: Array<{ label: string; value: number }>;
   byModel: Array<{ label: string; value: number }>;
   modelBreakdown: Array<{ label: string; aiCredits: number; costUsd: number; events: number }>;
+  actionModelBreakdown: Array<{
+    action: string;
+    model: string;
+    credits: number;
+    costUsd: number;
+    events: number;
+  }>;
+  importBreakdown: Array<{
+    requestId: string;
+    ownerId: string | null;
+    source: string | null;
+    action: string;
+    model: string;
+    createdAt: string;
+    credits: number;
+    costUsd: number;
+    events: number;
+  }>;
   actionSeries: Array<{ label: string; points: Array<{ date: string; value: number }> }>;
   sourceSeries: Array<{ label: string; points: Array<{ date: string; value: number }> }>;
   contextSeries: Array<{ label: string; points: Array<{ date: string; value: number }> }>;
