@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DataTable } from "./components/DataTable";
 import { LineChart } from "./components/LineChart";
 import type { UsageEvent, UsageSummary } from "./lib/types";
@@ -73,14 +73,14 @@ export default function DashboardPage() {
     start: initialRange.start,
     end: initialRange.end,
     userId: "",
-    email: "",
     eventType: "",
     source: "",
     model: "",
     usageContext: "",
   });
-  const [searchMode, setSearchMode] = useState<"user" | "email">("user");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [userQuery, setUserQuery] = useState("");
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   const activeUser = users.find((user) => user.id === filters.userId);
 
@@ -89,7 +89,6 @@ export default function DashboardPage() {
     if (filters.start) params.set("start", filters.start);
     if (filters.end) params.set("end", filters.end);
     if (filters.userId) params.set("userId", filters.userId);
-    if (filters.email) params.set("email", filters.email);
     if (filters.eventType) params.set("eventType", filters.eventType);
     if (filters.source) params.set("source", filters.source);
     if (filters.model) params.set("model", filters.model);
@@ -110,7 +109,6 @@ export default function DashboardPage() {
   const fetchEvents = async (mode: "replace" | "append" = "replace") => {
     const params = new URLSearchParams();
     if (filters.userId) params.set("userId", filters.userId);
-    if (filters.email) params.set("email", filters.email);
     if (filters.eventType) params.set("eventType", filters.eventType);
     if (filters.source) params.set("source", filters.source);
     if (filters.model) params.set("model", filters.model);
@@ -145,33 +143,33 @@ export default function DashboardPage() {
   }, [filters, eventsLimit]);
 
   useEffect(() => {
-    if (filters.userId && searchMode === "user") {
-      const matchedUser = users.find((user) => user.id === filters.userId);
-      setSearchTerm(matchedUser?.name ?? filters.userId);
-    }
-    if (filters.email && searchMode === "email") {
-      setSearchTerm(filters.email);
-    }
-  }, [filters.userId, filters.email, searchMode, users]);
+    const handleClick = (event: MouseEvent) => {
+      if (!dropdownRef.current) return;
+      if (!dropdownRef.current.contains(event.target as Node)) {
+        setUserDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
-  const handleSearch = () => {
-    const term = searchTerm.trim();
-    if (!term) {
-      setFilters((prev) => ({ ...prev, userId: "", email: "" }));
-      return;
-    }
-    if (searchMode === "email") {
-      setFilters((prev) => ({ ...prev, email: term, userId: "" }));
-      return;
-    }
-    const normalized = term.toLowerCase();
-    const matchedUser =
-      users.find((user) => user.id.toLowerCase().startsWith(normalized)) ??
-      users.find((user) => (user.name ?? "").toLowerCase().includes(normalized));
-    if (matchedUser) {
-      setFilters((prev) => ({ ...prev, userId: matchedUser.id, email: "" }));
-    }
-  };
+  const filteredUsers = users.filter((user) => {
+    if (!userQuery.trim()) return true;
+    const term = userQuery.trim().toLowerCase();
+    return (
+      user.id.toLowerCase().includes(term) ||
+      (user.name ?? "").toLowerCase().includes(term) ||
+      (user.email ?? "").toLowerCase().includes(term)
+    );
+  });
+
+  const selectedUserLabel = (() => {
+    if (!filters.userId) return "All users";
+    const user = users.find((entry) => entry.id === filters.userId);
+    if (!user) return filters.userId.slice(0, 8);
+    const name = (user.name ?? "User").trim() || "User";
+    return `${name} · ${user.email ?? user.id.slice(0, 8)}`;
+  })();
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMoreEvents) return;
@@ -251,28 +249,57 @@ export default function DashboardPage() {
         </div>
 
         <div className="filterGroup">
-          <label>
-            Search by
-            <select
-              value={searchMode}
-              onChange={(event) => setSearchMode(event.target.value as "user" | "email")}
+          <div className="userFilter" ref={dropdownRef}>
+            <span>Users</span>
+            <button
+              type="button"
+              className="userSelect"
+              onClick={() => setUserDropdownOpen((prev) => !prev)}
             >
-              <option value="user">User</option>
-              <option value="email">Email</option>
-            </select>
-          </label>
-          <label>
-            Search
-            <input
-              type="text"
-              placeholder={searchMode === "email" ? "Search email" : "Search user name or ID"}
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
-          </label>
-          <button className="filterSearch" onClick={handleSearch}>
-            Search
-          </button>
+              {selectedUserLabel}
+            </button>
+            {userDropdownOpen ? (
+              <div className="userMenu">
+                <input
+                  type="text"
+                  className="userSearch"
+                  placeholder="Search name or email"
+                  value={userQuery}
+                  onChange={(event) => setUserQuery(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className={`userOption ${filters.userId ? "" : "active"}`}
+                  onClick={() => {
+                    setFilters((prev) => ({ ...prev, userId: "" }));
+                    setUserDropdownOpen(false);
+                  }}
+                >
+                  All users
+                </button>
+                <div className="userList">
+                  {filteredUsers.map((user) => {
+                    const label = `${(user.name ?? "User").trim() || "User"} · ${
+                      user.email ?? user.id.slice(0, 8)
+                    }`;
+                    return (
+                      <button
+                        type="button"
+                        key={user.id}
+                        className={`userOption ${filters.userId === user.id ? "active" : ""}`}
+                        onClick={() => {
+                          setFilters((prev) => ({ ...prev, userId: user.id }));
+                          setUserDropdownOpen(false);
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
           <label>
             Action
             <select
