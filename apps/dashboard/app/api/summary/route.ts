@@ -21,6 +21,10 @@ const getDateRange = (start?: string | null, end?: string | null) => {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get("userId");
+  const eventType = searchParams.get("eventType");
+  const source = searchParams.get("source");
+  const model = searchParams.get("model");
+  const usageContext = searchParams.get("usageContext");
   const { startDate, endDate } = getDateRange(
     searchParams.get("start"),
     searchParams.get("end")
@@ -56,6 +60,18 @@ export async function GET(request: Request) {
     eventsQuery = eventsQuery.eq("owner_id", userId);
     monthlyQuery = monthlyQuery.eq("owner_id", userId);
     monthlyImportsQuery = monthlyImportsQuery.eq("owner_id", userId);
+  }
+  if (eventType) {
+    eventsQuery = eventsQuery.eq("event_type", eventType);
+  }
+  if (source) {
+    eventsQuery = eventsQuery.eq("source", source);
+  }
+  if (model) {
+    eventsQuery = eventsQuery.eq("model_name", model);
+  }
+  if (usageContext) {
+    eventsQuery = eventsQuery.filter("metadata->>usage_context", "eq", usageContext);
   }
 
   const [
@@ -144,7 +160,8 @@ export async function GET(request: Request) {
     }
   }
 
-  if (safeEvents.length === 0 && safeMonthly.length > 0) {
+  const hasEventFilters = Boolean(eventType || source || model || usageContext);
+  if (safeEvents.length === 0 && safeMonthly.length > 0 && !hasEventFilters) {
     for (const entry of safeMonthly) {
       activeUsers.add(entry.owner_id);
       totalImports += Number(entry.import_count || 0);
@@ -162,7 +179,7 @@ export async function GET(request: Request) {
   }
 
   const dailySeries: UsageSummary["dailySeries"] = [];
-  if (safeEvents.length > 0) {
+  if (safeEvents.length > 0 || hasEventFilters) {
     for (let cursor = new Date(startDate); cursor <= endDate; cursor = new Date(cursor.getTime() + DAY_MS)) {
       const key = toDayKey(cursor);
       const entry = dailyMap.get(key) ?? { imports: 0, aiCredits: 0 };
