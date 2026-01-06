@@ -545,7 +545,15 @@ export default function DashboardPage() {
             {
               key: "credits",
               header: "Credits",
-              render: (row) => formatNumber(row.credits),
+              render: (row) => {
+                if (row.model === "whisper-1") {
+                  return `${formatNumber(Math.round(row.credits))}s`;
+                }
+                if (row.model === "document-text-detection") {
+                  return `${formatNumber(row.credits)} img`;
+                }
+                return formatNumber(row.credits);
+              },
             },
             {
               key: "cost",
