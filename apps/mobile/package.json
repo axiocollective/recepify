@@ -16,6 +16,7 @@
     "expo-clipboard": "~5.0.1",
     "expo-font": "~12.0.10",
     "expo-image-picker": "~15.1.0",
+    "expo-image-manipulator": "~14.0.0",
     "expo-linear-gradient": "~13.0.2",
     "expo-status-bar": "~2.0.0",
     "react": "18.2.0",

@@ -1,3 +1,4 @@
+import * as ImageManipulator from "expo-image-manipulator";
 import { Recipe } from "../data/types";
 
 type BackendIngredient = {
@@ -97,7 +98,16 @@ const normalizePlatform = (platform?: string | null): Recipe["source"] => {
 
 const toNumber = (value?: string | number | null): number | undefined => {
   if (value === null || value === undefined) return undefined;
-  const parsed = typeof value === "number" ? value : Number(value);
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  const normalized = String(value).trim();
+  if (!normalized) return undefined;
+  const direct = Number(normalized);
+  if (Number.isFinite(direct)) return direct;
+  const match = normalized.match(/\d+(?:[.,]\d+)?/);
+  if (!match) return undefined;
+  const parsed = Number(match[0].replace(",", "."));
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
@@ -268,14 +278,35 @@ export const importFromScan = async (imageUris: string[]): Promise<Recipe> => {
   }
   const formData = new FormData();
   const files = imageUris.slice(0, 3);
-  for (const uri of files) {
-    const imageResponse = await fetch(uri);
-    if (!imageResponse.ok) {
-      throw new Error("Unable to load the image for scanning.");
-    }
-    const blob = await imageResponse.blob();
-    const nameFromUri = uri.split("/").pop()?.split("?")[0] || "scan.jpg";
-    formData.append("files", blob, nameFromUri);
+  const preparedFiles = await Promise.all(
+    files.map(async (uri) => {
+      const nameFromUri = uri.split("/").pop()?.split("?")[0] || "scan.jpg";
+      const extension = nameFromUri.split(".").pop()?.toLowerCase();
+      const needsConversion = extension === "heic" || extension === "heif";
+      if (needsConversion) {
+        const baseName = nameFromUri.lastIndexOf(".") > 0 ? nameFromUri.slice(0, nameFromUri.lastIndexOf(".")) : nameFromUri;
+        try {
+          const result = await ImageManipulator.manipulateAsync(uri, [], {
+            compress: 0.9,
+            format: ImageManipulator.SaveFormat.JPEG,
+          });
+          return { uri: result.uri, name: `${baseName || "scan"}.jpg` };
+        } catch {
+          return { uri, name: nameFromUri };
+        }
+      }
+      return { uri, name: nameFromUri };
+    })
+  );
+  for (const file of preparedFiles) {
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    const type =
+      extension === "png"
+        ? "image/png"
+        : extension === "heic" || extension === "heif"
+        ? "image/heic"
+        : "image/jpeg";
+    formData.append("files", { uri: file.uri, name: file.name, type } as any);
   }
 
   const response = await fetch(`${API_PREFIX}/import/scan`, {
