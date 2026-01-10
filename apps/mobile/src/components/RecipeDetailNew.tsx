@@ -464,34 +464,34 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
           <Text style={styles.importReviewText}>
             This source didn’t include enough information to create a usable recipe. Please add the missing
             pieces manually or try another link.{" "}
-            <Text style={styles.importReviewEmphasis}>No actions were used.</Text>
+            <Text style={styles.importReviewEmphasis}>0 recipe import credit used.</Text>
           </Text>
         ),
       }
     : nutritionMissingOnly
       ? {
           title: "Recipe looks good",
-          body: "Nutrition values are missing. Please add them manually or use AI.",
+          body: "Nutrition values are missing. Please add them manually or use AI. 1 recipe import credit used.",
         }
       : cookingTimeMissingOnly
       ? {
           title: "Recipe looks good",
-          body: "Cooking time is missing. Please add it manually or use AI.",
+          body: "Cooking time is missing. Please add it manually or use AI. 1 recipe import credit used.",
         }
       : servingsMissingOnly
       ? {
           title: "Recipe looks good",
-          body: "Servings are not specified. Please add them manually.",
+          body: "Servings are not specified. Please add them manually. 1 recipe import credit used.",
         }
       : looksGood
       ? {
           title: "Recipe looks good",
-          body: "All the key details are here. You can approve it now, or tweak anything you’d like.",
+          body: "All the key details are here. You can approve it now, or tweak anything you’d like. 1 recipe import credit used.",
         }
       : {
           title: "A few details are missing",
           body:
-            "Some information is missing. You can add what’s missing manually or use AI to fill the gaps.",
+            "Some information is missing. You can add what’s missing manually or use AI to fill the gaps. 1 recipe import credit used.",
         };
 
   return (

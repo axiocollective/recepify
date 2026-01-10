@@ -1,8 +1,8 @@
 import React from "react";
-import { Alert, Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useApp } from "../data/AppContext";
-import { colors, radius, shadow, spacing, typography } from "../theme/theme";
+import { colors, spacing } from "../theme/theme";
 import { BottomNav } from "../components/BottomNav";
 import { Home } from "../components/Home";
 import { ImportInbox } from "../components/ImportInbox";
@@ -103,6 +103,7 @@ export const AppNavigator: React.FC = () => {
     type: "optimize" | "translate";
     creditsUsed: number | null;
   } | null>(null);
+  const aiNoticeShownRef = React.useRef(false);
   const [authStep, setAuthStep] = React.useState<"welcome" | "login">("welcome");
   const [onboardingActive, setOnboardingActive] = React.useState(false);
   const [onboardingStep, setOnboardingStep] = React.useState<"language" | "consent" | "plan" | "loading">("language");
@@ -111,9 +112,6 @@ export const AppNavigator: React.FC = () => {
     run: () => Promise<void>;
   } | null>(null);
   const [loadingInFlight, setLoadingInFlight] = React.useState(false);
-  const [duplicatePrompt, setDuplicatePrompt] = React.useState<{
-    resolve: (value: boolean) => void;
-  } | null>(null);
   const videoFallbackAlerts = React.useRef(new Set<string>());
   const readyImportCount = importItems.filter((item) => item.status === "ready").length;
   const isOnboardingFlow = needsOnboarding || onboardingActive;
@@ -132,14 +130,16 @@ export const AppNavigator: React.FC = () => {
 
   const shouldImportAgain = (url: string) =>
     new Promise<boolean>((resolve) => {
-      setDuplicatePrompt({ resolve });
+      Alert.alert(
+        "Already imported",
+        "This link was imported before. Do you want to import it again?",
+        [
+          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+          { text: "Import again", onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) }
+      );
     });
-
-  const resolveDuplicatePrompt = (value: boolean) => {
-    if (!duplicatePrompt) return;
-    duplicatePrompt.resolve(value);
-    setDuplicatePrompt(null);
-  };
 
   const formatAiCreditUsage = (value: number | null, type: "translate" | "optimize") => {
     const count = Number(value ?? 0);
@@ -147,6 +147,44 @@ export const AppNavigator: React.FC = () => {
     const label = type === "translate" ? "translation credit" : "AI optimization credit";
     return `${count.toLocaleString("en-US")} ${label}${count === 1 ? "" : "s"} used.`;
   };
+
+  React.useEffect(() => {
+    if (!aiCompletionNotice || aiNoticeShownRef.current) return;
+    aiNoticeShownRef.current = true;
+    const title = aiCompletionNotice.type === "translate" ? "Recipe translated" : "Recipe optimized";
+    const body = `Please review the changes before saving.\n\n${formatAiCreditUsage(
+      aiCompletionNotice.creditsUsed ?? 0,
+      aiCompletionNotice.type
+    )}`;
+    Alert.alert(
+      title,
+      body,
+      [
+        {
+          text: "Edit",
+          onPress: () => {
+            setAiCompletionNotice(null);
+            aiNoticeShownRef.current = false;
+            setCurrentScreen("recipeEdit");
+          },
+        },
+        {
+          text: "OK",
+          onPress: () => {
+            setAiCompletionNotice(null);
+            aiNoticeShownRef.current = false;
+          },
+        },
+      ],
+      {
+        cancelable: true,
+        onDismiss: () => {
+          setAiCompletionNotice(null);
+          aiNoticeShownRef.current = false;
+        },
+      }
+    );
+  }, [aiCompletionNotice, formatAiCreditUsage, setCurrentScreen]);
 
   const getSourceFromUrl = (url: string) => {
     const lower = url.toLowerCase();
@@ -693,72 +731,6 @@ export const AppNavigator: React.FC = () => {
         onAddManually={handleAddManualRecipe}
         inboxCount={importItems.length}
       />
-      <Modal
-        visible={Boolean(duplicatePrompt)}
-        transparent
-        animationType="fade"
-        onRequestClose={() => resolveDuplicatePrompt(false)}
-      >
-        <Pressable style={styles.duplicateBackdrop} onPress={() => resolveDuplicatePrompt(false)}>
-          <Pressable style={styles.duplicateCard} onPress={() => undefined}>
-            <Text style={styles.duplicateTitle}>Already imported</Text>
-            <Text style={styles.duplicateBody}>
-              This link was imported before. Do you want to import it again?
-            </Text>
-            <View style={styles.duplicateActions}>
-              <Pressable
-                style={[styles.duplicateButton, styles.duplicateButtonSecondary]}
-                onPress={() => resolveDuplicatePrompt(false)}
-              >
-                <Text style={styles.duplicateButtonSecondaryText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.duplicateButton, styles.duplicateButtonPrimary]}
-                onPress={() => resolveDuplicatePrompt(true)}
-              >
-                <Text style={styles.duplicateButtonPrimaryText}>Import again</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-      <Modal
-        visible={Boolean(aiCompletionNotice)}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAiCompletionNotice(null)}
-      >
-        <Pressable style={styles.duplicateBackdrop} onPress={() => setAiCompletionNotice(null)}>
-          <Pressable style={styles.duplicateCard} onPress={() => undefined}>
-            <Text style={styles.duplicateTitle}>
-              {aiCompletionNotice?.type === "translate"
-                ? "Recipe translated"
-                : "Recipe optimized"}
-            </Text>
-            <Text style={styles.duplicateBody}>Please review changes before saving.</Text>
-            <Text style={styles.aiCreditsUsed}>
-              {formatAiCreditUsage(aiCompletionNotice?.creditsUsed ?? 0, aiCompletionNotice?.type ?? "optimize")}
-            </Text>
-            <View style={styles.duplicateActions}>
-              <Pressable
-                style={[styles.duplicateButton, styles.duplicateButtonSecondary]}
-                onPress={() => {
-                  setAiCompletionNotice(null);
-                  setCurrentScreen("recipeEdit");
-                }}
-              >
-                <Text style={styles.duplicateButtonSecondaryText}>Edit</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.duplicateButton, styles.duplicateButtonPrimary]}
-                onPress={() => setAiCompletionNotice(null)}
-              >
-                <Text style={styles.duplicateButtonPrimaryText}>OK</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 };
@@ -785,63 +757,5 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: colors.white,
-  },
-  duplicateBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.xl,
-  },
-  duplicateCard: {
-    width: "100%",
-    maxWidth: 340,
-    borderRadius: radius.xl,
-    backgroundColor: colors.white,
-    padding: spacing.lg,
-    ...shadow.lg,
-  },
-  duplicateTitle: {
-    ...typography.bodyBold,
-    color: colors.gray900,
-    marginBottom: spacing.xs,
-  },
-  duplicateBody: {
-    ...typography.bodySmall,
-    color: colors.gray600,
-  },
-  duplicateActions: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  duplicateButton: {
-    flex: 1,
-    borderRadius: radius.full,
-    paddingVertical: spacing.sm,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  duplicateButtonSecondary: {
-    backgroundColor: colors.blue100,
-  },
-  duplicateButtonPrimary: {
-    backgroundColor: colors.blue600,
-  },
-  duplicateButtonSecondaryText: {
-    ...typography.bodySmall,
-    color: colors.blue600,
-    fontWeight: "600",
-  },
-  duplicateButtonPrimaryText: {
-    ...typography.bodySmall,
-    color: colors.white,
-    fontWeight: "600",
-  },
-  aiCreditsUsed: {
-    ...typography.bodySmall,
-    color: colors.gray700,
-    fontWeight: "600",
-    marginTop: spacing.sm,
   },
 });

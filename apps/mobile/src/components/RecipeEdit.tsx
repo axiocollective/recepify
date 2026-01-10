@@ -102,6 +102,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   const isPremium = plan === "premium";
   const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const disclaimerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressCreditAlertsRef = useRef(false);
   const pulseAnim = useRef(new Animated.Value(0)).current;
   const waveAnim = useRef(new Animated.Value(0)).current;
   const waveAnimReverse = useRef(new Animated.Value(0)).current;
@@ -314,7 +315,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     beforeCount: number,
     field: "optimizationCount" | "translationCount"
   ) => {
-    if (isOptimizing || isTranslating || suppressAiAlerts) return;
+    if (isOptimizing || isTranslating || suppressAiAlerts || suppressCreditAlertsRef.current) return;
     const delta = await getActionUsedDelta(beforeCount, field);
     if (!delta) return;
     const type = field === "translationCount" ? "translate" : "optimize";
@@ -824,6 +825,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
       return;
     }
     setIsTranslating(true);
+    suppressCreditAlertsRef.current = true;
     const actionsBefore = usageSummary?.translationCount ?? 0;
     try {
       await trackUsageEvent({
@@ -852,6 +854,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
       const message = error instanceof Error ? error.message : "Unable to translate the recipe right now.";
       Alert.alert("AI unavailable", message);
     } finally {
+      suppressCreditAlertsRef.current = false;
       setIsTranslating(false);
     }
   };
@@ -1239,6 +1242,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
       return;
     }
     setIsOptimizing(true);
+    suppressCreditAlertsRef.current = true;
     const actionsBefore = usageSummary?.optimizationCount ?? 0;
     let missingServingsForNutrition = false;
     try {
@@ -1384,6 +1388,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
       const message = error instanceof Error ? error.message : "Unable to optimize the recipe right now.";
       Alert.alert("AI unavailable", message);
     } finally {
+      suppressCreditAlertsRef.current = false;
       setIsOptimizing(false);
     }
   };
