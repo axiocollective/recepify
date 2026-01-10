@@ -192,6 +192,29 @@ export const purchaseAddon = async (payload: { action: "import" | "translation" 
   };
 };
 
+export const consumeAction = async (payload: {
+  action: "import" | "translation" | "optimization" | "ai_message";
+  quantity?: number;
+  consume?: boolean;
+}) => {
+  const { data, error } = await supabase.rpc("consume_action", {
+    action_type: payload.action,
+    quantity: payload.quantity ?? 1,
+    consume: payload.consume ?? true,
+  });
+  if (error) {
+    throw new Error(error.message);
+  }
+  return data as {
+    allowed: boolean;
+    reason?: string;
+    available?: number;
+    used_trial?: number;
+    used_addon?: number;
+    used_plan?: number;
+  };
+};
+
 export const fetchUsageSummary = async (): Promise<UsageSummary | null> => {
   if (!currentUserId) return null;
   const { data, error } = await supabase

@@ -35,6 +35,7 @@ import {
   fetchShoppingListItems,
   fetchUsageSummary,
   purchaseAddon as purchaseAddonRemote,
+  consumeAction as consumeActionRemote,
   replaceRecipeCollections,
   replaceShoppingListItems,
   saveRecipe,
@@ -113,6 +114,15 @@ interface AppContextValue {
   updateAccountConnection: (platform: string, connected: boolean) => void;
   refreshUsageSummary: () => void;
   purchaseAddon: (action: "import" | "translation" | "optimization" | "ai_message", quantity: number) => Promise<void>;
+  consumeAction: (payload: {
+    action: "import" | "translation" | "optimization" | "ai_message";
+    quantity?: number;
+    consume?: boolean;
+  }) => Promise<{
+    allowed: boolean;
+    reason?: string;
+    available?: number;
+  }>;
   setSimulateEmptyState: (value: boolean) => void;
 }
 
@@ -182,7 +192,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const TRIAL_IMPORTS = 10;
   const TRIAL_TRANSLATIONS = 10;
   const TRIAL_OPTIMIZATIONS = 10;
-  const TRIAL_AI_MESSAGES = 100;
+  const TRIAL_AI_MESSAGES = 50;
   const TRIAL_DAYS = 14;
   const addDays = (value: Date, days: number) => new Date(value.getTime() + days * 24 * 60 * 60 * 1000);
 
@@ -622,6 +632,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     []
   );
 
+  const consumeAction = useCallback(
+    async (payload: { action: "import" | "translation" | "optimization" | "ai_message"; quantity?: number; consume?: boolean }) =>
+      consumeActionRemote(payload),
+    []
+  );
+
 
   useEffect(() => {
     let isMounted = true;
@@ -1030,6 +1046,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ]);
           return;
         }
+        try {
+          const allowance = await consumeActionRemote({ action: "import", consume: false });
+          if (!allowance.allowed) {
+            const limitMessage = getImportLimitMessage(plan);
+            const limitTitle = getImportLimitTitle(plan);
+            Alert.alert(limitTitle, limitMessage, [
+              { text: "Buy more", onPress: () => navigateTo("planBilling", { focus: "credits" }) },
+              { text: "Cancel", style: "cancel" },
+            ]);
+            return;
+          }
+        } catch {
+          Alert.alert("Import unavailable", "Please try again in a moment.");
+          return;
+        }
         setImportItems((prev) =>
           prev.map((importItem) =>
             importItem.id === itemId ? { ...importItem, status: "processing" } : importItem
@@ -1040,6 +1071,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const saved = await addRecipe(imported);
           const nextRecipe = saved ?? imported;
           setSelectedRecipe(nextRecipe);
+          try {
+            const allowance = await consumeActionRemote({ action: "import" });
+            if (!allowance.allowed) {
+              const limitMessage = getImportLimitMessage(plan);
+              const limitTitle = getImportLimitTitle(plan);
+              Alert.alert(limitTitle, limitMessage, [
+                { text: "Buy more", onPress: () => navigateTo("planBilling", { focus: "credits" }) },
+                { text: "Cancel", style: "cancel" },
+              ]);
+            }
+          } catch {
+            Alert.alert("Import recorded later", "We couldn't update your usage right now.");
+          }
           setCurrentScreen("recipeDetail");
           refreshUsageSummary();
           setImportItems((prev) => prev.filter((importItem) => importItem.id !== itemId));
@@ -1287,6 +1331,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateAccountConnection,
       refreshUsageSummary,
       purchaseAddon,
+      consumeAction,
       setSimulateEmptyState,
     }),
     [
@@ -1344,6 +1389,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateAccountConnection,
       refreshUsageSummary,
       purchaseAddon,
+      consumeAction,
       setSimulateEmptyState,
     ]
   );

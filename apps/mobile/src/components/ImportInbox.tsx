@@ -1,9 +1,8 @@
 import React from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ImportItem, Platform } from "../data/types";
 import { colors, radius, shadow, spacing, typography } from "../theme/theme";
-import { RecipeThumbnail } from "./RecipeThumbnail";
 
 interface ImportInboxProps {
   items: ImportItem[];
@@ -12,15 +11,21 @@ interface ImportInboxProps {
 }
 
 export const ImportInbox: React.FC<ImportInboxProps> = ({ items, onBack, onAction }) => {
+  const readyCount = items.length;
+  const subtitle = `${readyCount} recipe${readyCount === 1 ? "" : "s"} ready to import`;
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 120 }}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      stickyHeaderIndices={[0]}
+    >
       <View style={styles.header}>
         <Pressable onPress={onBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={20} color={colors.gray900} />
         </Pressable>
         <View>
           <Text style={styles.headerTitle}>Shared Recipes</Text>
-          <Text style={styles.headerSubtitle}>Your import inbox</Text>
+          <Text style={styles.headerSubtitle}>{subtitle}</Text>
         </View>
       </View>
 
@@ -28,11 +33,11 @@ export const ImportInbox: React.FC<ImportInboxProps> = ({ items, onBack, onActio
         {items.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
-              <Ionicons name="link-outline" size={36} color={colors.gray400} />
+              <Ionicons name="link-outline" size={32} color={colors.gray400} />
             </View>
             <Text style={styles.emptyTitle}>No shared recipes yet</Text>
             <Text style={styles.emptySubtitle}>
-              Your inbox is empty. Share a recipe link from social media or the web, and it will appear here.
+              Share any TikTok, Instagram, Pinterest or web recipe to send it to your inbox.
             </Text>
             <Pressable onPress={onBack} style={styles.emptyButton}>
               <Text style={styles.emptyButtonText}>Start importing</Text>
@@ -69,27 +74,32 @@ const getPlatformLabel = (platform: Platform) => {
       return "YouTube";
     case "web":
       return "Web";
-    case "photo":
-      return "Scan";
     default:
       return "Source";
   }
 };
 
-const getSourceLabel = (item: ImportItem) => {
-  if (item.platform === "web" && item.url) {
-    try {
-      return new URL(item.url).hostname.replace(/^www\./, "");
-    } catch (error) {
-      return "Web";
-    }
+const getPlatformIcon = (platform: Platform) => {
+  switch (platform) {
+    case "tiktok":
+      return { name: "logo-tiktok" as const, color: colors.gray900 };
+    case "instagram":
+      return { name: "logo-instagram" as const, color: "#ec4899" };
+    case "pinterest":
+      return { name: "logo-pinterest" as const, color: "#ef4444" };
+    case "web":
+      return { name: "globe-outline" as const, color: colors.gray400 };
+    default:
+      return { name: "link-outline" as const, color: colors.gray400 };
   }
-  return getPlatformLabel(item.platform);
 };
 
 const ImportItemCard: React.FC<ImportItemCardProps> = ({ item, onAction }) => {
   const isProcessing = item.status === "processing";
   const isFailed = item.status === "failed";
+  const isConnect = item.status === "needsConnection";
+  const icon = getPlatformIcon(item.platform);
+  const actionLabel = isConnect ? "Connect" : isFailed ? "Retry" : "Import";
 
   const handlePrimary = () => {
     if (item.status === "needsConnection") {
@@ -105,36 +115,31 @@ const ImportItemCard: React.FC<ImportItemCardProps> = ({ item, onAction }) => {
 
   return (
     <View style={styles.card}>
-      <View style={styles.cardRow}>
-        <View style={styles.thumbWrap}>
-          {item.thumbnail ? (
-            <Image source={{ uri: item.thumbnail }} style={styles.thumbImage} resizeMode="cover" />
+      <View style={styles.titleBlock}>
+        <Text style={styles.cardTitle}>{item.title}</Text>
+        <View style={styles.platformRow}>
+          <Ionicons name={icon.name} size={16} color={icon.color} />
+          <Text style={styles.platformLabel}>{getPlatformLabel(item.platform)}</Text>
+        </View>
+      </View>
+      <View style={styles.actionRow}>
+        <Pressable
+          onPress={handlePrimary}
+          disabled={isProcessing}
+          style={[styles.actionButton, isProcessing ? styles.actionButtonDisabled : null]}
+        >
+          {isProcessing ? (
+            <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <RecipeThumbnail title={item.title} imageUrl={undefined} style={styles.thumbImage} />
+            <>
+              <Ionicons name="download-outline" size={16} color={colors.white} />
+              <Text style={styles.actionButtonText}>{actionLabel}</Text>
+            </>
           )}
-        </View>
-        <View style={styles.cardContent}>
-          <Text style={styles.sourceLabel}>{getSourceLabel(item)}</Text>
-          <Text style={styles.cardTitle} numberOfLines={2}>
-            {item.title}
-          </Text>
-        </View>
-        <View style={styles.actionColumn}>
-          <Pressable
-            onPress={handlePrimary}
-            disabled={isProcessing}
-            style={[styles.actionButton, isProcessing ? styles.actionButtonDisabled : null]}
-          >
-            {isProcessing ? (
-              <ActivityIndicator size="small" color={colors.white} />
-            ) : (
-              <Text style={styles.actionButtonText}>Import</Text>
-            )}
-          </Pressable>
-          <Pressable onPress={() => onAction("delete")} style={styles.removeButton}>
-            <Text style={styles.removeButtonText}>Remove</Text>
-          </Pressable>
-        </View>
+        </Pressable>
+        <Pressable onPress={() => onAction("delete")} style={styles.deleteButton}>
+          <Ionicons name="trash-outline" size={18} color={colors.gray400} />
+        </Pressable>
       </View>
     </View>
   );
@@ -143,7 +148,10 @@ const ImportItemCard: React.FC<ImportItemCardProps> = ({ item, onAction }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.gray50,
+  },
+  content: {
+    paddingBottom: 96,
   },
   header: {
     flexDirection: "row",
@@ -153,6 +161,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.gray200,
+    backgroundColor: colors.white,
   },
   backButton: {
     width: 44,
@@ -171,7 +180,7 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
+    paddingVertical: spacing.lg,
     gap: spacing.lg,
   },
   emptyState: {
@@ -213,51 +222,45 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   card: {
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.gray200,
     backgroundColor: colors.white,
-    ...shadow.md,
-  },
-  cardRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
     padding: spacing.md,
-  },
-  thumbWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
-    overflow: "hidden",
-    backgroundColor: colors.gray100,
-  },
-  thumbImage: {
-    width: "100%",
-    height: "100%",
-  },
-  cardContent: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  sourceLabel: {
-    ...typography.caption,
-    color: colors.gray500,
+    gap: spacing.md,
+    ...shadow.md,
   },
   cardTitle: {
     ...typography.bodyBold,
     color: colors.gray900,
+    fontSize: 17,
+    lineHeight: 22,
   },
-  actionColumn: {
-    alignItems: "flex-end",
+  titleBlock: {
     gap: spacing.sm,
+  },
+  platformRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  platformLabel: {
+    ...typography.bodySmall,
+    color: colors.gray500,
+  },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
   },
   actionButton: {
     backgroundColor: colors.gray900,
     borderRadius: radius.full,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    minHeight: 36,
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -265,20 +268,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray200,
   },
   actionButtonText: {
-    ...typography.captionBold,
+    ...typography.bodySmall,
     color: colors.white,
+    fontWeight: "600",
   },
-  removeButton: {
+  deleteButton: {
+    width: 44,
+    height: 44,
     borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
     alignItems: "center",
     justifyContent: "center",
-  },
-  removeButtonText: {
-    ...typography.caption,
-    color: colors.gray700,
   },
 });

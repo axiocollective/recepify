@@ -355,6 +355,7 @@ export const RecipeAssistantChat: React.FC<RecipeAssistantChatProps> = ({ isOpen
     trialActive,
     trialAiMessagesRemaining,
     navigateTo,
+    consumeAction,
   } = useApp();
   const aiLimitReached = isAiLimitReached(plan, usageSummary, trialActive, addonAiMessages, trialAiMessagesRemaining);
   const aiUsageBlocked = aiDisabled || aiLimitReached;
@@ -458,6 +459,19 @@ export const RecipeAssistantChat: React.FC<RecipeAssistantChatProps> = ({ isOpen
       const history = [...messages, userMessage]
         .filter((message) => !message.isThinking)
         .map((message) => ({ role: message.role, content: message.text }));
+
+      try {
+        const allowance = await consumeAction({ action: "ai_message" });
+        if (!allowance.allowed) {
+          setMessages((prev) => prev.filter((message) => message.id !== thinkingId));
+          showAiLimitAlert();
+          return;
+        }
+      } catch {
+        setMessages((prev) => prev.filter((message) => message.id !== thinkingId));
+        setError("Unable to send right now. Please try again.");
+        return;
+      }
 
       const response = await askRecipeAssistant({
         recipe: buildAssistantRecipePayload(activeRecipe),

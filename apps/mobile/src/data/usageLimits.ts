@@ -123,4 +123,4 @@ export const getImportLimitTitle = (plan: PlanTier) =>
   plan === "premium" ? "Monthly recipe imports used up" : "Recipe imports used up";
 
 export const getAiLimitTitle = (plan: PlanTier) =>
-  plan === "premium" ? "Monthly AI messages used up" : "AI messages used up";
+  plan === "premium" ? "Monthly AI assistant messages used up" : "AI assistant messages used up";

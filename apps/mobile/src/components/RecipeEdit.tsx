@@ -79,6 +79,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     addonOptimizations,
     addonTranslations,
     refreshUsageSummary,
+    consumeAction,
     trialActive,
     trialOptimizationsRemaining,
     trialTranslationsRemaining,
@@ -824,6 +825,16 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     if (isInPreferredLanguage) {
       return;
     }
+    try {
+      const allowance = await consumeAction({ action: "translation" });
+      if (!allowance.allowed) {
+        showTranslateLimitAlert();
+        return;
+      }
+    } catch {
+      Alert.alert("Unable to translate", "Please try again in a moment.");
+      return;
+    }
     setIsTranslating(true);
     suppressCreditAlertsRef.current = true;
     const actionsBefore = usageSummary?.translationCount ?? 0;
@@ -1239,6 +1250,16 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     }
     if (aiDisabled || optimizationLimitReached) {
       showOptimizeLimitAlert();
+      return;
+    }
+    try {
+      const allowance = await consumeAction({ action: "optimization" });
+      if (!allowance.allowed) {
+        showOptimizeLimitAlert();
+        return;
+      }
+    } catch {
+      Alert.alert("AI unavailable", "Please try again in a moment.");
       return;
     }
     setIsOptimizing(true);

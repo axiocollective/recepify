@@ -29,6 +29,7 @@ import { LoadingScreen } from "../components/LoadingScreen";
 import { Logo } from "../components/Logo";
 import { Search } from "../components/Search";
 import { RecipeImportLoading } from "../components/RecipeImportLoading";
+import { getImportLimitMessage, getImportLimitTitle } from "../data/usageLimits";
 import {
   importFromPinterest,
   importFromScan,
@@ -94,6 +95,7 @@ export const AppNavigator: React.FC = () => {
     refreshUsageSummary,
     purchaseAddon,
     scheduleSubscriptionCancellation,
+    consumeAction,
   } = useApp();
   const [myRecipesInitialTag, setMyRecipesInitialTag] = React.useState<string | null>(null);
   const [newlyImportedRecipeId, setNewlyImportedRecipeId] = React.useState<string | null>(null);
@@ -115,6 +117,40 @@ export const AppNavigator: React.FC = () => {
   const videoFallbackAlerts = React.useRef(new Set<string>());
   const readyImportCount = importItems.filter((item) => item.status === "ready").length;
   const isOnboardingFlow = needsOnboarding || onboardingActive;
+
+  const showImportLimitAlert = () => {
+    const limitTitle = getImportLimitTitle(plan);
+    const limitMessage = getImportLimitMessage(plan);
+    Alert.alert(limitTitle, limitMessage, [
+      { text: "Buy more", onPress: () => navigateTo("planBilling", { focus: "credits" }) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  const ensureImportAllowance = async () => {
+    try {
+      const allowance = await consumeAction({ action: "import", consume: false });
+      if (!allowance.allowed) {
+        showImportLimitAlert();
+        return false;
+      }
+      return true;
+    } catch {
+      Alert.alert("Import unavailable", "Please try again in a moment.");
+      return false;
+    }
+  };
+
+  const recordImportUsage = async () => {
+    try {
+      const allowance = await consumeAction({ action: "import" });
+      if (!allowance.allowed) {
+        showImportLimitAlert();
+      }
+    } catch {
+      Alert.alert("Import recorded later", "We couldn't update your usage right now.");
+    }
+  };
 
   const normalizeImportUrl = (value: string) => {
     const trimmed = value.trim();
@@ -442,18 +478,21 @@ export const AppNavigator: React.FC = () => {
                 const shouldProceed = await shouldImportAgain(url);
                 if (!shouldProceed) return;
               }
+              const canImport = await ensureImportAllowance();
+              if (!canImport) return;
               const source = getSourceFromUrl(url);
               startLoading(source, async () => {
                 try {
                   const imported = await importFromUrl(url);
                   const saved = await addRecipe(imported);
-                const nextRecipe = saved ?? imported;
-                setSelectedRecipe(nextRecipe);
-                refreshUsageSummary();
-                setNewlyImportedRecipeId(nextRecipe.id);
-                navigateTo("recipeDetail");
-                notifyVideoFallback(nextRecipe);
-              } catch (error) {
+                  const nextRecipe = saved ?? imported;
+                  setSelectedRecipe(nextRecipe);
+                  await recordImportUsage();
+                  refreshUsageSummary();
+                  setNewlyImportedRecipeId(nextRecipe.id);
+                  navigateTo("recipeDetail");
+                  notifyVideoFallback(nextRecipe);
+                } catch (error) {
                 handleImportError(error);
               }
             });
@@ -474,10 +513,13 @@ export const AppNavigator: React.FC = () => {
                   const shouldProceed = await shouldImportAgain(url);
                   if (!shouldProceed) return;
                 }
+                const canImport = await ensureImportAllowance();
+                if (!canImport) return;
                 const imported = await importFromTikTok(url);
                 const saved = await addRecipe(imported);
                 const nextRecipe = saved ?? imported;
                 setSelectedRecipe(nextRecipe);
+                await recordImportUsage();
                 refreshUsageSummary();
                 setNewlyImportedRecipeId(nextRecipe.id);
                 navigateTo("recipeDetail");
@@ -501,10 +543,13 @@ export const AppNavigator: React.FC = () => {
                   const shouldProceed = await shouldImportAgain(url);
                   if (!shouldProceed) return;
                 }
+                const canImport = await ensureImportAllowance();
+                if (!canImport) return;
                 const imported = await importFromPinterest(url);
                 const saved = await addRecipe(imported);
                 const nextRecipe = saved ?? imported;
                 setSelectedRecipe(nextRecipe);
+                await recordImportUsage();
                 refreshUsageSummary();
                 setNewlyImportedRecipeId(nextRecipe.id);
                 navigateTo("recipeDetail");
@@ -521,10 +566,13 @@ export const AppNavigator: React.FC = () => {
             onScan={async (imageData) => {
               startLoading("scan", async () => {
                 try {
+                  const canImport = await ensureImportAllowance();
+                  if (!canImport) return;
                   const imported = await importFromScan(imageData);
                   const saved = await addRecipe(imported);
                   const nextRecipe = saved ?? imported;
                   setSelectedRecipe(nextRecipe);
+                  await recordImportUsage();
                   refreshUsageSummary();
                   setNewlyImportedRecipeId(nextRecipe.id);
                   navigateTo("recipeDetail");

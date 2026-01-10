@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Alert, Dimensions, Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { PlanTier, UsageSummary } from "../data/types";
 import { getPlanLimits } from "../data/usageLimits";
 import { colors, radius, shadow, spacing, typography } from "../theme/theme";
@@ -283,127 +282,153 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
   };
 
   if (isOnboarding) {
-    const onboardingPlans: Array<{
-      id: "base" | "premium";
-      name: string;
-      price: string;
-      period?: string;
-      description: string;
-      features: string[];
-      popular?: boolean;
-      note?: string;
-    }> = [
-      {
-        id: "base",
-        name: BASE_PLAN.name,
-        price: BASE_PLAN.price,
-        description: BASE_PLAN.subtitle,
-        features: BASE_PLAN.includes,
-      },
-      {
-        id: "premium",
-        name: paidPlan.name,
-        price: billingPeriod === "yearly" ? "CHF 69" : "CHF 6.90",
-        period: billingPeriod === "yearly" ? "/ year" : "/ month",
-        description: paidPlan.subtitle,
-        features: paidPlan.includes,
-        popular: true,
-        note: paidPlan.note,
-      },
+    const isYearly = billingPeriod === "yearly";
+    const trialBadge = "14 DAYS FREE";
+    const premiumBadge = "MOST POPULAR";
+    const basePrice = isYearly ? "CHF 15" : "CHF 1.50";
+    const premiumPrice = isYearly ? "CHF 69" : "CHF 8";
+    const periodLabel = isYearly ? "year" : "month";
+    const trialFeatures = [
+      "10 imports",
+      "10 AI translations",
+      "10 AI optimizations",
+      "50 AI assistant messages",
     ];
+    const premiumFeatures = [
+      `25 imports/${periodLabel}`,
+      "25 AI translations",
+      "25 AI optimizations",
+      "150 AI assistant messages",
+      "Everything from Base included",
+    ];
+    const renderToggle = (onPress?: () => void) => (
+      <View style={styles.onboardingToggle}>
+        {(["yearly", "monthly"] as const).map((period) => (
+          <Pressable
+            key={period}
+            onPress={(event) => {
+              event.stopPropagation();
+              setBillingPeriod(period);
+              onSubscriptionPeriodChange(period);
+              onPress?.();
+            }}
+            style={[
+              styles.onboardingToggleChip,
+              billingPeriod === period && styles.onboardingToggleChipActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.onboardingToggleText,
+                billingPeriod === period && styles.onboardingToggleTextActive,
+              ]}
+            >
+              {period === "yearly" ? "Yearly" : "Monthly"}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    );
 
     return (
       <SafeAreaView style={styles.onboardingScreen}>
         <View style={styles.onboardingHeader}>
-          <Text style={styles.onboardingTitle}>{title ?? "Choose your plan"}</Text>
-          <Text style={styles.onboardingSubtitle}>
-            Pick the plan that fits you best. You can change this later.
-          </Text>
+          <View style={styles.onboardingLogo}>
+            <Ionicons name="sparkles" size={28} color={colors.white} />
+          </View>
+          <Text style={styles.onboardingTitle}>{title ?? "Choose Your Plan"}</Text>
+          <Text style={styles.onboardingSubtitle}>Start with a free trial or go premium</Text>
         </View>
 
         <ScrollView contentContainerStyle={styles.onboardingList}>
-          {onboardingPlans.map((option) => {
-            const isSelected = activeSelection === option.id;
-            return (
-              <Pressable
-                key={option.id}
-                onPress={() => setSelectedPlan(option.id)}
-                style={({ pressed }) => [
-                  styles.onboardingCard,
-                  isSelected && styles.onboardingCardSelected,
-                  option.popular && styles.onboardingCardPopular,
-                  pressed && styles.onboardingCardPressed,
-                ]}
-              >
-                {option.popular && (
-                  <LinearGradient
-                    colors={[colors.purple600, colors.purple500]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.popularBadge}
-                  >
-                    <Ionicons name="star" size={12} color={colors.white} />
-                    <Text style={styles.popularBadgeText}>Most Popular</Text>
-                  </LinearGradient>
-                )}
-                <View style={styles.onboardingHeaderRow}>
-                  <View style={styles.planHeaderLeft}>
-                    <Text style={styles.planName}>{option.name}</Text>
-                    <View style={styles.priceRow}>
-                      <Text style={styles.planPrice}>{option.price}</Text>
-                      {option.period && <Text style={styles.planPeriod}>{option.period}</Text>}
-                    </View>
-                  </View>
-                  <View style={styles.planHeaderRight}>
-            {option.id === "premium" && (
-                      <View style={styles.billingToggle}>
-                      {(["yearly", "monthly"] as const).map((period) => (
-                          <Pressable
-                            key={period}
-                            onPress={() => {
-                              setBillingPeriod(period);
-                              onSubscriptionPeriodChange(period);
-                            }}
-                            style={[styles.billingChip, billingPeriod === period && styles.billingChipActive]}
-                          >
-                            <Text style={[styles.billingChipText, billingPeriod === period && styles.billingChipTextActive]}>
-                              {period === "yearly" ? "Yearly" : "Monthly"}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    )}
-                    <View style={[styles.selectionCircle, isSelected && styles.selectionCircleSelected]}>
-                      {isSelected && <Ionicons name="checkmark" size={14} color={colors.white} />}
-                    </View>
-                  </View>
+          <Pressable
+            onPress={() => setSelectedPlan("base")}
+            style={({ pressed }) => [
+              styles.onboardingPlanCard,
+              activeSelection === "base" && styles.onboardingPlanCardSelected,
+              pressed && styles.onboardingCardPressed,
+            ]}
+          >
+            <View style={styles.onboardingCardHeader}>
+              <View style={styles.onboardingBadge}>
+                <Text style={styles.onboardingBadgeText}>{trialBadge}</Text>
+              </View>
+              {renderToggle()}
+            </View>
+            <Text style={styles.onboardingPlanName}>Start Free Trial</Text>
+            <View style={styles.onboardingPriceRow}>
+              <Text style={styles.onboardingPrice}>CHF 0</Text>
+              <Text style={styles.onboardingPriceSuffix}>for 14 days</Text>
+            </View>
+            <Text style={styles.onboardingSubtext}>Then {basePrice}/{periodLabel}</Text>
+            <View style={styles.onboardingFeatureGrid}>
+              {trialFeatures.map((feature) => (
+                <View key={feature} style={styles.onboardingFeature}>
+                  <Ionicons name="checkmark" size={14} color={colors.gray600} />
+                  <Text style={styles.onboardingFeatureText}>{feature}</Text>
                 </View>
+              ))}
+            </View>
+            <View style={styles.onboardingAfterTrial}>
+              <Text style={styles.onboardingAfterTrialText}>
+                After trial: Manual recipes, collections, favorites
+              </Text>
+            </View>
+            {activeSelection === "base" && (
+              <View style={styles.onboardingCheckmark}>
+                <Ionicons name="checkmark" size={14} color={colors.white} />
+              </View>
+            )}
+          </Pressable>
 
-                <Text style={styles.planDescription}>{option.description}</Text>
-                {option.note && <Text style={styles.planNoteText}>{option.note}</Text>}
-                <View style={styles.planFeatures}>
-                  {option.features.map((feature) => (
-                    <View key={feature} style={styles.featureRow}>
-                      <View style={[styles.featureIcon, isSelected && styles.featureIconSelected]}>
-                        <Ionicons
-                          name="checkmark"
-                          size={10}
-                          color={isSelected ? colors.purple600 : colors.gray400}
-                        />
-                      </View>
-                      <Text style={styles.featureText}>{feature}</Text>
-                    </View>
-                  ))}
+          <Pressable
+            onPress={() => setSelectedPlan("premium")}
+            style={({ pressed }) => [
+              styles.onboardingPlanCard,
+              activeSelection === "premium" && styles.onboardingPlanCardSelected,
+              pressed && styles.onboardingCardPressed,
+            ]}
+          >
+            <View style={styles.onboardingCardHeader}>
+              <View style={styles.onboardingBadge}>
+                <Text style={styles.onboardingBadgeText}>{premiumBadge}</Text>
+              </View>
+              {renderToggle()}
+            </View>
+            <Text style={styles.onboardingPlanName}>Recipefy Premium</Text>
+            <View style={styles.onboardingPriceRow}>
+              <Text style={styles.onboardingPrice}>{premiumPrice}</Text>
+              <Text style={styles.onboardingPriceSuffix}>/{periodLabel}</Text>
+            </View>
+            <Text style={styles.onboardingSubtext}>
+              {isYearly ? "Save 30% compared to monthly" : "Best for regular cooking"}
+            </Text>
+            <View style={styles.onboardingFeatureGrid}>
+              {premiumFeatures.map((feature, index) => (
+                <View
+                  key={feature}
+                  style={[
+                    styles.onboardingFeature,
+                    index === premiumFeatures.length - 1 && styles.onboardingFeatureWide,
+                  ]}
+                >
+                  <Ionicons name="checkmark" size={14} color={colors.gray600} />
+                  <Text style={styles.onboardingFeatureText}>{feature}</Text>
                 </View>
-              </Pressable>
-            );
-          })}
+              ))}
+            </View>
+            {activeSelection === "premium" && (
+              <View style={styles.onboardingCheckmark}>
+                <Ionicons name="checkmark" size={14} color={colors.white} />
+              </View>
+            )}
+          </Pressable>
         </ScrollView>
 
         <View style={styles.onboardingFooter}>
           <Pressable
             style={({ pressed }) => [
-              styles.continueButton,
+              styles.onboardingContinueButton,
               pressed && styles.onboardingCardPressed,
             ]}
             onPress={async () => {
@@ -415,10 +440,12 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
               onContinue?.();
             }}
           >
-            <Text style={styles.continueButtonText}>{continueLabel ?? "Continue"}</Text>
+            <Text style={styles.onboardingContinueText}>
+              {activeSelection === "premium" ? "Continue with Premium" : "Start Free Trial"}
+            </Text>
           </Pressable>
-          <Text style={styles.footerHelper}>
-            All features included
+          <Text style={styles.onboardingDisclaimer}>
+            Cancel anytime. No credit card required for trial.
           </Text>
         </View>
       </SafeAreaView>
@@ -482,7 +509,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                   ))}
                 </View>
                 <Text style={styles.planNoteText}>
-                  After 14 days, the Base subscription starts and trial actions expire. You can add more imports, translations, optimizations, or AI messages anytime.
+                  After 14 days, the Base subscription starts and trial actions expire. You can add imports, translations, optimizations, or AI assistant messages anytime.
                 </Text>
               </Pressable>
 
@@ -528,7 +555,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                   </View>
                 </View>
                 <View style={styles.planIncludes}>
-                  {["25 recipe imports", "25 translations", "25 optimizations", "150 AI messages"].map((item) => (
+                  {["25 recipe imports", "25 translations", "25 optimizations", "150 AI assistant messages"].map((item) => (
                     <View key={item} style={styles.planIncludeRow}>
                       <Ionicons name="checkmark" size={12} color={colors.gray500} />
                       <Text style={styles.planIncludeText}>{item}</Text>
@@ -622,7 +649,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 <Text style={styles.statLabel}>
                   {formatUsageLabel(
                     usedImports,
-                    isSubscribed ? planLimits.imports : 0,
+                    planLimits.imports,
                     addonImports,
                     !isSubscribed && trialActive ? trialImportsRemaining : 0
                   )}
@@ -642,7 +669,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 <Text style={styles.statLabel}>
                   {formatUsageLabel(
                     usedTranslations,
-                    isSubscribed ? planLimits.translations : 0,
+                    planLimits.translations,
                     addonTranslations,
                     !isSubscribed && trialActive ? trialTranslationsRemaining : 0
                   )}
@@ -660,7 +687,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 <Text style={styles.statLabel}>
                   {formatUsageLabel(
                     usedOptimizations,
-                    isSubscribed ? planLimits.optimizations : 0,
+                    planLimits.optimizations,
                     addonOptimizations,
                     !isSubscribed && trialActive ? trialOptimizationsRemaining : 0
                   )}
@@ -680,7 +707,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 <Text style={styles.statLabel}>
                   {formatUsageLabel(
                     usedAiMessages,
-                    isSubscribed ? planLimits.aiMessages : 0,
+                    planLimits.aiMessages,
                     addonAiMessages,
                     !isSubscribed && trialActive ? trialAiMessagesRemaining : 0
                   )}
@@ -709,10 +736,10 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 </Text>
                 <Text style={styles.currentPlanSubtitle}>
                   {isSubscribed
-                    ? "Includes monthly imports, translations, optimizations, and AI messages."
+                    ? "Includes monthly imports, translations, optimizations, and AI assistant messages."
                     : trialActive
-                    ? `Trial active · ${trialDaysLeft} days left · 10 imports, 10 translations, 10 optimizations, 100 AI messages`
-                    : "Base plan active. Add-ons unlock imports, translations, optimizations, and AI messages."}
+                    ? `Trial active · ${trialDaysLeft} days left · 10 imports, 10 translations, 10 optimizations, 50 AI assistant messages`
+                    : "Base plan active. Add-ons unlock imports, translations, optimizations, and AI assistant messages."}
                 </Text>
               </View>
               <Pressable
@@ -1172,211 +1199,194 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   onboardingHeader: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.lg,
+    paddingHorizontal: 24,
+    paddingTop: 48,
+    paddingBottom: 32,
+    alignItems: "center",
     gap: spacing.sm,
   },
+  onboardingLogo: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.xl,
+    backgroundColor: colors.gray900,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.sm,
+  },
   onboardingTitle: {
-    fontSize: 34,
-    lineHeight: 41,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: "700",
     color: colors.gray900,
+    textAlign: "center",
   },
   onboardingSubtitle: {
-    ...typography.body,
+    fontSize: 15,
+    lineHeight: 20,
     color: colors.gray500,
+    textAlign: "center",
   },
   onboardingList: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.lg,
-    gap: spacing.md,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    gap: 12,
   },
-  onboardingCard: {
+  onboardingPlanCard: {
     borderRadius: radius.xl,
     borderWidth: 2,
     borderColor: colors.gray200,
     backgroundColor: colors.white,
     padding: spacing.lg,
-    minHeight: 44,
     gap: spacing.md,
   },
-  onboardingCardSelected: {
-    borderColor: colors.purple600,
-    backgroundColor: "rgba(141, 74, 255, 0.08)",
-    shadowColor: colors.purple600,
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-  },
-  onboardingCardPopular: {
-    marginTop: spacing.lg,
+  onboardingPlanCardSelected: {
+    borderColor: colors.purple500,
+    backgroundColor: colors.purple100,
   },
   onboardingCardPressed: {
-    transform: [{ scale: 0.98 }],
+    opacity: 0.92,
   },
-  popularBadge: {
-    position: "absolute",
-    top: -12,
-    left: spacing.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.full,
+  onboardingCardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    shadowColor: colors.purple600,
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  popularBadgeText: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "700",
-    color: colors.white,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  trialBadge: {
-    position: "absolute",
-    top: -12,
-    right: spacing.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.full,
-    backgroundColor: "#F97316",
-    shadowColor: "#F97316",
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  trialBadgeText: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "700",
-    color: colors.white,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  onboardingHeaderRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: spacing.md,
   },
-  planName: {
-    fontSize: 20,
-    lineHeight: 24,
-    fontWeight: "700",
-    color: colors.gray900,
-    marginBottom: 4,
+  onboardingBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
   },
-  priceRow: {
+  onboardingBadgeText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "600",
+    color: colors.gray700,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  onboardingToggle: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "center",
     gap: 4,
+    backgroundColor: colors.gray100,
+    padding: 2,
+    borderRadius: radius.full,
   },
-  planPrice: {
-    fontSize: 24,
+  onboardingToggleChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  onboardingToggleChipActive: {
+    backgroundColor: colors.white,
+    ...shadow.md,
+  },
+  onboardingToggleText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "500",
+    color: colors.gray500,
+  },
+  onboardingToggleTextActive: {
+    color: colors.gray900,
+  },
+  onboardingPlanName: {
+    fontSize: 22,
     lineHeight: 28,
     fontWeight: "700",
     color: colors.gray900,
   },
-  planPeriod: {
+  onboardingPriceRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: spacing.sm,
+  },
+  onboardingPrice: {
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: "700",
+    color: colors.gray900,
+  },
+  onboardingPriceSuffix: {
     fontSize: 15,
     lineHeight: 20,
     color: colors.gray500,
   },
-  selectionCircle: {
+  onboardingSubtext: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.gray600,
+  },
+  onboardingFeatureGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: spacing.sm,
+    columnGap: spacing.lg,
+  },
+  onboardingFeature: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    width: "48%",
+  },
+  onboardingFeatureWide: {
+    width: "100%",
+  },
+  onboardingFeatureText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.gray700,
+  },
+  onboardingAfterTrial: {
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    backgroundColor: colors.gray50,
+  },
+  onboardingAfterTrialText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.gray600,
+  },
+  onboardingCheckmark: {
+    position: "absolute",
+    top: spacing.lg,
+    right: spacing.lg,
     width: 24,
     height: 24,
     borderRadius: radius.full,
-    borderWidth: 2,
-    borderColor: colors.gray300,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  selectionCircleSelected: {
-    borderColor: colors.purple600,
     backgroundColor: colors.purple600,
-  },
-  planDescription: {
-    fontSize: 15,
-    lineHeight: 20,
-    color: colors.gray600,
-  },
-  planNoteText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.gray500,
-  },
-  billingToggle: {
-    flexDirection: "row",
-    backgroundColor: colors.gray100,
-    borderRadius: radius.full,
-    padding: 4,
-    alignSelf: "flex-start",
-    marginTop: spacing.xs,
-  },
-  billingChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-  },
-  billingChipActive: {
-    backgroundColor: colors.white,
-    ...shadow.md,
-  },
-  billingChipText: {
-    ...typography.bodySmall,
-    color: colors.gray600,
-  },
-  billingChipTextActive: {
-    color: colors.gray900,
-    fontWeight: "600",
-  },
-  planFeatures: {
-    gap: spacing.sm,
-  },
-  featureRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  featureIcon: {
-    width: 16,
-    height: 16,
-    borderRadius: radius.full,
-    backgroundColor: colors.gray100,
     alignItems: "center",
     justifyContent: "center",
-  },
-  featureIconSelected: {
-    backgroundColor: colors.purple100,
-  },
-  featureText: {
-    fontSize: 15,
-    lineHeight: 20,
-    color: colors.gray700,
   },
   onboardingFooter: {
-    borderTopWidth: 1,
-    borderTopColor: colors.gray100,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.gray200,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
     gap: spacing.sm,
+    backgroundColor: colors.white,
   },
-  trialHelper: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.gray500,
-    textAlign: "center",
+  onboardingContinueButton: {
+    width: "100%",
+    minHeight: 56,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray900,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  footerHelper: {
-    fontSize: 13,
-    lineHeight: 18,
+  onboardingContinueText: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "600",
+    color: colors.white,
+  },
+  onboardingDisclaimer: {
+    fontSize: 11,
+    lineHeight: 16,
     color: colors.gray400,
     textAlign: "center",
   },

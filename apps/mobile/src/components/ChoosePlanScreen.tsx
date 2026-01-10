@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, shadow, spacing, typography } from "../theme/theme";
+import { colors, radius, shadow, spacing } from "../theme/theme";
 
 type PlanSelection = "base" | "subscription";
 type BillingCycle = "yearly" | "monthly";
@@ -15,55 +15,26 @@ interface ChoosePlanScreenProps {
   initialBilling?: BillingCycle;
 }
 
-const BASE_PLAN = {
-  title: "Recepify Base",
-  yearly: {
-    price: "CHF 15 / year",
-    alt: "or CHF 1.50 / month",
-  },
-  monthly: {
-    price: "CHF 1.50 / month",
-    alt: "or CHF 15 / year",
-  },
-  trialTitle: "14-day free trial",
-  trialSubtitle:
-    "Includes 10 imports, 10 translations, 10 optimizations, and 100 AI messages. Trial actions expire after 14 days. Base monthly starts automatically.",
-  bestFor: "Best for cooking on your own schedule.",
-  included: [
-    "Add recipes manually",
-    "Access all recipes",
-    "Collections & favorites",
-    "Cooking mode",
-    "Shopping list",
-  ],
-  aiTitle: "Need AI or imports?",
-  aiIntro: "No expensive subscription pressure. Buy add-ons only when you need:",
-  aiBullets: [
-    "Import recipes",
-    "Scan recipes",
-    "AI cooking assistant (optimize imported recipes, fix steps, improve results)",
-  ],
-  aiNote: "After 14 days, the Base subscription starts and trial actions expire. You can buy add-ons anytime.",
-  cta: "Start free trial",
-  ctaHelper: "No charge today · Cancel anytime",
-};
+const TRIAL_FEATURES = [
+  "10 imports",
+  "10 AI translations",
+  "10 AI optimizations",
+  "50 AI assistant messages",
+];
 
-const SUBSCRIPTION_PLAN = {
-  title: "Recepify Premium",
-  bestFor: "Best for frequent cooks who import often.",
-  yearly: {
-    price: "CHF 69 / year",
-    helper: ["Best price overall", "Save vs monthly"],
-  },
-  monthly: {
-    price: "CHF 6.90 / month",
-    helper: ["More flexibility"],
-  },
-  includedEveryMonth: ["25 recipe imports", "25 translations", "25 optimizations", "150 AI messages"],
-  alsoIncluded: ["Everything from Recepify Base"],
-  notIncluded: ["Unused actions do not roll over"],
-  needMore: "Buy add-ons anytime.",
-};
+const BASE_FEATURES = [
+  "Unlimited manual recipe entry",
+  "Collections & favorites",
+  "Buy credits for AI features as needed",
+];
+
+const PREMIUM_FEATURES = [
+  "25 imports/month",
+  "25 AI translations",
+  "25 AI optimizations",
+  "150 AI assistant messages",
+  "Everything from Base included",
+];
 
 export const ChoosePlanScreen: React.FC<ChoosePlanScreenProps> = ({
   onContinue,
@@ -71,285 +42,173 @@ export const ChoosePlanScreen: React.FC<ChoosePlanScreenProps> = ({
   initialBilling = "yearly",
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<PlanSelection>(initialPlan);
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>(initialBilling);
-  const [baseBillingCycle, setBaseBillingCycle] = useState<BillingCycle>("yearly");
+  const [billingPeriod, setBillingPeriod] = useState<BillingCycle>(initialBilling);
   const [showBaseDetails, setShowBaseDetails] = useState(false);
-  const [showSubscriptionDetails, setShowSubscriptionDetails] = useState(false);
-  const subscriptionPrice = billingCycle === "yearly" ? SUBSCRIPTION_PLAN.yearly : SUBSCRIPTION_PLAN.monthly;
-  const basePrice = baseBillingCycle === "yearly" ? BASE_PLAN.yearly : BASE_PLAN.monthly;
+
+  const isYearly = billingPeriod === "yearly";
+  const periodLabel = isYearly ? "year" : "month";
+  const basePrice = isYearly ? "CHF 15" : "CHF 1.50";
+  const baseMonthlyPrice = "CHF 1.50";
+  const premiumPrice = isYearly ? "CHF 69" : "CHF 8";
 
   const handleContinue = () => {
     onContinue({
       selectedPlan,
-      billingCycle: selectedPlan === "subscription" ? billingCycle : baseBillingCycle,
+      billingCycle: billingPeriod,
     });
   };
 
-  const subscriptionHelpers = useMemo(() => subscriptionPrice.helper, [subscriptionPrice]);
+  const renderToggle = () => (
+    <View style={styles.toggle}>
+      {(["monthly", "yearly"] as const).map((period) => (
+        <Pressable
+          key={period}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            setBillingPeriod(period);
+          }}
+          style={[styles.toggleChip, billingPeriod === period && styles.toggleChipActive]}
+        >
+          <Text style={[styles.toggleText, billingPeriod === period && styles.toggleTextActive]}>
+            {period === "monthly" ? "Monthly" : "Yearly"}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>Choose your plan</Text>
-        <Text style={styles.subtitle}>Pick the plan that fits you best. You can change this later.</Text>
+        <View style={styles.logo}>
+          <Ionicons name="sparkles" size={28} color={colors.white} />
+        </View>
+        <Text style={styles.title}>Choose Your Plan</Text>
+        <Text style={styles.subtitle}>Start with a free trial or go premium</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <PlanCard
-          title={BASE_PLAN.title}
-          selected={selectedPlan === "base"}
+        <Pressable
           onPress={() => setSelectedPlan("base")}
-          headerRight={
-            <View>
-              <Text style={styles.billingLabel}>Billing</Text>
-              <SegmentedToggle
-                options={[
-                  { label: "Yearly", value: "yearly" },
-                  { label: "Monthly", value: "monthly" },
-                ]}
-                value={baseBillingCycle}
-                onChange={setBaseBillingCycle}
-              />
-            </View>
-          }
+          style={({ pressed }) => [
+            styles.card,
+            selectedPlan === "base" && styles.cardSelected,
+            pressed && styles.cardPressed,
+          ]}
         >
-          <View style={styles.priceBlock}>
-            <Text style={styles.price}>{basePrice.price}</Text>
-            <Text style={styles.priceAlt}>{basePrice.alt}</Text>
+          <View style={styles.cardHeader}>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>14 DAYS FREE</Text>
+            </View>
           </View>
 
-          <View style={styles.trialBlock}>
-            <Text style={styles.trialTitle}>{BASE_PLAN.trialTitle}</Text>
-            <Text style={styles.trialSubtitle}>{BASE_PLAN.trialSubtitle}</Text>
+          <Text style={styles.planName}>Start Free Trial</Text>
+          <View style={styles.priceRow}>
+            <Text style={styles.price}>CHF 0</Text>
+            <Text style={styles.priceSuffix}>for 14 days</Text>
           </View>
+          <Text style={styles.subtext}>Then Base monthly: {baseMonthlyPrice}/month</Text>
 
-          <Text style={styles.bestFor}>{BASE_PLAN.bestFor}</Text>
-
-          <FeatureSection
-            title="Included"
-            bullets={showBaseDetails ? BASE_PLAN.included : BASE_PLAN.included.slice(0, 3)}
-            icon="check"
-          />
-
-          {showBaseDetails && (
-            <View style={styles.aiBlock}>
-              <Text style={styles.sectionTitle}>{BASE_PLAN.aiTitle}</Text>
-              <Text style={styles.aiIntro}>{BASE_PLAN.aiIntro}</Text>
-              <View style={styles.bulletList}>
-                {BASE_PLAN.aiBullets.map((bullet) => (
-                  <BulletRow key={bullet} text={bullet} />
-                ))}
+          <Text style={styles.sectionLabel}>During 14-day trial</Text>
+          <View style={styles.featureGrid}>
+            {TRIAL_FEATURES.map((feature) => (
+              <View key={feature} style={styles.featureItem}>
+                <Ionicons name="checkmark" size={14} color={colors.gray600} />
+                <Text style={styles.featureText}>{feature}</Text>
               </View>
-              <Text style={styles.aiNote}>{BASE_PLAN.aiNote}</Text>
-            </View>
-          )}
-
-          <Pressable
-            onPress={() => setShowBaseDetails((prev) => !prev)}
-            style={({ pressed }) => [styles.readMoreButton, pressed && styles.buttonPressed]}
-            accessibilityRole="button"
-            accessibilityLabel={showBaseDetails ? "Show less details" : "Read more details"}
-          >
-            <Text style={styles.readMoreText}>{showBaseDetails ? "Show less" : "Read more"}</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => setSelectedPlan("base")}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              pressed && styles.buttonPressed,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={BASE_PLAN.cta}
-          >
-            <Text style={styles.secondaryButtonText}>{BASE_PLAN.cta}</Text>
-          </Pressable>
-          <Text style={styles.helperText}>{BASE_PLAN.ctaHelper}</Text>
-        </PlanCard>
-
-        <PlanCard
-          title={SUBSCRIPTION_PLAN.title}
-          selected={selectedPlan === "subscription"}
-          onPress={() => setSelectedPlan("subscription")}
-          badge={<MostPopularBadge />}
-          headerRight={
-            <View>
-              <Text style={styles.billingLabel}>Billing</Text>
-              <SegmentedToggle
-                options={[
-                  { label: "Yearly", value: "yearly" },
-                  { label: "Monthly", value: "monthly" },
-                ]}
-                value={billingCycle}
-                onChange={setBillingCycle}
-              />
-            </View>
-          }
-        >
-          <View style={styles.priceBlock}>
-            <Text style={styles.price}>{subscriptionPrice.price}</Text>
-            {subscriptionHelpers.map((line) => (
-              <Text key={line} style={styles.priceHelper}>
-                {line}
-              </Text>
             ))}
           </View>
 
-          <Text style={styles.bestFor}>{SUBSCRIPTION_PLAN.bestFor}</Text>
-
-          <FeatureSection
-            title="Included every month"
-            bullets={
-              showSubscriptionDetails
-                ? SUBSCRIPTION_PLAN.includedEveryMonth
-                : SUBSCRIPTION_PLAN.includedEveryMonth.slice(0, 2)
-            }
-            icon="check"
-          />
-
-          {showSubscriptionDetails && (
-            <>
-              <FeatureSection title="Also included" bullets={SUBSCRIPTION_PLAN.alsoIncluded} icon="check" />
-              <FeatureSection title="Not included" bullets={SUBSCRIPTION_PLAN.notIncluded} icon="close" />
-              <View style={styles.needMoreBlock}>
-                <Text style={styles.sectionTitle}>Need more?</Text>
-                <Text style={styles.sectionBody}>{SUBSCRIPTION_PLAN.needMore}</Text>
-              </View>
-            </>
-          )}
-
           <Pressable
-            onPress={() => setShowSubscriptionDetails((prev) => !prev)}
-            style={({ pressed }) => [styles.readMoreButton, pressed && styles.buttonPressed]}
-            accessibilityRole="button"
-            accessibilityLabel={showSubscriptionDetails ? "Show less details" : "Read more details"}
+            style={styles.readMoreRow}
+            onPress={() => setShowBaseDetails((prev) => !prev)}
           >
-            <Text style={styles.readMoreText}>{showSubscriptionDetails ? "Show less" : "Read more"}</Text>
+            <Text style={styles.readMoreText}>Read more</Text>
+            <Ionicons
+              name={showBaseDetails ? "chevron-up" : "chevron-forward"}
+              size={14}
+              color={colors.gray500}
+            />
           </Pressable>
 
-        </PlanCard>
+          {showBaseDetails && (
+            <View style={styles.afterTrial}>
+              <Text style={styles.afterTrialLabel}>After trial (Base plan)</Text>
+              {BASE_FEATURES.map((feature) => (
+                <View key={feature} style={styles.afterTrialRow}>
+                  <Ionicons name="checkmark" size={14} color={colors.gray600} />
+                  <Text style={styles.afterTrialText}>{feature}</Text>
+                </View>
+              ))}
+              <Text style={styles.afterTrialNote}>Base monthly starts after trial: {baseMonthlyPrice}/month</Text>
+            </View>
+          )}
+
+          {selectedPlan === "base" && (
+            <View style={styles.checkmark}>
+              <Ionicons name="checkmark" size={14} color={colors.white} />
+            </View>
+          )}
+        </Pressable>
+
+        <Pressable
+          onPress={() => setSelectedPlan("subscription")}
+          style={({ pressed }) => [
+            styles.card,
+            selectedPlan === "subscription" && styles.cardSelected,
+            pressed && styles.cardPressed,
+          ]}
+        >
+          <View style={styles.cardHeader}>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>MOST POPULAR</Text>
+            </View>
+            {renderToggle()}
+          </View>
+
+          <Text style={styles.planName}>Recipefy Premium</Text>
+          <View style={styles.priceRow}>
+            <Text style={styles.price}>{premiumPrice}</Text>
+            <Text style={styles.priceSuffix}>/{periodLabel}</Text>
+          </View>
+          <Text style={styles.subtext}>
+            {isYearly ? "Save 30% compared to monthly" : "Best for regular cooking"}
+          </Text>
+
+          <View style={styles.featureGrid}>
+            {PREMIUM_FEATURES.map((feature, index) => (
+              <View
+                key={feature}
+                style={[styles.featureItem, index === PREMIUM_FEATURES.length - 1 && styles.featureItemWide]}
+              >
+                <Ionicons name="checkmark" size={14} color={colors.gray600} />
+                <Text style={styles.featureText}>{feature}</Text>
+              </View>
+            ))}
+          </View>
+
+          {selectedPlan === "subscription" && (
+            <View style={styles.checkmark}>
+              <Ionicons name="checkmark" size={14} color={colors.white} />
+            </View>
+          )}
+        </Pressable>
       </ScrollView>
 
       <View style={styles.footer}>
         <Pressable
           onPress={handleContinue}
-          style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Continue"
+          style={({ pressed }) => [styles.continueButton, pressed && styles.buttonPressed]}
         >
-          <Text style={styles.primaryButtonText}>Continue</Text>
+          <Text style={styles.continueText}>
+            {selectedPlan === "subscription" ? "Continue with Premium" : "Start Free Trial"}
+          </Text>
         </Pressable>
+        <Text style={styles.disclaimer}>Cancel anytime. No credit card required for trial.</Text>
       </View>
     </SafeAreaView>
   );
 };
-
-interface PlanCardProps {
-  title: string;
-  selected: boolean;
-  onPress: () => void;
-  badge?: React.ReactNode;
-  headerRight?: React.ReactNode;
-  children: React.ReactNode;
-}
-
-const PlanCard: React.FC<PlanCardProps> = ({ title, selected, onPress, badge, headerRight, children }) => {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.card,
-        selected && styles.cardSelected,
-        pressed && styles.cardPressed,
-      ]}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      accessibilityLabel={`${title} plan`}
-    >
-      {badge}
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>{title}</Text>
-        <View style={styles.headerRight}>{headerRight}</View>
-      </View>
-      {children}
-    </Pressable>
-  );
-};
-
-interface FeatureSectionProps {
-  title: string;
-  bullets: string[];
-  icon: "check" | "close";
-}
-
-const FeatureSection: React.FC<FeatureSectionProps> = ({ title, bullets, icon }) => (
-  <View style={styles.section}>
-    <Text style={styles.sectionTitle}>{title}</Text>
-    <View style={styles.bulletList}>
-      {bullets.map((bullet) => (
-        <BulletRow key={bullet} text={bullet} icon={icon} />
-      ))}
-    </View>
-  </View>
-);
-
-interface BulletRowProps {
-  text: string;
-  icon?: "check" | "close";
-}
-
-const BulletRow: React.FC<BulletRowProps> = ({ text, icon = "check" }) => (
-  <View style={styles.bulletRow}>
-    <View style={[styles.bulletIcon, icon === "close" && styles.bulletIconMuted]}>
-      <Ionicons
-        name={icon === "close" ? "close" : "checkmark"}
-        size={12}
-        color={icon === "close" ? colors.gray400 : colors.purple600}
-      />
-    </View>
-    <Text style={styles.bulletText}>{text}</Text>
-  </View>
-);
-
-interface SegmentedToggleOption<T> {
-  label: string;
-  value: T;
-}
-
-interface SegmentedToggleProps<T> {
-  options: Array<SegmentedToggleOption<T>>;
-  value: T;
-  onChange: (value: T) => void;
-}
-
-const SegmentedToggle = <T,>({ options, value, onChange }: SegmentedToggleProps<T>) => (
-  <View style={styles.segmented}>
-    {options.map((option) => {
-      const isActive = option.value === value;
-      return (
-        <Pressable
-          key={option.label}
-          onPress={() => onChange(option.value)}
-          style={[styles.segment, isActive && styles.segmentActive]}
-          accessibilityRole="button"
-          accessibilityState={{ selected: isActive }}
-          accessibilityLabel={option.label}
-        >
-          <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
-            {option.label}
-          </Text>
-        </Pressable>
-      );
-    })}
-  </View>
-);
-
-const MostPopularBadge = () => (
-  <View style={styles.badge}>
-    <Ionicons name="star" size={12} color={colors.white} />
-    <Text style={styles.badgeText}>Most popular</Text>
-  </View>
-);
 
 const styles = StyleSheet.create({
   screen: {
@@ -357,249 +216,236 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   header: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.lg,
+    paddingHorizontal: 24,
+    paddingTop: 48,
+    paddingBottom: 32,
+    alignItems: "center",
     gap: spacing.sm,
   },
+  logo: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.xl,
+    backgroundColor: colors.gray900,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.sm,
+  },
   title: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "700",
+    color: colors.gray900,
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    color: colors.gray500,
+    textAlign: "center",
+  },
+  content: {
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    gap: 12,
+  },
+  card: {
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: colors.gray200,
+    backgroundColor: colors.white,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  cardSelected: {
+    borderColor: colors.purple500,
+    backgroundColor: colors.purple100,
+  },
+  cardPressed: {
+    opacity: 0.92,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+  },
+  badgeText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "600",
+    color: colors.gray700,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  toggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.gray100,
+    padding: 2,
+    borderRadius: radius.full,
+  },
+  toggleChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  toggleChipActive: {
+    backgroundColor: colors.white,
+    ...shadow.md,
+  },
+  toggleText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "500",
+    color: colors.gray500,
+  },
+  toggleTextActive: {
+    color: colors.gray900,
+  },
+  planName: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "700",
+    color: colors.gray900,
+  },
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: spacing.sm,
+  },
+  price: {
     fontSize: 32,
     lineHeight: 38,
     fontWeight: "700",
     color: colors.gray900,
   },
-  subtitle: {
-    ...typography.body,
+  priceSuffix: {
+    fontSize: 15,
+    lineHeight: 20,
     color: colors.gray500,
   },
-  content: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xl,
-    gap: spacing.lg,
+  subtext: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.gray600,
   },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: radius.xl,
-    borderWidth: 2,
-    borderColor: colors.gray200,
-    padding: spacing.lg,
-    gap: spacing.md,
-    ...shadow.md,
-  },
-  cardSelected: {
-    borderColor: colors.purple600,
-    backgroundColor: "rgba(141, 74, 255, 0.08)",
-  },
-  cardPressed: {
-    transform: [{ scale: 0.99 }],
-  },
-  cardHeader: {
+  featureGrid: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: spacing.md,
+    flexWrap: "wrap",
+    rowGap: spacing.sm,
+    columnGap: spacing.lg,
   },
-  cardTitle: {
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: "700",
-    color: colors.gray900,
-  },
-  headerRight: {
-    alignItems: "flex-end",
-    gap: spacing.sm,
-  },
-  badge: {
-    position: "absolute",
-    top: -12,
-    left: spacing.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.full,
+  featureItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: colors.purple600,
-    ...shadow.md,
+    gap: spacing.sm,
+    width: "48%",
   },
-  badgeText: {
-    fontSize: 11,
-    lineHeight: 14,
+  featureItemWide: {
+    width: "100%",
+  },
+  featureText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.gray700,
+  },
+  afterTrial: {
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    backgroundColor: colors.gray50,
+    gap: spacing.sm,
+  },
+  readMoreRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  readMoreText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.gray500,
+    fontWeight: "600",
+  },
+  afterTrialLabel: {
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: "700",
-    color: colors.white,
+    color: colors.gray600,
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
-  priceBlock: {
-    gap: 4,
-  },
-  price: {
-    fontSize: 24,
-    lineHeight: 28,
-    fontWeight: "700",
-    color: colors.gray900,
-  },
-  priceAlt: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.gray500,
-  },
-  priceHelper: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.gray500,
-  },
-  trialBlock: {
-    borderRadius: radius.lg,
-    backgroundColor: colors.gray50,
-    padding: spacing.md,
-    gap: 2,
-  },
-  trialTitle: {
-    ...typography.bodyBold,
-    color: colors.gray900,
-  },
-  trialSubtitle: {
-    ...typography.caption,
-    color: colors.gray500,
-  },
-  bestFor: {
-    ...typography.bodySmall,
-    color: colors.gray600,
-  },
-  section: {
-    gap: spacing.sm,
-  },
-  sectionTitle: {
-    ...typography.bodyBold,
-    color: colors.gray900,
-  },
-  sectionBody: {
-    ...typography.bodySmall,
-    color: colors.gray600,
-  },
-  bulletList: {
-    gap: spacing.sm,
-  },
-  bulletRow: {
+  afterTrialRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
-  bulletIcon: {
-    width: 18,
-    height: 18,
-    borderRadius: radius.full,
-    backgroundColor: colors.purple100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  bulletIconMuted: {
-    backgroundColor: colors.gray100,
-  },
-  bulletText: {
-    ...typography.bodySmall,
+  afterTrialText: {
+    fontSize: 12,
+    lineHeight: 17,
     color: colors.gray700,
-    flex: 1,
   },
-  aiBlock: {
-    gap: spacing.sm,
-  },
-  aiIntro: {
-    ...typography.bodySmall,
+  afterTrialNote: {
+    fontSize: 12,
+    lineHeight: 17,
     color: colors.gray600,
   },
-  aiNote: {
-    ...typography.caption,
-    color: colors.gray500,
+  sectionLabel: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+    color: colors.gray600,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
   },
-  needMoreBlock: {
-    gap: spacing.xs,
-  },
-  secondaryButton: {
-    minHeight: 48,
+  checkmark: {
+    position: "absolute",
+    top: spacing.lg,
+    right: spacing.lg,
+    width: 24,
+    height: 24,
     borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.gray200,
+    backgroundColor: colors.purple600,
     alignItems: "center",
     justifyContent: "center",
-  },
-  secondaryButtonText: {
-    ...typography.bodySmall,
-    color: colors.gray900,
-    fontWeight: "600",
-  },
-  helperText: {
-    ...typography.caption,
-    color: colors.gray500,
-    textAlign: "center",
-  },
-  readMoreButton: {
-    alignSelf: "flex-start",
-    paddingVertical: spacing.xs,
-  },
-  readMoreText: {
-    ...typography.bodySmall,
-    color: colors.purple600,
-    fontWeight: "600",
-  },
-  segmented: {
-    flexDirection: "row",
-    backgroundColor: colors.gray100,
-    borderRadius: radius.full,
-    padding: 4,
-  },
-  segment: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-  },
-  segmentActive: {
-    backgroundColor: colors.white,
-    ...shadow.md,
-  },
-  segmentText: {
-    ...typography.bodySmall,
-    color: colors.gray600,
-  },
-  segmentTextActive: {
-    color: colors.gray900,
-    fontWeight: "600",
-  },
-  billingLabel: {
-    ...typography.caption,
-    color: colors.gray500,
-    textAlign: "right",
   },
   footer: {
-    borderTopWidth: 1,
-    borderTopColor: colors.gray100,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.gray200,
     backgroundColor: colors.white,
   },
-  primaryButton: {
+  continueButton: {
+    width: "100%",
     minHeight: 56,
     borderRadius: radius.full,
+    backgroundColor: colors.gray900,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.gray900,
-    ...shadow.lg,
   },
-  primaryButtonText: {
+  continueText: {
     fontSize: 17,
     lineHeight: 22,
     fontWeight: "600",
     color: colors.white,
   },
+  disclaimer: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.gray400,
+    textAlign: "center",
+    marginTop: spacing.sm,
+  },
   buttonPressed: {
     transform: [{ scale: 0.98 }],
   },
 });
-
-// Example usage:
-// <ChoosePlanScreen
-//   onContinue={(payload) => {
-//     console.log("Selected plan", payload);
-//   }}
-// />
