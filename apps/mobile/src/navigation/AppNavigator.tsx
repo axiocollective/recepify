@@ -823,14 +823,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   duplicateButtonSecondary: {
-    backgroundColor: colors.gray100,
+    backgroundColor: colors.blue100,
   },
   duplicateButtonPrimary: {
-    backgroundColor: colors.gray900,
+    backgroundColor: colors.blue600,
   },
   duplicateButtonSecondaryText: {
     ...typography.bodySmall,
-    color: colors.gray700,
+    color: colors.blue600,
     fontWeight: "600",
   },
   duplicateButtonPrimaryText: {

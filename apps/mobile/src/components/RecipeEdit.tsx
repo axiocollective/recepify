@@ -314,6 +314,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     beforeCount: number,
     field: "optimizationCount" | "translationCount"
   ) => {
+    if (isOptimizing || isTranslating || suppressAiAlerts) return;
     const delta = await getActionUsedDelta(beforeCount, field);
     if (!delta) return;
     const type = field === "translationCount" ? "translate" : "optimize";
