@@ -1,8 +1,8 @@
 import React from "react";
-import { Alert, SafeAreaView, View, StyleSheet } from "react-native";
+import { Alert, Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useApp } from "../data/AppContext";
-import { colors, spacing } from "../theme/theme";
+import { colors, radius, shadow, spacing, typography } from "../theme/theme";
 import { BottomNav } from "../components/BottomNav";
 import { Home } from "../components/Home";
 import { ImportInbox } from "../components/ImportInbox";
@@ -24,6 +24,7 @@ import { ImportOverlay } from "../components/ImportOverlay";
 import { Welcome } from "../components/Welcome";
 import { LoginScreen } from "../components/LoginScreen";
 import { OnboardingWelcome } from "../components/OnboardingWelcome";
+import { OnboardingConsent } from "../components/OnboardingConsent";
 import { LoadingScreen } from "../components/LoadingScreen";
 import { Logo } from "../components/Logo";
 import { Search } from "../components/Search";
@@ -54,12 +55,19 @@ export const AppNavigator: React.FC = () => {
     aiDisabled,
     plan,
     usageSummary,
-    bonusImports,
-    bonusTokens,
+    addonImports,
+    addonTranslations,
+    addonOptimizations,
+    addonAiMessages,
     trialActive,
     trialImportsRemaining,
-    trialTokensRemaining,
+    trialTranslationsRemaining,
+    trialOptimizationsRemaining,
+    trialAiMessagesRemaining,
     subscriptionPeriod,
+    subscriptionEndsAt,
+    subscriptionStatus,
+    planBillingFocus,
     trialEndsAt,
     simulateEmptyState,
     setSimulateEmptyState,
@@ -84,19 +92,28 @@ export const AppNavigator: React.FC = () => {
     setSelectedRecipe,
     setCurrentScreen,
     refreshUsageSummary,
-    purchasePayPerUseCredits,
+    purchaseAddon,
+    scheduleSubscriptionCancellation,
   } = useApp();
   const [myRecipesInitialTag, setMyRecipesInitialTag] = React.useState<string | null>(null);
   const [newlyImportedRecipeId, setNewlyImportedRecipeId] = React.useState<string | null>(null);
   const [pendingAiAction, setPendingAiAction] = React.useState<"optimize" | "translate" | null>(null);
+  const [aiReturnToDetail, setAiReturnToDetail] = React.useState(false);
+  const [aiCompletionNotice, setAiCompletionNotice] = React.useState<{
+    type: "optimize" | "translate";
+    creditsUsed: number | null;
+  } | null>(null);
   const [authStep, setAuthStep] = React.useState<"welcome" | "login">("welcome");
   const [onboardingActive, setOnboardingActive] = React.useState(false);
-  const [onboardingStep, setOnboardingStep] = React.useState<"language" | "plan" | "loading">("language");
+  const [onboardingStep, setOnboardingStep] = React.useState<"language" | "consent" | "plan" | "loading">("language");
   const [loadingTask, setLoadingTask] = React.useState<{
     source: "tiktok" | "instagram" | "pinterest" | "youtube" | "web" | "scan";
     run: () => Promise<void>;
   } | null>(null);
   const [loadingInFlight, setLoadingInFlight] = React.useState(false);
+  const [duplicatePrompt, setDuplicatePrompt] = React.useState<{
+    resolve: (value: boolean) => void;
+  } | null>(null);
   const videoFallbackAlerts = React.useRef(new Set<string>());
   const readyImportCount = importItems.filter((item) => item.status === "ready").length;
   const isOnboardingFlow = needsOnboarding || onboardingActive;
@@ -115,15 +132,17 @@ export const AppNavigator: React.FC = () => {
 
   const shouldImportAgain = (url: string) =>
     new Promise<boolean>((resolve) => {
-      Alert.alert(
-        "Already imported",
-        "This link was imported before. Do you want to import it again?",
-        [
-          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-          { text: "Import again", onPress: () => resolve(true) },
-        ]
-      );
+      setDuplicatePrompt({ resolve });
     });
+
+  const resolveDuplicatePrompt = (value: boolean) => {
+    if (!duplicatePrompt) return;
+    duplicatePrompt.resolve(value);
+    setDuplicatePrompt(null);
+  };
+
+  const formatActionsUsed = (value: number | null) =>
+    Number(value ?? 0).toLocaleString("en-US");
 
   const getSourceFromUrl = (url: string) => {
     const lower = url.toLowerCase();
@@ -209,13 +228,13 @@ export const AppNavigator: React.FC = () => {
     if (message.includes("YOUTUBE_TOO_LONG_NO_DESC")) {
       Alert.alert(
         "Video too long to import",
-        "This video is longer than 15 minutes and doesn’t include ingredients in the description. Please try another link or add the recipe manually. No credits were used."
+        "This video is longer than 15 minutes and doesn’t include ingredients in the description. Please try another link or add the recipe manually. No actions were used."
       );
       return;
     }
     Alert.alert(
       "Import didn’t work",
-      "We couldn’t read this link properly. Please try again or use a different link. No credits were used."
+      "We couldn’t read this link properly. Please try again or use a different link. No actions were used."
     );
   };
 
@@ -305,7 +324,7 @@ export const AppNavigator: React.FC = () => {
           initialPlan="base"
           initialBilling="yearly"
           onContinue={(payload) => {
-            const nextPlan = payload.selectedPlan === "subscription" ? "paid" : "free";
+            const nextPlan = payload.selectedPlan === "subscription" ? "premium" : "base";
             updateProfile({
               plan: nextPlan,
               subscriptionPeriod: payload.billingCycle ?? subscriptionPeriod,
@@ -319,7 +338,10 @@ export const AppNavigator: React.FC = () => {
     if (onboardingStep === "loading") {
       return <LoadingScreen />;
     }
-    return <OnboardingWelcome onContinue={() => setOnboardingStep("plan")} />;
+    if (onboardingStep === "consent") {
+      return <OnboardingConsent onContinue={() => setOnboardingStep("plan")} />;
+    }
+    return <OnboardingWelcome onContinue={() => setOnboardingStep("consent")} />;
   }
 
   if (currentScreen === "welcome") {
@@ -507,23 +529,33 @@ export const AppNavigator: React.FC = () => {
             onLogout={logout}
             onDeleteAccount={deleteAccount}
             onOpenPlans={() => navigateTo("planBilling")}
+            subscriptionStatus={subscriptionStatus}
+            subscriptionEndsAt={subscriptionEndsAt}
           />
         )}
         {currentScreen === "planBilling" && (
           <PlanBilling
             plan={plan}
             usageSummary={usageSummary}
-            bonusImports={bonusImports}
-            bonusTokens={bonusTokens}
+            addonImports={addonImports}
+            addonTranslations={addonTranslations}
+            addonOptimizations={addonOptimizations}
+            addonAiMessages={addonAiMessages}
             trialActive={trialActive}
             trialEndsAt={trialEndsAt}
             trialImportsRemaining={trialImportsRemaining}
-            trialTokensRemaining={trialTokensRemaining}
+            trialTranslationsRemaining={trialTranslationsRemaining}
+            trialOptimizationsRemaining={trialOptimizationsRemaining}
+            trialAiMessagesRemaining={trialAiMessagesRemaining}
+            subscriptionEndsAt={subscriptionEndsAt}
+            subscriptionStatus={subscriptionStatus}
+            focusSection={planBillingFocus}
             subscriptionPeriod={subscriptionPeriod}
             recipesCount={recipes.length}
             onPlanChange={(value) => updateProfile({ plan: value })}
-            onBuyCredits={purchasePayPerUseCredits}
+            onBuyCredits={(action, quantity) => purchaseAddon(action, quantity)}
             onSubscriptionPeriodChange={(value) => updateProfile({ subscriptionPeriod: value })}
+            onCancelSubscription={scheduleSubscriptionCancellation}
             onBack={() => navigateTo("profile")}
           />
         )}
@@ -534,9 +566,6 @@ export const AppNavigator: React.FC = () => {
             onStartCooking={() => setCurrentScreen("cookMode")}
             onToggleFavorite={() => toggleFavorite(selectedRecipe.id)}
             onEdit={() => {
-              if (newlyImportedRecipeId === selectedRecipe.id) {
-                setNewlyImportedRecipeId(null);
-              }
               setCurrentScreen("recipeEdit");
             }}
             onAddToShoppingList={handleAddToShoppingList}
@@ -560,8 +589,13 @@ export const AppNavigator: React.FC = () => {
               setNewlyImportedRecipeId(null);
             }}
             onOptimizeWithAI={() => {
-              setNewlyImportedRecipeId(null);
               setPendingAiAction("optimize");
+              setAiReturnToDetail(true);
+              setCurrentScreen("recipeEdit");
+            }}
+            onTranslateWithAI={() => {
+              setPendingAiAction("translate");
+              setAiReturnToDetail(true);
               setCurrentScreen("recipeEdit");
             }}
             isNewImport={newlyImportedRecipeId === selectedRecipe.id}
@@ -587,6 +621,9 @@ export const AppNavigator: React.FC = () => {
               } else {
                 addRecipe(updatedRecipe);
               }
+              if (newlyImportedRecipeId === updatedRecipe.id) {
+                setNewlyImportedRecipeId(null);
+              }
               setCurrentScreen("recipeDetail");
             }}
             onApproveImport={(updatedRecipe) => {
@@ -601,6 +638,24 @@ export const AppNavigator: React.FC = () => {
             aiDisabled={aiDisabled}
             initialAiAction={pendingAiAction}
             onAiActionHandled={() => setPendingAiAction(null)}
+            suppressAiAlerts={aiReturnToDetail}
+            onAiActionComplete={(payload) => {
+              if (!aiReturnToDetail) return;
+              const nextRecipe = payload.recipe;
+              const exists = recipes.find((recipe) => recipe.id === nextRecipe.id);
+              if (exists) {
+                updateRecipe(nextRecipe);
+              } else {
+                addRecipe(nextRecipe);
+              }
+              setSelectedRecipe(nextRecipe);
+              setAiCompletionNotice({
+                type: payload.type,
+                creditsUsed: payload.creditsUsed ?? 0,
+              });
+              setAiReturnToDetail(false);
+              setCurrentScreen("recipeDetail");
+            }}
           />
         )}
         {currentScreen === "cookMode" && selectedRecipe && (
@@ -634,6 +689,72 @@ export const AppNavigator: React.FC = () => {
         onAddManually={handleAddManualRecipe}
         inboxCount={importItems.length}
       />
+      <Modal
+        visible={Boolean(duplicatePrompt)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => resolveDuplicatePrompt(false)}
+      >
+        <Pressable style={styles.duplicateBackdrop} onPress={() => resolveDuplicatePrompt(false)}>
+          <Pressable style={styles.duplicateCard} onPress={() => undefined}>
+            <Text style={styles.duplicateTitle}>Already imported</Text>
+            <Text style={styles.duplicateBody}>
+              This link was imported before. Do you want to import it again?
+            </Text>
+            <View style={styles.duplicateActions}>
+              <Pressable
+                style={[styles.duplicateButton, styles.duplicateButtonSecondary]}
+                onPress={() => resolveDuplicatePrompt(false)}
+              >
+                <Text style={styles.duplicateButtonSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.duplicateButton, styles.duplicateButtonPrimary]}
+                onPress={() => resolveDuplicatePrompt(true)}
+              >
+                <Text style={styles.duplicateButtonPrimaryText}>Import again</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+      <Modal
+        visible={Boolean(aiCompletionNotice)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAiCompletionNotice(null)}
+      >
+        <Pressable style={styles.duplicateBackdrop} onPress={() => setAiCompletionNotice(null)}>
+          <Pressable style={styles.duplicateCard} onPress={() => undefined}>
+            <Text style={styles.duplicateTitle}>
+              {aiCompletionNotice?.type === "translate"
+                ? "Recipe has been translated"
+                : "Recipe has been optimized"}
+            </Text>
+            <Text style={styles.duplicateBody}>Please review changes before saving.</Text>
+            <Text style={styles.aiCreditsUsed}>
+              {formatActionsUsed(aiCompletionNotice?.creditsUsed)} actions used
+            </Text>
+            <View style={styles.duplicateActions}>
+              <Pressable
+                style={[styles.duplicateButton, styles.duplicateButtonSecondary]}
+                onPress={() => {
+                  setAiCompletionNotice(null);
+                  setCurrentScreen("recipeEdit");
+                }}
+              >
+                <Text style={styles.duplicateButtonSecondaryText}>Edit</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.duplicateButton, styles.duplicateButtonPrimary]}
+                onPress={() => setAiCompletionNotice(null)}
+              >
+                <Text style={styles.duplicateButtonPrimaryText}>OK</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
@@ -660,5 +781,63 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: colors.white,
+  },
+  duplicateBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.xl,
+  },
+  duplicateCard: {
+    width: "100%",
+    maxWidth: 340,
+    borderRadius: radius.xl,
+    backgroundColor: colors.white,
+    padding: spacing.lg,
+    ...shadow.lg,
+  },
+  duplicateTitle: {
+    ...typography.bodyBold,
+    color: colors.gray900,
+    marginBottom: spacing.xs,
+  },
+  duplicateBody: {
+    ...typography.bodySmall,
+    color: colors.gray600,
+  },
+  duplicateActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  duplicateButton: {
+    flex: 1,
+    borderRadius: radius.full,
+    paddingVertical: spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  duplicateButtonSecondary: {
+    backgroundColor: colors.gray100,
+  },
+  duplicateButtonPrimary: {
+    backgroundColor: colors.gray900,
+  },
+  duplicateButtonSecondaryText: {
+    ...typography.bodySmall,
+    color: colors.gray700,
+    fontWeight: "600",
+  },
+  duplicateButtonPrimaryText: {
+    ...typography.bodySmall,
+    color: colors.white,
+    fontWeight: "600",
+  },
+  aiCreditsUsed: {
+    ...typography.bodySmall,
+    color: colors.gray700,
+    fontWeight: "600",
+    marginTop: spacing.sm,
   },
 });

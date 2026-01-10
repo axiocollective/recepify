@@ -1,11 +1,32 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AppState, Linking } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { BottomTab, ImportItem, Ingredient, PlanTier, Recipe, RecipeCollection, Screen, ShoppingListItem, UsageSummary } from "./types";
-import { getImportLimitMessage, getImportLimitTitle, getPlanLimits, isImportLimitReached } from "./usageLimits";
+import {
+  BottomTab,
+  ImportItem,
+  Ingredient,
+  PlanTier,
+  Recipe,
+  RecipeCollection,
+  Screen,
+  ShoppingListItem,
+  UsageSummary,
+} from "./types";
+import {
+  getPlanLimits,
+  getImportLimitMessage,
+  getImportLimitTitle,
+  getAvailableImports,
+  getAvailableTranslations,
+  getAvailableOptimizations,
+  getAvailableAiMessages,
+  isImportLimitReached,
+  isTranslationLimitReached,
+  isOptimizationLimitReached,
+  isAiLimitReached,
+} from "./usageLimits";
 import {
   addShoppingListItems,
-  addPayPerUseCredits,
   deleteRecipe as deleteRecipeRemote,
   ensureProfile,
   fetchProfile,
@@ -13,6 +34,7 @@ import {
   fetchRecipes,
   fetchShoppingListItems,
   fetchUsageSummary,
+  purchaseAddon as purchaseAddonRemote,
   replaceRecipeCollections,
   replaceShoppingListItems,
   saveRecipe,
@@ -44,13 +66,20 @@ interface AppContextValue {
   aiDisabled: boolean;
   plan: PlanTier;
   usageSummary: UsageSummary | null;
-  bonusImports: number;
-  bonusTokens: number;
+  addonImports: number;
+  addonTranslations: number;
+  addonOptimizations: number;
+  addonAiMessages: number;
   trialActive: boolean;
   trialImportsRemaining: number;
-  trialTokensRemaining: number;
+  trialTranslationsRemaining: number;
+  trialOptimizationsRemaining: number;
+  trialAiMessagesRemaining: number;
   trialEndsAt: string | null;
+  subscriptionEndsAt: string | null;
+  subscriptionStatus: "active" | "canceled" | "expired";
   subscriptionPeriod: "monthly" | "yearly";
+  planBillingFocus: "credits" | null;
   simulateEmptyState: boolean;
   setIsImportOverlayOpen: (open: boolean) => void;
   setSelectedRecipe: (recipe: Recipe | null) => void;
@@ -66,9 +95,10 @@ interface AppContextValue {
     plan?: PlanTier;
     subscriptionPeriod?: "monthly" | "yearly";
   }) => void;
+  scheduleSubscriptionCancellation: (endsAt: string) => void;
   deleteAccount: () => Promise<void>;
   logout: () => void;
-  navigateTo: (screen: Screen) => void;
+  navigateTo: (screen: Screen, options?: { focus?: "credits" }) => void;
   handleRecipeSelect: (recipe: Recipe) => void;
   toggleFavorite: (recipeId: string) => void;
   handleImportAction: (itemId: string, action: "open" | "connect" | "retry" | "delete") => Promise<void>;
@@ -82,7 +112,7 @@ interface AppContextValue {
   deleteRecipe: (recipeId: string) => void;
   updateAccountConnection: (platform: string, connected: boolean) => void;
   refreshUsageSummary: () => void;
-  purchasePayPerUseCredits: () => Promise<void>;
+  purchaseAddon: (action: "import" | "translation" | "optimization" | "ai_message", quantity: number) => Promise<void>;
   setSimulateEmptyState: (value: boolean) => void;
 }
 
@@ -110,17 +140,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [profileReady, setProfileReady] = useState(false);
   const [aiDisabled, setAiDisabled] = useState(false);
-  const [plan, setPlan] = useState<PlanTier>("free");
+  const [plan, setPlan] = useState<PlanTier>("base");
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
-  const [bonusImports, setBonusImports] = useState(0);
-  const [bonusTokens, setBonusTokens] = useState(0);
+  const [addonImports, setAddonImports] = useState(0);
+  const [addonTranslations, setAddonTranslations] = useState(0);
+  const [addonOptimizations, setAddonOptimizations] = useState(0);
+  const [addonAiMessages, setAddonAiMessages] = useState(0);
   const [trialStartsAt, setTrialStartsAt] = useState<string | null>(null);
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [trialImports, setTrialImports] = useState(0);
-  const [trialTokens, setTrialTokens] = useState(0);
+  const [trialTranslations, setTrialTranslations] = useState(0);
+  const [trialOptimizations, setTrialOptimizations] = useState(0);
+  const [trialAiMessages, setTrialAiMessages] = useState(0);
   const [trialImportsUsed, setTrialImportsUsed] = useState(0);
-  const [trialTokensUsed, setTrialTokensUsed] = useState(0);
+  const [trialTranslationsUsed, setTrialTranslationsUsed] = useState(0);
+  const [trialOptimizationsUsed, setTrialOptimizationsUsed] = useState(0);
+  const [trialAiMessagesUsed, setTrialAiMessagesUsed] = useState(0);
+  const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<"active" | "canceled" | "expired">("active");
   const [subscriptionPeriod, setSubscriptionPeriod] = useState<"monthly" | "yearly">("yearly");
+  const [planBillingFocus, setPlanBillingFocus] = useState<"credits" | null>(null);
+  const trialEndAlertShownRef = useRef(false);
+  const subscriptionEndAlertShownRef = useRef(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [simulateEmptyState, setSimulateEmptyState] = useState(false);
   const lastUserIdRef = useRef<string | null>(null);
@@ -138,8 +179,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }),
     []
   );
-  const TRIAL_IMPORTS = 15;
-  const TRIAL_TOKENS = 75000;
+  const TRIAL_IMPORTS = 10;
+  const TRIAL_TRANSLATIONS = 10;
+  const TRIAL_OPTIMIZATIONS = 10;
+  const TRIAL_AI_MESSAGES = 100;
   const TRIAL_DAYS = 14;
   const addDays = (value: Date, days: number) => new Date(value.getTime() + days * 24 * 60 * 60 * 1000);
 
@@ -295,6 +338,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ]
   );
 
+  const processIncomingShare = useCallback(
+    (incoming?: string | null) => {
+      const sharedUrl = extractSharedUrl(incoming);
+      if (!sharedUrl) return false;
+      const didAdd = addImportItemFromUrl(sharedUrl);
+      if (didAdd) {
+        Alert.alert("Saved to inbox", "This link was added to your import inbox.");
+      }
+      return didAdd;
+    },
+    [addImportItemFromUrl, extractSharedUrl]
+  );
+
   const refreshData = useCallback(async () => {
     try {
       const [profile, loadedRecipes, loadedShopping, loadedCollections, loadedUsage] = await Promise.all([
@@ -312,19 +368,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const nextAiDisabled = Boolean(profile.ai_disabled);
         const normalizedPlan = (() => {
           const rawPlan = profile.plan as string | null | undefined;
-          if (rawPlan === "base") return "free";
-          if (rawPlan === "premium") return "paid";
-          if (rawPlan === "free" || rawPlan === "paid" || rawPlan === "premium" || rawPlan === "ai_disabled") {
-            return rawPlan as PlanTier;
-          }
-          return "free";
+          if (rawPlan === "base") return "base";
+          if (rawPlan === "premium") return "premium";
+          if (rawPlan === "free") return "base";
+          if (rawPlan === "paid") return "premium";
+          if (rawPlan === "ai_disabled") return "ai_disabled";
+          return "base";
         })();
-        const nextPlan = normalizedPlan === "ai_disabled" ? "free" : normalizedPlan;
+        const nextPlan = normalizedPlan === "ai_disabled" ? "base" : normalizedPlan;
         setAiDisabled(nextAiDisabled);
         setPlan(nextPlan);
-        setBonusImports(profile.bonus_imports ?? 0);
-        setBonusTokens(profile.bonus_tokens ?? 0);
+        setAddonImports(profile.addon_imports ?? 0);
+        setAddonTranslations(profile.addon_translations ?? 0);
+        setAddonOptimizations(profile.addon_optimizations ?? 0);
+        setAddonAiMessages(profile.addon_ai_messages ?? 0);
         setSubscriptionPeriod(profile.subscription_period === "monthly" ? "monthly" : "yearly");
+        setSubscriptionEndsAt(profile.subscription_ends_at ? new Date(profile.subscription_ends_at).toISOString() : null);
+        setSubscriptionStatus(
+          profile.subscription_status === "canceled" || profile.subscription_status === "expired"
+            ? profile.subscription_status
+            : "active"
+        );
         const now = new Date();
         const profileCreatedAt = profile.created_at ? new Date(profile.created_at) : null;
         const trialStart =
@@ -341,24 +405,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             trialStartedAt: trialStart.toISOString(),
             trialEndsAt: trialEnd.toISOString(),
             trialImports: TRIAL_IMPORTS,
-            trialTokens: TRIAL_TOKENS,
+            trialTranslations: TRIAL_TRANSLATIONS,
+            trialOptimizations: TRIAL_OPTIMIZATIONS,
+            trialAiMessages: TRIAL_AI_MESSAGES,
             trialImportsUsed: 0,
-            trialTokensUsed: 0,
+            trialTranslationsUsed: 0,
+            trialOptimizationsUsed: 0,
+            trialAiMessagesUsed: 0,
           });
         }
         const trialExpired = trialEnd.getTime() <= now.getTime();
-        if (trialExpired && (profile.trial_imports || profile.trial_tokens)) {
+        if (
+          trialExpired &&
+          (profile.trial_imports ||
+            profile.trial_translations ||
+            profile.trial_optimizations ||
+            profile.trial_ai_messages ||
+            profile.plan !== "base" ||
+            profile.subscription_period !== "monthly")
+        ) {
           void ensureProfile({
             trialImports: 0,
-            trialTokens: 0,
+            trialTranslations: 0,
+            trialOptimizations: 0,
+            trialAiMessages: 0,
+            plan: "base",
+            subscriptionPeriod: "monthly",
           });
+        }
+        if (trialExpired && nextPlan !== "base") {
+          setPlan("base");
+        }
+        if (trialExpired) {
+          setSubscriptionPeriod("monthly");
         }
         setTrialStartsAt(trialStart.toISOString());
         setTrialEndsAt(trialEnd.toISOString());
         setTrialImports(trialExpired ? 0 : (profile.trial_imports ?? TRIAL_IMPORTS));
-        setTrialTokens(trialExpired ? 0 : (profile.trial_tokens ?? TRIAL_TOKENS));
+        setTrialTranslations(trialExpired ? 0 : (profile.trial_translations ?? TRIAL_TRANSLATIONS));
+        setTrialOptimizations(trialExpired ? 0 : (profile.trial_optimizations ?? TRIAL_OPTIMIZATIONS));
+        setTrialAiMessages(trialExpired ? 0 : (profile.trial_ai_messages ?? TRIAL_AI_MESSAGES));
         setTrialImportsUsed(profile.trial_imports_used ?? 0);
-        setTrialTokensUsed(profile.trial_tokens_used ?? 0);
+        setTrialTranslationsUsed(profile.trial_translations_used ?? 0);
+        setTrialOptimizationsUsed(profile.trial_optimizations_used ?? 0);
+        setTrialAiMessagesUsed(profile.trial_ai_messages_used ?? 0);
       } else {
         const now = new Date();
         const trialStart = authCreatedAt ? new Date(authCreatedAt) : now;
@@ -367,16 +457,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           trialStartedAt: trialStart.toISOString(),
           trialEndsAt: trialEnd.toISOString(),
           trialImports: TRIAL_IMPORTS,
-          trialTokens: TRIAL_TOKENS,
+          trialTranslations: TRIAL_TRANSLATIONS,
+          trialOptimizations: TRIAL_OPTIMIZATIONS,
+          trialAiMessages: TRIAL_AI_MESSAGES,
           trialImportsUsed: 0,
-          trialTokensUsed: 0,
+          trialTranslationsUsed: 0,
+          trialOptimizationsUsed: 0,
+          trialAiMessagesUsed: 0,
         });
         setTrialStartsAt(trialStart.toISOString());
         setTrialEndsAt(trialEnd.toISOString());
         setTrialImports(TRIAL_IMPORTS);
-        setTrialTokens(TRIAL_TOKENS);
+        setTrialTranslations(TRIAL_TRANSLATIONS);
+        setTrialOptimizations(TRIAL_OPTIMIZATIONS);
+        setTrialAiMessages(TRIAL_AI_MESSAGES);
         setTrialImportsUsed(0);
-        setTrialTokensUsed(0);
+        setTrialTranslationsUsed(0);
+        setTrialOptimizationsUsed(0);
+        setTrialAiMessagesUsed(0);
+        setSubscriptionEndsAt(null);
+        setSubscriptionStatus("active");
         setNeedsOnboarding(true);
         setImportItems([]);
       }
@@ -402,102 +502,125 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!usageSummary) return;
     const trialActive = Boolean(trialEndsAt && new Date(trialEndsAt).getTime() > Date.now());
-    const isFreePlan = plan === "free";
     const previous = lastUsageSummaryRef.current;
-    let importDelta = usageSummary.importCount;
-    let tokenDelta = usageSummary.aiTokens;
-    if (previous && previous.periodStart === usageSummary.periodStart) {
-      importDelta = usageSummary.importCount - previous.importCount;
-      tokenDelta = usageSummary.aiTokens - previous.aiTokens;
-    }
-    if (importDelta > 0) {
-      if (isFreePlan) {
-        let remainingDelta = importDelta;
-        const trialRemaining = Math.max(0, trialImports - trialImportsUsed);
-        if (trialActive && trialRemaining > 0) {
-          const useTrial = Math.min(remainingDelta, trialRemaining);
-          const nextUsed = Math.min(trialImports, trialImportsUsed + useTrial);
-          setTrialImportsUsed(nextUsed);
-          void ensureProfile({ trialImportsUsed: nextUsed });
-          remainingDelta -= useTrial;
-        }
-        if (remainingDelta > 0 && bonusImports > 0) {
-          const nextBonus = Math.max(0, bonusImports - remainingDelta);
-          setBonusImports(nextBonus);
-          void ensureProfile({ bonusImports: nextBonus });
-        }
-      } else {
-        const planLimits = getPlanLimits(plan);
-        const previousOverage = previous
-          ? Math.max(0, previous.importCount - planLimits.imports)
-          : 0;
-        const currentOverage = Math.max(0, usageSummary.importCount - planLimits.imports);
-        const overageDelta = previous && previous.periodStart === usageSummary.periodStart
-          ? currentOverage - previousOverage
-          : currentOverage;
-        if (overageDelta > 0 && bonusImports > 0) {
-          const nextBonus = Math.max(0, bonusImports - overageDelta);
-          setBonusImports(nextBonus);
-          void ensureProfile({ bonusImports: nextBonus });
+    const samePeriod = previous && previous.periodStart === usageSummary.periodStart;
+    const importDelta = samePeriod ? usageSummary.importCount - (previous?.importCount ?? 0) : usageSummary.importCount;
+    const translationDelta = samePeriod
+      ? usageSummary.translationCount - (previous?.translationCount ?? 0)
+      : usageSummary.translationCount;
+    const optimizationDelta = samePeriod
+      ? usageSummary.optimizationCount - (previous?.optimizationCount ?? 0)
+      : usageSummary.optimizationCount;
+    const aiDelta = samePeriod
+      ? usageSummary.aiMessagesCount - (previous?.aiMessagesCount ?? 0)
+      : usageSummary.aiMessagesCount;
+
+    const consume = (
+      delta: number,
+      trialTotal: number,
+      trialUsed: number,
+      setTrialUsed: (value: number) => void,
+      addon: number,
+      setAddon: (value: number) => void,
+      trialUsedField: "trialImportsUsed" | "trialTranslationsUsed" | "trialOptimizationsUsed" | "trialAiMessagesUsed",
+      addonField: "addonImports" | "addonTranslations" | "addonOptimizations" | "addonAiMessages"
+    ) => {
+      if (delta <= 0) return;
+      let remaining = delta;
+      if (trialActive) {
+        const trialRemaining = Math.max(0, trialTotal - trialUsed);
+        if (trialRemaining > 0) {
+          const useTrial = Math.min(remaining, trialRemaining);
+          const nextUsed = trialUsed + useTrial;
+          setTrialUsed(nextUsed);
+          void ensureProfile({ [trialUsedField]: nextUsed } as any);
+          remaining -= useTrial;
         }
       }
-    }
-    if (tokenDelta > 0) {
-      if (isFreePlan) {
-        let remainingDelta = tokenDelta;
-        const trialRemaining = Math.max(0, trialTokens - trialTokensUsed);
-        if (trialActive && trialRemaining > 0) {
-          const useTrial = Math.min(remainingDelta, trialRemaining);
-          const nextUsed = Math.min(trialTokens, trialTokensUsed + useTrial);
-          setTrialTokensUsed(nextUsed);
-          void ensureProfile({ trialTokensUsed: nextUsed });
-          remainingDelta -= useTrial;
-        }
-        if (remainingDelta > 0 && bonusTokens > 0) {
-          const nextBonus = Math.max(0, bonusTokens - remainingDelta);
-          setBonusTokens(nextBonus);
-          void ensureProfile({ bonusTokens: nextBonus });
-        }
-      } else {
-        const planLimits = getPlanLimits(plan);
-        const previousOverage = previous
-          ? Math.max(0, previous.aiTokens - planLimits.tokens)
-          : 0;
-        const currentOverage = Math.max(0, usageSummary.aiTokens - planLimits.tokens);
-        const overageDelta = previous && previous.periodStart === usageSummary.periodStart
-          ? currentOverage - previousOverage
-          : currentOverage;
-        if (overageDelta > 0 && bonusTokens > 0) {
-          const nextBonus = Math.max(0, bonusTokens - overageDelta);
-          setBonusTokens(nextBonus);
-          void ensureProfile({ bonusTokens: nextBonus });
-        }
+      if (remaining > 0 && addon > 0) {
+        const nextAddon = Math.max(0, addon - remaining);
+        setAddon(nextAddon);
+        void ensureProfile({ [addonField]: nextAddon } as any);
+        remaining = Math.max(0, remaining - addon);
       }
-    }
+    };
+
+    consume(
+      importDelta,
+      trialImports,
+      trialImportsUsed,
+      setTrialImportsUsed,
+      addonImports,
+      setAddonImports,
+      "trialImportsUsed",
+      "addonImports"
+    );
+    consume(
+      translationDelta,
+      trialTranslations,
+      trialTranslationsUsed,
+      setTrialTranslationsUsed,
+      addonTranslations,
+      setAddonTranslations,
+      "trialTranslationsUsed",
+      "addonTranslations"
+    );
+    consume(
+      optimizationDelta,
+      trialOptimizations,
+      trialOptimizationsUsed,
+      setTrialOptimizationsUsed,
+      addonOptimizations,
+      setAddonOptimizations,
+      "trialOptimizationsUsed",
+      "addonOptimizations"
+    );
+    consume(
+      aiDelta,
+      trialAiMessages,
+      trialAiMessagesUsed,
+      setTrialAiMessagesUsed,
+      addonAiMessages,
+      setAddonAiMessages,
+      "trialAiMessagesUsed",
+      "addonAiMessages"
+    );
+
     lastUsageSummaryRef.current = usageSummary;
   }, [
-    bonusImports,
-    bonusTokens,
+    addonAiMessages,
+    addonImports,
+    addonOptimizations,
+    addonTranslations,
     plan,
+    trialAiMessages,
+    trialAiMessagesUsed,
     trialEndsAt,
     trialImports,
     trialImportsUsed,
-    trialTokens,
-    trialTokensUsed,
+    trialOptimizations,
+    trialOptimizationsUsed,
+    trialTranslations,
+    trialTranslationsUsed,
     usageSummary,
   ]);
 
-  const purchasePayPerUseCredits = useCallback(async () => {
-    try {
-      const next = await addPayPerUseCredits({ imports: 15, tokens: 75000 });
-      setBonusImports(next.bonusImports);
-      setBonusTokens(next.bonusTokens);
-      Alert.alert("Credits added", "15 recipe imports and 75k AI tokens were added to your account.");
-    } catch (error) {
-      console.warn("Failed to add pay per use credits", error);
-      Alert.alert("Purchase failed", "Please try again in a moment.");
-    }
-  }, []);
+  const purchaseAddon = useCallback(
+    async (action: "import" | "translation" | "optimization" | "ai_message", quantity: number) => {
+      try {
+        const next = await purchaseAddonRemote({ action, quantity });
+        setAddonImports(next.addonImports);
+        setAddonTranslations(next.addonTranslations);
+        setAddonOptimizations(next.addonOptimizations);
+        setAddonAiMessages(next.addonAiMessages);
+        Alert.alert("Added", "The add-on was added to your account.");
+      } catch (error) {
+        console.warn("Failed to purchase add-on", error);
+        Alert.alert("Purchase failed", "Please try again in a moment.");
+      }
+    },
+    []
+  );
 
 
   useEffect(() => {
@@ -551,26 +674,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [refreshData]);
 
   useEffect(() => {
-    const handleSharedLink = (incoming?: string | null) => {
-      const sharedUrl = extractSharedUrl(incoming);
-      if (sharedUrl) {
-        const didAdd = addImportItemFromUrl(sharedUrl);
-        if (didAdd) {
-          Alert.alert("Saved to inbox", "This link was added to your import inbox.");
-        }
-      }
+    const handleIncoming = (incoming?: string | null) => {
+      processIncomingShare(incoming);
     };
 
-    void Linking.getInitialURL().then(handleSharedLink).catch(() => undefined);
-
-    const subscription = Linking.addEventListener("url", ({ url }) => {
-      handleSharedLink(url);
-    });
+    void Linking.getInitialURL().then(handleIncoming).catch(() => undefined);
+    const subscription = Linking.addEventListener("url", ({ url }) => handleIncoming(url));
 
     return () => {
       subscription.remove();
     };
-  }, [addImportItemFromUrl, extractSharedUrl]);
+  }, [processIncomingShare]);
 
   useEffect(() => {
     let isActive = true;
@@ -581,7 +695,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!value.startsWith("recepify-share:")) return;
         const url = value.replace("recepify-share:", "").trim();
         if (!url) return;
-        const didAdd = addImportItemFromUrl(url);
+        const didAdd = processIncomingShare(url);
         if (didAdd) {
           await Clipboard.setStringAsync("");
         }
@@ -602,7 +716,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isActive = false;
       subscription.remove();
     };
-  }, [addImportItemFromUrl]);
+  }, [processIncomingShare]);
 
   useEffect(() => {
     if (!isAuthenticated || !userId) return;
@@ -657,7 +771,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     if (!previousAuthRef.current && isAuthenticated) {
-      setCurrentScreen("home");
+      setCurrentScreen("welcome");
       setSelectedTab("home");
       setSelectedRecipe(null);
     }
@@ -668,12 +782,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!trialEndsAt) return;
     const now = Date.now();
     const endsAt = new Date(trialEndsAt).getTime();
-    if (endsAt <= now && (trialImports > 0 || trialTokens > 0)) {
-      setTrialImports(0);
-      setTrialTokens(0);
-      void ensureProfile({ trialImports: 0, trialTokens: 0 });
+    if (endsAt <= now) {
+      if (trialImports > 0 || trialTranslations > 0 || trialOptimizations > 0 || trialAiMessages > 0) {
+        setTrialImports(0);
+        setTrialTranslations(0);
+        setTrialOptimizations(0);
+        setTrialAiMessages(0);
+      }
+      void ensureProfile({
+        trialImports: 0,
+        trialTranslations: 0,
+        trialOptimizations: 0,
+        trialAiMessages: 0,
+        plan: "base",
+        subscriptionPeriod: "monthly",
+      });
+      setPlan("base");
+      setSubscriptionPeriod("monthly");
+      if (!trialEndAlertShownRef.current) {
+        trialEndAlertShownRef.current = true;
+        Alert.alert(
+          "Trial ended",
+          "Your trial has ended. You’re now on Recepify Base (monthly). Trial actions and imports have expired.",
+          [
+            { text: "OK" },
+            {
+              text: "Subscription",
+              style: "cancel",
+              onPress: () => {
+                setSelectedTab("profile");
+                setCurrentScreen("planBilling");
+              },
+            },
+          ]
+        );
+      }
     }
-  }, [trialEndsAt, trialImports, trialTokens]);
+  }, [trialEndsAt, trialAiMessages, trialImports, trialOptimizations, trialTranslations]);
+
+  useEffect(() => {
+    if (!subscriptionEndsAt || !isAuthenticated) return;
+    const endsAt = new Date(subscriptionEndsAt).getTime();
+    if (Number.isNaN(endsAt) || endsAt > Date.now()) return;
+    if (!subscriptionEndAlertShownRef.current) {
+      subscriptionEndAlertShownRef.current = true;
+      setSubscriptionStatus("expired");
+      void ensureProfile({ subscriptionStatus: "expired" });
+      Alert.alert(
+        "Subscription ended",
+        "Your subscription has ended. Please sign in again to continue.",
+        [{ text: "OK", onPress: () => logout() }]
+      );
+      return;
+    }
+    logout();
+  }, [isAuthenticated, logout, subscriptionEndsAt]);
 
   const handleLoadingComplete = useCallback((payload?: { name?: string; email?: string }) => {
     setCurrentScreen("home");
@@ -697,11 +860,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [aiDisabled, plan, subscriptionPeriod, userCountry, userLanguage]);
 
+  const scheduleSubscriptionCancellation = useCallback((endsAt: string) => {
+    setSubscriptionEndsAt(endsAt);
+    setSubscriptionStatus("canceled");
+    void ensureProfile({ subscriptionEndsAt: endsAt, subscriptionStatus: "canceled" });
+  }, []);
+
   const updateProfile = useCallback((payload: { name?: string; email?: string; language?: "English" | "German"; country?: string; aiDisabled?: boolean; plan?: PlanTier; subscriptionPeriod?: "monthly" | "yearly" }) => {
     const nextName = payload.name ?? userName;
     const nextLanguage = payload.language ?? userLanguage;
     const nextCountry = payload.country ?? userCountry;
-    const nextPlan = payload.plan === "ai_disabled" ? "free" : payload.plan ?? plan;
+    const nextPlan = payload.plan === "ai_disabled" ? "base" : payload.plan ?? plan;
     const nextSubscriptionPeriod = payload.subscriptionPeriod ?? subscriptionPeriod;
     const nextAiDisabled = payload.aiDisabled ?? aiDisabled;
 
@@ -724,7 +893,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setAiDisabled(payload.aiDisabled);
     }
     if (payload.plan !== undefined) {
-      setPlan(payload.plan === "ai_disabled" ? "free" : payload.plan);
+      setPlan(payload.plan === "ai_disabled" ? "base" : payload.plan);
+      setSubscriptionEndsAt(null);
+      setSubscriptionStatus("active");
     }
     if (payload.subscriptionPeriod !== undefined) {
       setSubscriptionPeriod(payload.subscriptionPeriod);
@@ -737,8 +908,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       aiDisabled: nextAiDisabled,
       plan: nextPlan,
       subscriptionPeriod: nextSubscriptionPeriod,
+      subscriptionEndsAt: payload.plan !== undefined ? null : subscriptionEndsAt,
+      subscriptionStatus: payload.plan !== undefined ? "active" : subscriptionStatus,
     });
-  }, [aiDisabled, plan, subscriptionPeriod, userCountry, userLanguage, userName]);
+  }, [aiDisabled, plan, subscriptionEndsAt, subscriptionPeriod, userCountry, userLanguage, userName]);
 
   const deleteAccount = useCallback(async () => {
     if (!userId) {
@@ -761,15 +934,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNeedsOnboarding(true);
     setProfileReady(false);
     setAiDisabled(false);
-    setPlan("free");
-    setBonusImports(0);
-    setBonusTokens(0);
+    setPlan("base");
+    setAddonImports(0);
+    setAddonTranslations(0);
+    setAddonOptimizations(0);
+    setAddonAiMessages(0);
     setTrialStartsAt(null);
     setTrialEndsAt(null);
     setTrialImports(0);
-    setTrialTokens(0);
+    setTrialTranslations(0);
+    setTrialOptimizations(0);
+    setTrialAiMessages(0);
     setTrialImportsUsed(0);
-    setTrialTokensUsed(0);
+    setTrialTranslationsUsed(0);
+    setTrialOptimizationsUsed(0);
+    setTrialAiMessagesUsed(0);
     setUsageSummary(null);
   }, [userId]);
 
@@ -780,18 +959,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSelectedTab("home");
     setCollections([]);
     setProfileReady(false);
-    setBonusImports(0);
-    setBonusTokens(0);
+    setAddonImports(0);
+    setAddonTranslations(0);
+    setAddonOptimizations(0);
+    setAddonAiMessages(0);
     setTrialStartsAt(null);
     setTrialEndsAt(null);
     setTrialImports(0);
-    setTrialTokens(0);
+    setTrialTranslations(0);
+    setTrialOptimizations(0);
+    setTrialAiMessages(0);
     setTrialImportsUsed(0);
-    setTrialTokensUsed(0);
+    setTrialTranslationsUsed(0);
+    setTrialOptimizationsUsed(0);
+    setTrialAiMessagesUsed(0);
+    setSubscriptionEndsAt(null);
+    setSubscriptionStatus("active");
   }, []);
 
-  const navigateTo = useCallback((screen: Screen) => {
+  const navigateTo = useCallback((screen: Screen, options?: { focus?: "credits" }) => {
     setCurrentScreen(screen);
+    if (screen === "planBilling") {
+      setPlanBillingFocus(options?.focus ?? null);
+    } else {
+      setPlanBillingFocus(null);
+    }
     if (screen === "home" || screen === "import" || screen === "myRecipes" || screen === "shoppingList" || screen === "profile") {
       setSelectedTab(screen);
     }
@@ -828,17 +1020,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!item.url) {
           return;
         }
-        const importLimitReached = isImportLimitReached(
-          plan,
-          usageSummary,
-          bonusImports,
-          trialImportsRemaining
-        );
+        const importLimitReached = isImportLimitReached(plan, usageSummary, trialActive, addonImports, trialImportsRemaining);
         if (importLimitReached) {
-          const limitMessage = getImportLimitMessage(plan, trialActive);
+          const limitMessage = getImportLimitMessage(plan);
           const limitTitle = getImportLimitTitle(plan);
           Alert.alert(limitTitle, limitMessage, [
-            { text: "Buy credits", onPress: () => navigateTo("planBilling") },
+            { text: "Buy more", onPress: () => navigateTo("planBilling", { focus: "credits" }) },
             { text: "Cancel", style: "cancel" },
           ]);
           return;
@@ -853,7 +1040,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const saved = await addRecipe(imported);
           const nextRecipe = saved ?? imported;
           setSelectedRecipe(nextRecipe);
-          setCurrentScreen("recipeEdit");
+          setCurrentScreen("recipeDetail");
           refreshUsageSummary();
           setImportItems((prev) => prev.filter((importItem) => importItem.id !== itemId));
             const alertKey = nextRecipe.id || nextRecipe.sourceUrl || nextRecipe.title;
@@ -873,12 +1060,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (message.includes("YOUTUBE_TOO_LONG_NO_DESC")) {
             Alert.alert(
               "Video too long to import",
-              "This video is longer than 15 minutes and doesn’t include ingredients in the description. Please try another link or add the recipe manually. No credits were used."
+              "This video is longer than 15 minutes and doesn’t include ingredients in the description. Please try another link or add the recipe manually. No actions were used."
             );
           } else {
             Alert.alert(
               "Import didn’t work",
-              "We couldn’t read this link properly. Please try again or use a different link. No credits were used."
+              "We couldn’t read this link properly. Please try again or use a different link. No actions were used."
             );
           }
           setImportItems((prev) =>
@@ -913,7 +1100,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
       }, 2000);
     },
-    [addRecipe, bonusImports, handleRecipeSelect, importItems, plan, recipes, refreshUsageSummary, trialActive, trialImportsRemaining, usageSummary, navigateTo]
+    [addRecipe, addonImports, handleRecipeSelect, importItems, plan, recipes, refreshUsageSummary, trialActive, trialImportsRemaining, usageSummary, navigateTo]
   );
 
   const handleAddToShoppingList = useCallback(
@@ -1030,8 +1217,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const trialImportsRemaining = trialActive
     ? Math.max(0, trialImports - trialImportsUsed)
     : 0;
-  const trialTokensRemaining = trialActive
-    ? Math.max(0, trialTokens - trialTokensUsed)
+  const trialTranslationsRemaining = trialActive
+    ? Math.max(0, trialTranslations - trialTranslationsUsed)
+    : 0;
+  const trialOptimizationsRemaining = trialActive
+    ? Math.max(0, trialOptimizations - trialOptimizationsUsed)
+    : 0;
+  const trialAiMessagesRemaining = trialActive
+    ? Math.max(0, trialAiMessages - trialAiMessagesUsed)
     : 0;
 
   const value = useMemo<AppContextValue>(
@@ -1055,13 +1248,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       aiDisabled,
       plan,
       usageSummary,
-      bonusImports,
-      bonusTokens,
+      addonImports,
+      addonTranslations,
+      addonOptimizations,
+      addonAiMessages,
       trialActive,
       trialImportsRemaining,
-      trialTokensRemaining,
+      trialTranslationsRemaining,
+      trialOptimizationsRemaining,
+      trialAiMessagesRemaining,
       trialEndsAt,
+      subscriptionEndsAt,
+      subscriptionStatus,
       subscriptionPeriod,
+      planBillingFocus,
       simulateEmptyState,
       setIsImportOverlayOpen,
       setSelectedRecipe,
@@ -1069,6 +1269,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSelectedTab,
       handleLoadingComplete,
       updateProfile,
+      scheduleSubscriptionCancellation,
       deleteAccount,
       logout,
       navigateTo,
@@ -1085,7 +1286,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteRecipe,
       updateAccountConnection,
       refreshUsageSummary,
-      purchasePayPerUseCredits,
+      purchaseAddon,
       setSimulateEmptyState,
     }),
     [
@@ -1108,16 +1309,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       aiDisabled,
       plan,
       usageSummary,
-      bonusImports,
-      bonusTokens,
+      addonImports,
+      addonTranslations,
+      addonOptimizations,
+      addonAiMessages,
       trialActive,
       trialImportsRemaining,
-      trialTokensRemaining,
+      trialTranslationsRemaining,
+      trialOptimizationsRemaining,
+      trialAiMessagesRemaining,
       trialEndsAt,
+      subscriptionEndsAt,
+      subscriptionStatus,
       subscriptionPeriod,
+      planBillingFocus,
       simulateEmptyState,
       handleLoadingComplete,
       updateProfile,
+      scheduleSubscriptionCancellation,
       deleteAccount,
       logout,
       navigateTo,
@@ -1134,12 +1343,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteRecipe,
       updateAccountConnection,
       refreshUsageSummary,
-      purchasePayPerUseCredits,
+      purchaseAddon,
       setSimulateEmptyState,
-      trialActive,
-      trialImportsRemaining,
-      trialTokensRemaining,
-      trialEndsAt,
     ]
   );
 

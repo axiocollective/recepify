@@ -26,6 +26,7 @@ from .import_utils import (
     ingredients_from_strings,
     instructions_from_strings,
     normalize_iso_duration,
+    normalize_servings,
     pick_best_recipe,
     resolve_schema_image,
     safe_list,
@@ -156,7 +157,7 @@ def _schema_to_recipe(
     servings = node.get("recipeYield")
     if isinstance(servings, list) and servings:
         servings = servings[0]
-    servings = clean_text(str(servings)) if servings else None
+    servings = normalize_servings(servings)
 
     prep_time = normalize_iso_duration(node.get("prepTime"))
     cook_time = normalize_iso_duration(node.get("cookTime"))

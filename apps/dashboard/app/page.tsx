@@ -351,15 +351,6 @@ export default function DashboardPage() {
               <option value="">All contexts</option>
               <option value="chat">Chat</option>
               <option value="optimized_with_ai">Optimized with AI</option>
-              <option value="translate_recipe">Translate</option>
-              <option value="improve_title">Improve title</option>
-              <option value="infer_ingredients">Infer ingredients</option>
-              <option value="generate_description">Generate description</option>
-              <option value="generate_steps">Generate steps</option>
-              <option value="optimize_ingredients">Optimize ingredients</option>
-              <option value="calculate_nutrition">Nutrition</option>
-              <option value="suggest_tags">Suggest tags</option>
-              <option value="estimate_time">Estimate time</option>
             </select>
           </label>
         </div>

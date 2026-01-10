@@ -9,7 +9,15 @@ import { RecipeThumbnail } from "./RecipeThumbnail";
 import { RecipeAssistantChat } from "./RecipeAssistantChat";
 import { AddToCollectionModal } from "./AddToCollectionModal";
 import { useApp } from "../data/AppContext";
-import { getAiLimitMessage, getAiLimitTitle, isAiLimitReached } from "../data/usageLimits";
+import {
+  getAiLimitMessage,
+  getAiLimitTitle,
+  getTranslationLimitMessage,
+  getOptimizationLimitMessage,
+  isAiLimitReached,
+  isTranslationLimitReached,
+  isOptimizationLimitReached,
+} from "../data/usageLimits";
 
 interface RecipeDetailProps {
   recipe: Recipe;
@@ -20,6 +28,7 @@ interface RecipeDetailProps {
   onAddToShoppingList?: (ingredients: Ingredient[], recipeName: string, recipeId: string) => void;
   onApproveImport?: () => void;
   onOptimizeWithAI?: () => void;
+  onTranslateWithAI?: () => void;
   isNewImport?: boolean;
   aiDisabled?: boolean;
   onUpdateViewSettings?: (payload: { servings: number; unitSystem: "metric" | "us" }) => void;
@@ -38,6 +47,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
   onAddToShoppingList,
   onApproveImport,
   onOptimizeWithAI,
+  onTranslateWithAI,
   isNewImport = false,
   aiDisabled = false,
   onUpdateViewSettings,
@@ -48,17 +58,74 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
 }) => {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const { plan, usageSummary, bonusTokens, trialActive, trialTokensRemaining } = useApp();
-  const aiLimitReached = isAiLimitReached(plan, usageSummary, bonusTokens, trialTokensRemaining);
-  const isPremium = plan === "paid" || plan === "premium";
-  const creditsExhausted = aiLimitReached;
-  const aiUsageBlocked = aiDisabled || creditsExhausted;
+  const {
+    plan,
+    usageSummary,
+    addonTranslations,
+    addonOptimizations,
+    addonAiMessages,
+    trialActive,
+    trialTranslationsRemaining,
+    trialOptimizationsRemaining,
+    trialAiMessagesRemaining,
+    navigateTo,
+    userLanguage,
+  } = useApp();
+  const translationLimitReached = isTranslationLimitReached(
+    plan,
+    usageSummary,
+    trialActive,
+    addonTranslations,
+    trialTranslationsRemaining
+  );
+  const optimizationLimitReached = isOptimizationLimitReached(
+    plan,
+    usageSummary,
+    trialActive,
+    addonOptimizations,
+    trialOptimizationsRemaining
+  );
+  const aiLimitReached = isAiLimitReached(
+    plan,
+    usageSummary,
+    trialActive,
+    addonAiMessages,
+    trialAiMessagesRemaining
+  );
+  const isPremium = plan === "premium";
+  const translateBlocked = aiDisabled || translationLimitReached;
+  const optimizeBlocked = aiDisabled || optimizationLimitReached;
   const aiLimitMessage = aiDisabled
     ? "AI features are disabled on your plan. Upgrade to re-enable ChefGPT."
-    : getAiLimitMessage(plan, trialActive);
+    : getAiLimitMessage(plan);
   const showPremiumBadge = false;
-  const showCreditsBadge = creditsExhausted;
+  const showCreditsBadge = false;
   const aiLimitTitle = getAiLimitTitle(plan);
+  const aiChatBlocked = aiDisabled || aiLimitReached;
+  const openPlans = () => {
+    if (typeof navigateTo === "function") {
+      navigateTo("planBilling", { focus: "credits" });
+    }
+  };
+
+  const showAiLimitAlert = () => {
+    Alert.alert(aiLimitTitle, aiLimitMessage, [
+      { text: "Buy more", onPress: openPlans },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+  const showTranslateLimitAlert = () => {
+    Alert.alert("Translations used up", getTranslationLimitMessage(plan), [
+      { text: "Buy more", onPress: openPlans },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+  const showOptimizeLimitAlert = () => {
+    Alert.alert("Optimizations used up", getOptimizationLimitMessage(plan), [
+      { text: "Buy more", onPress: openPlans },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
   const [currentServings, setCurrentServings] = useState((recipe.servingsOverride ?? recipe.servings) || 1);
   const [isVideoMuted, setIsVideoMuted] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -71,6 +138,65 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
     return /(g|kg|ml|l|°c)\b/.test(text) ? "metric" : "us";
   };
   const [unitSystem, setUnitSystem] = useState<"metric" | "us">(recipe.unitSystem ?? detectDefaultUnit());
+
+  const detectRecipeLanguage = (value: Recipe): "en" | "de" => {
+    const aggregate = [
+      value.title,
+      value.description,
+      value.notes,
+      value.ingredients.map((ingredient) => `${ingredient.name ?? ""}`).join(" "),
+      value.steps.join(" "),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    let germanScore = 0;
+    let englishScore = 0;
+    if (/[äöüß]/i.test(aggregate)) {
+      germanScore += 2;
+    }
+    const germanIndicators = [
+      /\bund\b/,
+      /\bmit\b/,
+      /\bzutaten\b/,
+      /\bofen\b/,
+      /\bpfanne\b/,
+      /\bminuten\b/,
+      /\bgramm\b/,
+      /\bel\b/,
+      /\btl\b/,
+      /\bdie\b/,
+      /\bder\b/,
+      /\bdas\b/,
+    ];
+    const englishIndicators = [
+      /\band\b/,
+      /\bwith\b/,
+      /\bfor\b/,
+      /\bthe\b/,
+      /\bto\b/,
+      /\bingredients?\b/,
+      /\bpreheat\b/,
+      /\boven\b/,
+      /\bpan\b/,
+      /\btsp\b/,
+      /\btbsp\b/,
+      /\bcups?\b/,
+      /\bminutes?\b/,
+      /\bserve\b/,
+      /\bmix\b/,
+      /\bbake\b/,
+      /\bsalt\b/,
+      /\bpepper\b/,
+    ];
+    germanIndicators.forEach((pattern) => {
+      if (pattern.test(aggregate)) germanScore += 1;
+    });
+    englishIndicators.forEach((pattern) => {
+      if (pattern.test(aggregate)) englishScore += 1;
+    });
+    return germanScore > englishScore ? "de" : "en";
+  };
 
   const formatSourceLabel = (source?: string) => {
     if (!source) return null;
@@ -303,15 +429,61 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
     hasServings &&
     hasCookingTime &&
     hasNutrition;
+  const nutritionMissingOnly =
+    hasTitle &&
+    hasDescription &&
+    hasIngredients &&
+    hasSteps &&
+    hasServings &&
+    hasCookingTime &&
+    !hasNutrition;
+  const cookingTimeMissingOnly =
+    hasTitle &&
+    hasDescription &&
+    hasIngredients &&
+    hasSteps &&
+    hasServings &&
+    !hasCookingTime;
+  const servingsMissingOnly =
+    hasTitle &&
+    hasDescription &&
+    hasIngredients &&
+    hasSteps &&
+    hasCookingTime &&
+    hasNutrition &&
+    !hasServings;
   const hasMissingDetails = !isIncomplete && !looksGood;
+  const preferredLanguage = userLanguage?.toLowerCase().startsWith("de") ? "de" : "en";
+  const recipeLanguage = detectRecipeLanguage(recipe);
+  const showTranslateAction = recipeLanguage !== preferredLanguage;
 
   const importReviewCopy = isIncomplete
     ? {
         title: "Recipe incomplete",
-        body:
-          "This source didn’t include enough information to create a usable recipe. Please add the missing details or try another link. No credits were used.",
+        body: (
+          <Text style={styles.importReviewText}>
+            This source didn’t include enough information to create a usable recipe. Please add the missing
+            pieces manually or try another link.{" "}
+            <Text style={styles.importReviewEmphasis}>No actions were used.</Text>
+          </Text>
+        ),
       }
-    : looksGood
+    : nutritionMissingOnly
+      ? {
+          title: "Recipe looks good",
+          body: "Nutrition values are missing. Please add them manually or use AI.",
+        }
+      : cookingTimeMissingOnly
+      ? {
+          title: "Recipe looks good",
+          body: "Cooking time is missing. Please add it manually or use AI.",
+        }
+      : servingsMissingOnly
+      ? {
+          title: "Recipe looks good",
+          body: "Servings are not specified. Please add them manually.",
+        }
+      : looksGood
       ? {
           title: "Recipe looks good",
           body: "All the key details are here. You can approve it now, or tweak anything you’d like.",
@@ -396,12 +568,16 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
           {showImportReview && (
             <View style={[styles.importReviewCard, shadow.md]}>
               <View style={styles.importReviewHeader}>
-                <View style={[styles.importReviewIcon, isIncomplete && styles.importReviewIconDanger]}>
+                <View style={styles.importReviewIcon}>
                   <Ionicons name="information-circle-outline" size={18} color={colors.gray700} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.importReviewTitle}>{importReviewCopy.title}</Text>
-                  <Text style={styles.importReviewText}>{importReviewCopy.body}</Text>
+                  {typeof importReviewCopy.body === "string" ? (
+                    <Text style={styles.importReviewText}>{importReviewCopy.body}</Text>
+                  ) : (
+                    importReviewCopy.body
+                  )}
                 </View>
               </View>
               <View style={styles.importReviewActions}>
@@ -433,53 +609,76 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
                     </Pressable>
                   ) : (
                     <>
-                      {(showPremiumBadge || showCreditsBadge) && (
-                        <LinearGradient
-                          colors={showPremiumBadge ? ["#fbbf24", "#f59e0b", "#d97706"] : ["#fb923c", "#f97316"]}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={styles.importBadge}
+                          {showTranslateAction && (
+                        <Pressable
+                          style={[
+                            styles.importTranslateButton,
+                            translateBlocked && styles.importTranslateButtonDisabled,
+                          ]}
+                          onPress={() => {
+                            if (translateBlocked) {
+                              showTranslateLimitAlert();
+                              return;
+                            }
+                            onTranslateWithAI?.();
+                          }}
                         >
-                          <Ionicons
-                            name={showPremiumBadge ? "star" : "alert-circle"}
-                            size={11}
-                            color={colors.white}
-                          />
-                          {showPremiumBadge && <Text style={styles.importBadgeText}>Premium</Text>}
-                        </LinearGradient>
+                          <LinearGradient
+                            colors={translateBlocked ? [colors.gray200, colors.gray200] : ["#3b82f6", "#2563eb"]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={[
+                              styles.importTranslateButtonInner,
+                              translateBlocked && styles.importTranslateButtonInnerDisabled,
+                            ]}
+                          >
+                            <Ionicons
+                              name="language-outline"
+                              size={16}
+                              color={translateBlocked ? colors.gray500 : colors.white}
+                            />
+                            <Text
+                              style={[
+                                styles.importTranslateText,
+                                translateBlocked && styles.importTranslateTextDisabled,
+                              ]}
+                            >
+                              Translate
+                            </Text>
+                          </LinearGradient>
+                        </Pressable>
                       )}
                       <Pressable
                         style={[
                           styles.importOptimizeButton,
-                          aiUsageBlocked && styles.importOptimizeButtonDisabled,
+                          optimizeBlocked && styles.importOptimizeButtonDisabled,
                         ]}
                         onPress={() => {
-                          if (aiUsageBlocked) {
-                          Alert.alert(aiLimitTitle, aiLimitMessage);
+                          if (optimizeBlocked) {
+                          showOptimizeLimitAlert();
                             return;
                           }
                           onOptimizeWithAI?.();
                         }}
-                        disabled={aiUsageBlocked}
                       >
                         <LinearGradient
-                          colors={aiUsageBlocked ? [colors.gray200, colors.gray200] : ["#a855f7", "#9333ea"]}
+                          colors={optimizeBlocked ? [colors.gray200, colors.gray200] : ["#a855f7", "#9333ea"]}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 0 }}
                           style={[
                             styles.importOptimizeButtonInner,
-                            aiUsageBlocked && styles.importOptimizeButtonInnerDisabled,
+                            optimizeBlocked && styles.importOptimizeButtonInnerDisabled,
                           ]}
                         >
                           <Ionicons
                             name="sparkles"
                             size={16}
-                            color={aiUsageBlocked ? colors.gray500 : colors.white}
+                            color={optimizeBlocked ? colors.gray500 : colors.white}
                           />
                           <Text
                             style={[
                               styles.importOptimizeText,
-                              aiUsageBlocked && styles.importOptimizeTextDisabled,
+                              optimizeBlocked && styles.importOptimizeTextDisabled,
                             ]}
                           >
                             Optimize with AI
@@ -494,22 +693,20 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
           )}
           {recipe.description && <Text style={styles.description}>{recipe.description}</Text>}
           <View style={styles.metaRow}>
-            {recipe.totalTime && (
-              <View style={styles.metaItem}>
-                <Ionicons name="time-outline" size={16} color={colors.gray600} />
-                <Text style={styles.metaText}>{recipe.totalTime}</Text>
-              </View>
-            )}
-            {recipe.servings && (
-              <View style={styles.metaItem}>
-                <Ionicons name="people-outline" size={16} color={colors.gray600} />
-                <Text style={styles.metaText}>{recipe.servings} servings</Text>
-              </View>
-            )}
+            <View style={styles.metaItem}>
+              <Ionicons name="time-outline" size={16} color={colors.gray600} />
+              <Text style={styles.metaText}>{recipe.totalTime || "—"}</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Ionicons name="people-outline" size={16} color={colors.gray600} />
+              <Text style={styles.metaText}>
+                {recipe.servings ? `${recipe.servings} servings` : "—"}
+              </Text>
+            </View>
           </View>
         </View>
 
-        {!isIncomplete && (
+        {!isIncomplete && hasServings && (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Ionicons name="people-outline" size={16} color={colors.gray700} />
@@ -799,35 +996,19 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
             recipe={recipe}
           />
 
-          {aiUsageBlocked && (
-            <View style={styles.limitBanner}>
-              <Ionicons name="alert-circle" size={16} color={colors.purple600} />
-              <Text style={styles.limitBannerText}>{aiLimitMessage}</Text>
-            </View>
-          )}
           <View style={styles.floatingAssistantWrap}>
             <Pressable
-              style={[styles.floatingAssistant, shadow.lg, aiUsageBlocked && styles.floatingAssistantDisabled]}
+              style={[styles.floatingAssistant, shadow.lg, aiChatBlocked && styles.floatingAssistantDisabled]}
               onPress={() => {
-                if (aiUsageBlocked) {
-                  Alert.alert(aiLimitTitle, aiLimitMessage);
+                if (aiChatBlocked) {
+                  showAiLimitAlert();
                   return;
                 }
                 setAssistantOpen(true);
               }}
             >
-              <Ionicons name="sparkles" size={22} color={aiUsageBlocked ? colors.gray500 : colors.white} />
+              <Ionicons name="sparkles" size={22} color={aiChatBlocked ? colors.gray500 : colors.white} />
             </Pressable>
-            {creditsExhausted && (
-              <LinearGradient
-                colors={["#fb923c", "#f97316"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.premiumBadge, shadow.md]}
-              >
-                <Ionicons name="alert-circle" size={10} color={colors.white} />
-              </LinearGradient>
-            )}
           </View>
         </>
       )}
@@ -954,9 +1135,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  importReviewIconDanger: {
-    backgroundColor: colors.red500,
-  },
   importReviewTitle: {
     ...typography.bodyBold,
     color: colors.gray900,
@@ -965,6 +1143,11 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.gray600,
     marginTop: spacing.xs,
+  },
+  importReviewEmphasis: {
+    ...typography.bodySmall,
+    fontWeight: "700",
+    color: colors.gray900,
   },
   importReviewActions: {
     gap: spacing.sm,
@@ -999,6 +1182,7 @@ const styles = StyleSheet.create({
   },
   importOptimizeWrap: {
     position: "relative",
+    gap: spacing.sm,
   },
   importOptimizeButton: {
     borderRadius: radius.xl,
@@ -1024,6 +1208,32 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   importOptimizeTextDisabled: {
+    color: colors.gray500,
+  },
+  importTranslateButton: {
+    borderRadius: radius.xl,
+    overflow: "hidden",
+  },
+  importTranslateButtonDisabled: {
+    opacity: 0.85,
+  },
+  importTranslateButtonInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    minHeight: 48,
+  },
+  importTranslateButtonInnerDisabled: {
+    backgroundColor: colors.gray200,
+  },
+  importTranslateText: {
+    ...typography.bodySmall,
+    color: colors.white,
+    fontWeight: "600",
+  },
+  importTranslateTextDisabled: {
     color: colors.gray500,
   },
   importDeleteButton: {

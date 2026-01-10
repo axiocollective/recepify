@@ -35,6 +35,19 @@ def clean_text(value: Optional[str]) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def normalize_servings(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)) and value:
+        return str(value)
+    normalized = clean_text(str(value))
+    if not normalized:
+        return None
+    match = re.search(r"\d+(?:[.,]\d+)?", normalized)
+    if not match:
+        return None
+    return match.group(0).replace(",", ".")
+
 def safe_list(value: Any) -> List[Any]:
     if value is None:
         return []

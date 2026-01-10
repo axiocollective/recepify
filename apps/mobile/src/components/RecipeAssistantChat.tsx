@@ -5,6 +5,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -16,7 +17,7 @@ import { Recipe } from "../data/types";
 import { askRecipeAssistant } from "../services/assistantApi";
 import { colors, radius, spacing, shadow } from "../theme/theme";
 import { useApp } from "../data/AppContext";
-import { getAiLimitMessage, isAiLimitReached } from "../data/usageLimits";
+import { getAiLimitMessage, getAiLimitTitle, isAiLimitReached } from "../data/usageLimits";
 
 interface RecipeAssistantChatProps {
   isOpen: boolean;
@@ -340,14 +341,38 @@ export const RecipeAssistantChat: React.FC<RecipeAssistantChatProps> = ({ isOpen
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { height: windowHeight } = useWindowDimensions();
-  const sheetHeight = Math.round(windowHeight * 0.75);
+  const statusBarHeight = Platform.OS === "ios" ? 44 : StatusBar.currentHeight ?? 24;
+  const cardBottomSpacing = 0;
+  const bottomPadding = spacing.md;
+  const sheetHeight = Math.round(windowHeight - statusBarHeight - cardBottomSpacing - bottomPadding);
   const scrollRef = useRef<ScrollView | null>(null);
-  const { plan, usageSummary, bonusTokens, aiDisabled, refreshUsageSummary, trialActive, trialTokensRemaining } = useApp();
-  const aiLimitReached = isAiLimitReached(plan, usageSummary, bonusTokens, trialTokensRemaining);
+  const {
+    plan,
+    usageSummary,
+    addonAiMessages,
+    aiDisabled,
+    refreshUsageSummary,
+    trialActive,
+    trialAiMessagesRemaining,
+    navigateTo,
+  } = useApp();
+  const aiLimitReached = isAiLimitReached(plan, usageSummary, trialActive, addonAiMessages, trialAiMessagesRemaining);
   const aiUsageBlocked = aiDisabled || aiLimitReached;
   const aiLimitMessage = aiDisabled
     ? "AI features are disabled on your plan. Upgrade to re-enable ChefGPT."
-    : getAiLimitMessage(plan, trialActive);
+    : getAiLimitMessage(plan);
+  const openPlans = () => {
+    if (typeof navigateTo === "function") {
+      navigateTo("planBilling", { focus: "credits" });
+    }
+  };
+
+  const showAiLimitAlert = () => {
+    Alert.alert(getAiLimitTitle(plan), aiLimitMessage, [
+      { text: "Buy more", onPress: openPlans },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
 
   const suggestions = useMemo(
     () => [
@@ -387,7 +412,7 @@ export const RecipeAssistantChat: React.FC<RecipeAssistantChatProps> = ({ isOpen
     }
 
     if (aiUsageBlocked) {
-      setMessages((prev) => [...prev, { id: createId(), role: "assistant", text: aiLimitMessage }]);
+      showAiLimitAlert();
       return;
     }
 
@@ -453,6 +478,8 @@ export const RecipeAssistantChat: React.FC<RecipeAssistantChatProps> = ({ isOpen
       setIsSending(false);
     }
   };
+  const sendButtonDisabled = limitReached || isSending || !input.trim();
+  const sendButtonVisualDisabled = sendButtonDisabled || aiUsageBlocked;
 
   if (!isOpen) return null;
 
@@ -533,17 +560,10 @@ export const RecipeAssistantChat: React.FC<RecipeAssistantChatProps> = ({ isOpen
 
           <View style={styles.footer}>
             <View style={styles.disclaimerBox}>
-              <Text style={styles.disclaimerTitle}>Quick check recommended</Text>
               <Text style={styles.disclaimerBody}>
                 AI suggestions aren’t always perfect.{"\n"}Please review the changes and adjust anything as needed.
               </Text>
             </View>
-            {aiUsageBlocked && (
-              <View style={styles.limitBanner}>
-                <Ionicons name="alert-circle" size={16} color={colors.purple600} />
-                <Text style={styles.limitBannerText}>{aiLimitMessage}</Text>
-              </View>
-            )}
             <View style={styles.inputRow}>
               <TextInput
                 value={input}
@@ -554,9 +574,9 @@ export const RecipeAssistantChat: React.FC<RecipeAssistantChatProps> = ({ isOpen
                 editable={!limitReached && !aiUsageBlocked}
               />
               <Pressable
-                style={[styles.sendButton, (limitReached || aiUsageBlocked) && styles.sendButtonDisabled]}
+                style={[styles.sendButton, sendButtonVisualDisabled && styles.sendButtonDisabled]}
                 onPress={() => handleSend()}
-                disabled={isSending || !input.trim() || limitReached || aiUsageBlocked}
+                disabled={sendButtonDisabled}
               >
                 <Ionicons name={isSending ? "sync" : "send"} size={18} color={colors.white} />
               </Pressable>
@@ -685,44 +705,44 @@ const styles = StyleSheet.create({
     backgroundColor: colors.purple50,
   },
   emptyIntro: {
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 16,
+    lineHeight: 22,
     color: colors.gray500,
     textAlign: "center",
   },
   emptyTitle: {
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 22,
+    lineHeight: 28,
     fontWeight: "600",
     color: colors.gray900,
     textAlign: "center",
   },
   emptySubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
     color: colors.gray500,
     textAlign: "center",
     maxWidth: 280,
   },
   suggestionsCentered: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: spacing.sm,
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: spacing.md,
     paddingBottom: spacing.xl,
   },
   suggestionChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
     backgroundColor: colors.gray100,
+    alignItems: "center",
   },
   suggestionText: {
-    fontSize: 13,
-    lineHeight: 16,
-    fontWeight: "500",
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "600",
     color: colors.gray700,
-    maxWidth: 180,
+    maxWidth: 260,
   },
   headerDivider: {
     height: StyleSheet.hairlineWidth,
@@ -730,28 +750,21 @@ const styles = StyleSheet.create({
   },
   disclaimerBox: {
     alignItems: "center",
-    gap: spacing.xs,
-  },
-  disclaimerTitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "600",
-    color: colors.gray900,
-    textAlign: "center",
   },
   disclaimerBody: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 18,
     color: colors.gray500,
     textAlign: "center",
   },
   footer: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xxl,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.gray100,
-    gap: spacing.md,
+    gap: spacing.xs,
+    marginBottom: spacing.lg,
   },
   limitBanner: {
     flexDirection: "row",
@@ -774,6 +787,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
+    marginBottom: spacing.md,
   },
   input: {
     flex: 1,

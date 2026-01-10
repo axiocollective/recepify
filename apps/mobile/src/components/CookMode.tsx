@@ -10,7 +10,7 @@ interface CookModeProps {
   onExit: () => void;
 }
 
-const timerPresets = [5, 10, 15, 20, 30];
+const timerPresets = [3, 5, 15];
 
 export const CookMode: React.FC<CookModeProps> = ({ recipe, onExit }) => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -25,6 +25,7 @@ export const CookMode: React.FC<CookModeProps> = ({ recipe, onExit }) => {
   };
   const [currentServings, setCurrentServings] = useState(recipe.servingsOverride ?? recipe.servings ?? 1);
   const [unitSystem, setUnitSystem] = useState<"metric" | "us">(recipe.unitSystem ?? detectDefaultUnit());
+  const [showIngredients, setShowIngredients] = useState(false);
 
   useEffect(() => {
     if (!isTimerRunning || timerSeconds <= 0) return;
@@ -272,7 +273,7 @@ export const CookMode: React.FC<CookModeProps> = ({ recipe, onExit }) => {
                 <Text style={styles.timerLabel}>Timer</Text>
               </View>
               <Pressable onPress={resetTimer} style={styles.timerReset}>
-                <Ionicons name="refresh" size={16} color={colors.white} />
+                <Ionicons name="close" size={16} color={colors.white} />
               </Pressable>
             </View>
             <View style={styles.timerCenter}>
@@ -330,56 +331,63 @@ export const CookMode: React.FC<CookModeProps> = ({ recipe, onExit }) => {
           </View>
         )}
 
-        <View style={styles.adjustCard}>
-          <View style={styles.adjustRow}>
-            <Text style={styles.adjustLabel}>Servings</Text>
-            <View style={styles.servingsControls}>
-              <Pressable
-                style={[styles.servingsButton, currentServings <= 1 && styles.servingsButtonDisabled]}
-                onPress={() => setCurrentServings((prev) => Math.max(1, prev - 1))}
-                disabled={currentServings <= 1}
-              >
-                <Ionicons name="remove" size={16} color={colors.gray700} />
-              </Pressable>
-              <Text style={styles.servingsCount}>{currentServings}</Text>
-              <Pressable style={styles.servingsButton} onPress={() => setCurrentServings((prev) => prev + 1)}>
-                <Ionicons name="add" size={16} color={colors.gray700} />
-              </Pressable>
-            </View>
-          </View>
-          <View style={styles.adjustRow}>
-            <Text style={styles.adjustLabel}>Units</Text>
-            <View style={styles.unitToggle}>
-              {(["metric", "us"] as const).map((unit) => (
-                <Pressable
-                  key={unit}
-                  style={[styles.unitChip, unitSystem === unit && styles.unitChipActive]}
-                  onPress={() => setUnitSystem(unit)}
-                >
-                  <Text style={[styles.unitChipText, unitSystem === unit && styles.unitChipTextActive]}>
-                    {unit === "metric" ? "Metric" : "US"}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </View>
+        <Pressable
+          style={styles.ingredientsToggle}
+          onPress={() => setShowIngredients((prev) => !prev)}
+        >
+          <Text style={styles.ingredientsToggleText}>
+            {showIngredients ? "Hide ingredients" : "See ingredients"}
+          </Text>
+        </Pressable>
 
-        <View style={styles.ingredientsCard}>
-          <View style={styles.ingredientsHeader}>
-            <Ionicons name="checkmark-circle-outline" size={18} color={colors.purple600} />
-            <Text style={styles.ingredientsTitle}>Ingredients</Text>
-          </View>
-          {recipe.ingredients.map((ingredient, index) => (
-            <View key={`${ingredient.name}-${index}`} style={styles.ingredientRow}>
-              <Text style={styles.ingredientBullet}>•</Text>
-              <Text style={styles.ingredientText}>
-                {ingredient.amount ? `${formatIngredientAmount(ingredient.amount)} ` : ""}
-                {ingredient.name}
-              </Text>
+        {showIngredients && (
+          <View style={styles.ingredientsCard}>
+            <View style={styles.ingredientsHeader}>
+              <View style={styles.ingredientsHeaderLeft}>
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.purple600} />
+                <Text style={styles.ingredientsTitle}>Ingredients</Text>
+              </View>
+              <View style={styles.unitToggle}>
+                {(["metric", "us"] as const).map((unit) => (
+                  <Pressable
+                    key={unit}
+                    style={[styles.unitChip, unitSystem === unit && styles.unitChipActive]}
+                    onPress={() => setUnitSystem(unit)}
+                  >
+                    <Text style={[styles.unitChipText, unitSystem === unit && styles.unitChipTextActive]}>
+                      {unit === "metric" ? "Metric" : "US"}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
-          ))}
-        </View>
+            <View style={styles.servingsRow}>
+              <Text style={styles.adjustLabel}>Servings</Text>
+              <View style={styles.servingsControls}>
+                <Pressable
+                  style={[styles.servingsButton, currentServings <= 1 && styles.servingsButtonDisabled]}
+                  onPress={() => setCurrentServings((prev) => Math.max(1, prev - 1))}
+                  disabled={currentServings <= 1}
+                >
+                  <Ionicons name="remove" size={14} color={colors.gray700} />
+                </Pressable>
+                <Text style={styles.servingsCount}>{currentServings}</Text>
+                <Pressable style={styles.servingsButton} onPress={() => setCurrentServings((prev) => prev + 1)}>
+                  <Ionicons name="add" size={14} color={colors.gray700} />
+                </Pressable>
+              </View>
+            </View>
+            {recipe.ingredients.map((ingredient, index) => (
+              <View key={`${ingredient.name}-${index}`} style={styles.ingredientRow}>
+                <Text style={styles.ingredientBullet}>•</Text>
+                <Text style={styles.ingredientText}>
+                  {ingredient.amount ? `${formatIngredientAmount(ingredient.amount)} ` : ""}
+                  {ingredient.name}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -518,14 +526,14 @@ const styles = StyleSheet.create({
   },
   timerCard: {
     borderRadius: radius.lg,
-    padding: spacing.xl,
+    padding: spacing.lg,
     marginBottom: spacing.lg,
   },
   timerHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   timerHeaderLeft: {
     flexDirection: "row",
@@ -548,11 +556,11 @@ const styles = StyleSheet.create({
   },
   timerCenter: {
     alignItems: "center",
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   timerValue: {
-    fontSize: 56,
-    lineHeight: 64,
+    fontSize: 44,
+    lineHeight: 52,
     fontWeight: "700",
     color: colors.white,
   },
@@ -561,7 +569,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.sm,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     borderRadius: radius.md,
     backgroundColor: "rgba(255,255,255,0.2)",
     minHeight: 44,
@@ -684,13 +692,13 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   adjustCard: {
-    padding: spacing.lg,
+    padding: spacing.md,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.gray200,
     backgroundColor: colors.white,
-    gap: spacing.md,
-    marginBottom: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
   adjustRow: {
     flexDirection: "row",
@@ -698,19 +706,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   adjustLabel: {
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: "600",
     color: colors.gray900,
   },
   servingsControls: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   servingsButton: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     borderRadius: radius.full,
     backgroundColor: colors.gray100,
     alignItems: "center",
@@ -720,15 +728,30 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   servingsCount: {
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: "600",
     color: colors.gray900,
-    minWidth: 32,
+    minWidth: 28,
     textAlign: "center",
+  },
+  ingredientsToggle: {
+    alignSelf: "flex-start",
+    marginBottom: spacing.sm,
+  },
+  ingredientsToggleText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+    color: colors.purple600,
   },
   unitToggle: {
     flexDirection: "row",
+    gap: spacing.sm,
+  },
+  ingredientsHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
   },
   unitChip: {
@@ -761,6 +784,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  servingsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: spacing.sm,
   },
   ingredientsTitle: {

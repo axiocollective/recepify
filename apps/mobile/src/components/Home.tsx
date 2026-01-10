@@ -25,18 +25,18 @@ interface HomeProps {
 }
 
 const homeTagOptions: Array<{ tag: string; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { tag: "quick", label: "Quick & Easy", icon: "flash-outline" },
-  { tag: "healthy", label: "Healthy", icon: "leaf-outline" },
+  { tag: "quick", label: "Quick", icon: "flash-outline" },
+  { tag: "under 30 minutes", label: "Under 30 Min", icon: "time-outline" },
   { tag: "breakfast", label: "Breakfast", icon: "cafe-outline" },
-  { tag: "dessert", label: "Dessert", icon: "ice-cream-outline" },
-  { tag: "comfort food", label: "Comfort Food", icon: "restaurant-outline" },
-  { tag: "vegetarian", label: "Vegetarian", icon: "nutrition-outline" },
-  { tag: "spicy", label: "Spicy", icon: "flame-outline" },
   { tag: "lunch", label: "Lunch", icon: "fast-food-outline" },
   { tag: "dinner", label: "Dinner", icon: "restaurant-outline" },
-  { tag: "one-pot", label: "One Pot", icon: "grid-outline" },
-  { tag: "baking", label: "Baking", icon: "pizza-outline" },
-  { tag: "salad", label: "Salad", icon: "leaf-outline" },
+  { tag: "snack", label: "Snack", icon: "nutrition-outline" },
+  { tag: "vegetarian", label: "Vegetarian", icon: "leaf-outline" },
+  { tag: "vegan", label: "Vegan", icon: "leaf" },
+  { tag: "healthy", label: "Healthy", icon: "heart-outline" },
+  { tag: "spicy", label: "Spicy", icon: "flame-outline" },
+  { tag: "soup", label: "Soup", icon: "water-outline" },
+  { tag: "pasta", label: "Pasta", icon: "pizza-outline" },
 ];
 const homeTagLookup = new Set(homeTagOptions.map((option) => option.tag));
 
@@ -55,7 +55,8 @@ export const Home: React.FC<HomeProps> = ({
   collections,
 }) => {
   const { width } = useWindowDimensions();
-  const hasRecipes = !simulateEmptyState && allRecipes.length > 0;
+  const safeRecipes = Array.isArray(allRecipes) ? allRecipes : [];
+  const hasRecipes = !simulateEmptyState && safeRecipes.length > 0;
   const showImportReady = !simulateEmptyState && importReadyCount > 0;
 
   const greeting = () => {
@@ -88,20 +89,19 @@ export const Home: React.FC<HomeProps> = ({
     return { title: `Still awake ${name}?` };
   };
 
-  const favorites = allRecipes.filter((recipe) => recipe.isFavorite);
-  const tagChipWidth = (width - spacing.xl * 2 - spacing.lg * 2) / 3;
+  const favorites = safeRecipes.filter((recipe) => recipe.isFavorite);
   const todaysPicks = useMemo(() => {
-    const sorted = [...allRecipes].sort((a, b) => {
+    const sorted = [...safeRecipes].sort((a, b) => {
       const aDate = a.addedDate ? a.addedDate.getTime() : 0;
       const bDate = b.addedDate ? b.addedDate.getTime() : 0;
       return bDate - aDate;
     });
     return sorted.slice(0, 3);
-  }, [allRecipes]);
+  }, [safeRecipes]);
 
   const homeTags = useMemo(() => {
     const counts = new Map<string, number>();
-    allRecipes.forEach((recipe) => {
+    safeRecipes.forEach((recipe) => {
       const tags = new Set((recipe.tags || []).map((tag) => tag.trim().toLowerCase()));
       tags.forEach((tag) => {
         if (homeTagLookup.has(tag)) {
@@ -117,7 +117,11 @@ export const Home: React.FC<HomeProps> = ({
         return a.label.localeCompare(b.label);
       })
       .slice(0, 6);
-  }, [allRecipes]);
+  }, [safeRecipes]);
+  const tagCount = homeTags?.length ?? 0;
+  const tagColumns = tagCount >= 3 ? 3 : tagCount || 1;
+  const tagChipWidth =
+    (width - spacing.xl * 2 - spacing.lg * (tagColumns - 1)) / tagColumns;
 
   const collectionsPreview = useMemo(() => {
     return [...collections]
@@ -142,18 +146,20 @@ export const Home: React.FC<HomeProps> = ({
           </Text>
         </View>
 
-        <View style={styles.section}>
-          <ImportQuickActions
-            onNavigate={onNavigate}
-            onAddManually={onAddManually}
-            inboxCount={inboxCount}
-            importReadyCount={importReadyCount}
-          />
-        </View>
+        {!hasRecipes && (
+          <View style={styles.section}>
+            <ImportQuickActions
+              onNavigate={onNavigate}
+              onAddManually={onAddManually}
+              inboxCount={inboxCount}
+              importReadyCount={importReadyCount}
+            />
+          </View>
+        )}
 
         {hasRecipes && homeTags.length > 0 && (
           <View style={styles.tagGridSection}>
-            <View style={styles.tagGrid}>
+            <View style={[styles.tagGrid, homeTags.length <= 2 && styles.tagGridCompact]}>
               {homeTags.map((tag) => (
                 <Pressable
                   key={tag.tag}
@@ -350,6 +356,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     rowGap: spacing.lg,
     columnGap: spacing.lg,
+  },
+  tagGridCompact: {
+    justifyContent: "flex-start",
   },
   tagChip: {
     alignItems: "center",

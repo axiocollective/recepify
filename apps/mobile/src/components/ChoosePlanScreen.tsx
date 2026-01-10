@@ -18,15 +18,16 @@ interface ChoosePlanScreenProps {
 const BASE_PLAN = {
   title: "Recepify Base",
   yearly: {
-    price: "CHF 8 / year",
-    alt: "or CHF 1 / month",
+    price: "CHF 15 / year",
+    alt: "or CHF 1.50 / month",
   },
   monthly: {
-    price: "CHF 1 / month",
-    alt: "or CHF 8 / year",
+    price: "CHF 1.50 / month",
+    alt: "or CHF 15 / year",
   },
   trialTitle: "14-day free trial",
-  trialSubtitle: "Includes 15 imports + 75k AI credits. Trial credits expire after 14 days.",
+  trialSubtitle:
+    "Includes 10 imports, 10 translations, 10 optimizations, and 100 AI messages. Trial actions expire after 14 days. Base monthly starts automatically.",
   bestFor: "Best for cooking on your own schedule.",
   included: [
     "Add recipes manually",
@@ -36,13 +37,13 @@ const BASE_PLAN = {
     "Shopping list",
   ],
   aiTitle: "Need AI or imports?",
-  aiIntro: "No expensive subscription pressure. Buy credits only when you need:",
+  aiIntro: "No expensive subscription pressure. Buy add-ons only when you need:",
   aiBullets: [
     "Import recipes",
     "Scan recipes",
     "AI cooking assistant (optimize imported recipes, fix steps, improve results)",
   ],
-  aiNote: "After 14 days, the Base subscription starts and trial credits expire. You can buy credits anytime.",
+  aiNote: "After 14 days, the Base subscription starts and trial actions expire. You can buy add-ons anytime.",
   cta: "Start free trial",
   ctaHelper: "No charge today · Cancel anytime",
 };
@@ -55,13 +56,13 @@ const SUBSCRIPTION_PLAN = {
     helper: ["Best price overall", "Save vs monthly"],
   },
   monthly: {
-    price: "CHF 9 / month",
+    price: "CHF 6.90 / month",
     helper: ["More flexibility"],
   },
-  includedEveryMonth: ["40 recipe imports", "200k AI credits", "AI assistant (ChefGPT)"],
+  includedEveryMonth: ["25 recipe imports", "25 translations", "25 optimizations", "150 AI messages"],
   alsoIncluded: ["Everything from Recepify Base"],
-  notIncluded: ["Unused imports or AI credits do not roll over"],
-  needMore: "Buy additional recipe imports or AI credits anytime.",
+  notIncluded: ["Unused actions do not roll over"],
+  needMore: "Buy add-ons anytime.",
 };
 
 export const ChoosePlanScreen: React.FC<ChoosePlanScreenProps> = ({

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, shadow, spacing, typography } from "../theme/theme";
+import { PRIVACY_POLICY_TEXT, PRIVACY_POLICY_TITLE, TERMS_OF_USE_TEXT, TERMS_OF_USE_TITLE } from "../content/legal";
 
 interface ProfileProps {
   name: string;
@@ -15,6 +16,8 @@ interface ProfileProps {
   onLogout: () => void;
   onDeleteAccount: () => Promise<void>;
   onOpenPlans: () => void;
+  subscriptionStatus?: "active" | "canceled" | "expired";
+  subscriptionEndsAt?: string | null;
 }
 
 type StatusMessage = {
@@ -36,6 +39,8 @@ export const Profile: React.FC<ProfileProps> = ({
   onLogout,
   onDeleteAccount,
   onOpenPlans,
+  subscriptionStatus = "active",
+  subscriptionEndsAt = null,
 }) => {
   const [pendingName, setPendingName] = useState(name);
   const [pendingEmail, setPendingEmail] = useState(email);
@@ -49,6 +54,7 @@ export const Profile: React.FC<ProfileProps> = ({
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
   const [isCountryModalOpen, setIsCountryModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [legalDoc, setLegalDoc] = useState<"terms" | "privacy" | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [countryQuery, setCountryQuery] = useState("");
 
@@ -212,11 +218,43 @@ export const Profile: React.FC<ProfileProps> = ({
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Plan & usage</Text>
+          <View style={styles.planRowWrap}>
+            <ProfileRow
+              icon="card-outline"
+              label="Plan, subscription & usage"
+              value="View limits, manage, or upgrade."
+              onPress={onOpenPlans}
+            />
+            {subscriptionStatus !== "active" && (
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusBadgeText}>
+                  {subscriptionStatus === "expired"
+                    ? "Expired"
+                    : subscriptionEndsAt
+                      ? `Canceled · ends ${new Date(subscriptionEndsAt).toLocaleDateString("en-US", {
+                          day: "2-digit",
+                          month: "short",
+                        })}`
+                      : "Canceled"}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Legal</Text>
           <ProfileRow
-            icon="card-outline"
-            label="Plan, subscription & usage"
-            value="View limits, manage, or upgrade."
-            onPress={onOpenPlans}
+            icon="document-text-outline"
+            label="Terms of Use"
+            value="Review terms of use"
+            onPress={() => setLegalDoc("terms")}
+          />
+          <ProfileRow
+            icon="shield-checkmark-outline"
+            label="Privacy Policy"
+            value="Review data privacy policy"
+            onPress={() => setLegalDoc("privacy")}
           />
         </View>
 
@@ -457,6 +495,21 @@ export const Profile: React.FC<ProfileProps> = ({
             >
               <Text style={styles.modalSecondaryText}>Cancel</Text>
             </Pressable>
+          </View>
+        </Overlay>
+      )}
+
+      {legalDoc && (
+        <Overlay
+          title={legalDoc === "terms" ? TERMS_OF_USE_TITLE : PRIVACY_POLICY_TITLE}
+          onClose={() => setLegalDoc(null)}
+        >
+          <View style={styles.modalBody}>
+            <ScrollView style={styles.legalScroll}>
+              <Text style={styles.legalText}>
+                {legalDoc === "terms" ? TERMS_OF_USE_TEXT : PRIVACY_POLICY_TEXT}
+              </Text>
+            </ScrollView>
           </View>
         </Overlay>
       )}
@@ -749,6 +802,22 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.gray900,
   },
+  planRowWrap: {
+    gap: spacing.sm,
+  },
+  statusBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.gray100,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "600",
+    color: colors.gray600,
+  },
   logoutCard: {
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -860,6 +929,14 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     gap: spacing.md,
+  },
+  legalScroll: {
+    maxHeight: 360,
+  },
+  legalText: {
+    ...typography.bodySmall,
+    color: colors.gray700,
+    lineHeight: 20,
   },
   modalField: {
     gap: spacing.sm,

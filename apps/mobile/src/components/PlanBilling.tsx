@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Alert, Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Dimensions, Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { PlanTier, UsageSummary } from "../data/types";
@@ -9,17 +9,25 @@ import { colors, radius, shadow, spacing, typography } from "../theme/theme";
 interface PlanBillingProps {
   plan: PlanTier;
   usageSummary: UsageSummary | null;
-  bonusImports?: number;
-  bonusTokens?: number;
+  addonImports?: number;
+  addonTranslations?: number;
+  addonOptimizations?: number;
+  addonAiMessages?: number;
   trialActive?: boolean;
   trialEndsAt?: string | null;
   trialImportsRemaining?: number;
-  trialTokensRemaining?: number;
+  trialTranslationsRemaining?: number;
+  trialOptimizationsRemaining?: number;
+  trialAiMessagesRemaining?: number;
+  subscriptionEndsAt?: string | null;
+  subscriptionStatus?: "active" | "canceled" | "expired";
+  focusSection?: "credits" | null;
   subscriptionPeriod: "monthly" | "yearly";
   recipesCount: number;
   onPlanChange: (plan: PlanTier) => void;
-  onBuyCredits: () => Promise<void>;
+  onBuyCredits: (action: "import" | "translation" | "optimization" | "ai_message", quantity: number) => Promise<void>;
   onSubscriptionPeriodChange: (period: "monthly" | "yearly") => void;
+  onCancelSubscription?: (endsAt: string) => void;
   onBack: () => void;
   onContinue?: () => void;
   continueLabel?: string;
@@ -28,28 +36,30 @@ interface PlanBillingProps {
   variant?: "manage" | "onboarding";
 }
 
-const FREE_PLAN = {
-  id: "free" as const,
-  name: "Free Starter",
-  price: "Free",
-  subtitle: "Try Recepyfy",
+const BASE_PLAN = {
+  id: "base" as const,
+  name: "Recepify Base",
+  price: "CHF 15 / year",
+  subtitle: "Your personal recipe library",
   includes: [
-    "5 recipe imports",
-    "50k AI credits",
-    "All features included",
-    "No payment required",
+    "Add recipes manually",
+    "Access all recipes",
+    "Collections & favorites",
+    "Cooking mode",
+    "Shopping list",
   ],
 };
 
 const getPaidPlanDetails = (billingPeriod: "yearly" | "monthly") => ({
-  id: "paid" as const,
+  id: "premium" as const,
   name: "Recepify Premium",
-  price: billingPeriod === "yearly" ? "CHF 69 / year" : "CHF 9 / month",
-  subtitle: billingPeriod === "yearly" ? "Best price overall" : "More flexibility",
+  price: billingPeriod === "yearly" ? "CHF 69 / year" : "CHF 6.90 / month",
+  subtitle: billingPeriod === "yearly" ? "Best price overall" : "Most flexible",
   includes: [
-    "40 recipe imports per month",
-    "200k AI credits per month",
-    "All features included",
+    "25 recipe imports per period",
+    "25 recipe translations per period",
+    "25 recipe optimizations per period",
+    "150 AI assistant messages per period",
   ],
   note: billingPeriod === "yearly" ? "Save vs monthly" : "Lower cost per recipe",
 });
@@ -57,17 +67,25 @@ const getPaidPlanDetails = (billingPeriod: "yearly" | "monthly") => ({
 export const PlanBilling: React.FC<PlanBillingProps> = ({
   plan,
   usageSummary,
-  bonusImports = 0,
-  bonusTokens = 0,
+  addonImports = 0,
+  addonTranslations = 0,
+  addonOptimizations = 0,
+  addonAiMessages = 0,
   trialActive = false,
   trialEndsAt = null,
   trialImportsRemaining = 0,
-  trialTokensRemaining = 0,
+  trialTranslationsRemaining = 0,
+  trialOptimizationsRemaining = 0,
+  trialAiMessagesRemaining = 0,
+  subscriptionEndsAt = null,
+  subscriptionStatus = "active",
+  focusSection = null,
   subscriptionPeriod,
   recipesCount,
   onPlanChange,
   onBuyCredits,
   onSubscriptionPeriodChange,
+  onCancelSubscription,
   onBack,
   onContinue,
   continueLabel,
@@ -78,16 +96,27 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
   const isOnboarding = variant === "onboarding";
   const planLimits = useMemo(() => getPlanLimits(plan), [plan]);
   const usedImports = usageSummary?.importCount ?? 0;
-  const usedTokens = usageSummary?.aiTokens ?? 0;
-  const importLimit = planLimits.imports + bonusImports + (plan === "free" ? trialImportsRemaining : 0);
-  const tokenLimit = planLimits.tokens + bonusTokens + (plan === "free" ? trialTokensRemaining : 0);
-  const isSubscribed = plan === "paid" || plan === "premium";
-  const importProgress = importLimit > 0 ? Math.min(1, usedImports / importLimit) : 0;
-  const tokenProgress = tokenLimit > 0 ? Math.min(1, usedTokens / tokenLimit) : 0;
+  const usedTranslations = usageSummary?.translationCount ?? 0;
+  const usedOptimizations = usageSummary?.optimizationCount ?? 0;
+  const usedAiMessages = usageSummary?.aiMessagesCount ?? 0;
+  const importLimit = planLimits.imports + addonImports + (plan === "base" ? trialImportsRemaining : 0);
+  const translationLimit = planLimits.translations + addonTranslations + (plan === "base" ? trialTranslationsRemaining : 0);
+  const optimizationLimit = planLimits.optimizations + addonOptimizations + (plan === "base" ? trialOptimizationsRemaining : 0);
+  const aiMessageLimit = planLimits.aiMessages + addonAiMessages + (plan === "base" ? trialAiMessagesRemaining : 0);
+  const isSubscribed = plan === "premium";
+  const planLabel = plan === "premium" ? "Recepify Premium" : "Recepify Base";
+  const importProgress =
+    importLimit > 0 ? Math.min(1, usedImports / importLimit) : usedImports > 0 ? 1 : 0;
+  const translationProgress =
+    translationLimit > 0 ? Math.min(1, usedTranslations / translationLimit) : usedTranslations > 0 ? 1 : 0;
+  const optimizationProgress =
+    optimizationLimit > 0 ? Math.min(1, usedOptimizations / optimizationLimit) : usedOptimizations > 0 ? 1 : 0;
+  const aiMessageProgress =
+    aiMessageLimit > 0 ? Math.min(1, usedAiMessages / aiMessageLimit) : usedAiMessages > 0 ? 1 : 0;
   const hasDevPlanSwitch = process.env.EXPO_PUBLIC_DEV_PLAN_SWITCH === "true";
   const [allowPlanSwitch, setAllowPlanSwitch] = useState(hasDevPlanSwitch);
   const canSwitchPlans = allowPlanSwitchOverride ?? allowPlanSwitch;
-  const [selectedPlan, setSelectedPlan] = useState<"free" | "paid" | "credit_pack">("paid");
+  const [selectedPlan, setSelectedPlan] = useState<"base" | "premium">("base");
   const activeSelection = isOnboarding ? selectedPlan : plan;
   const [billingPeriod, setBillingPeriod] = useState<"yearly" | "monthly">(subscriptionPeriod);
   const [showPlanOptions, setShowPlanOptions] = useState(false);
@@ -96,6 +125,67 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
     useState<"yearly" | "monthly">(subscriptionPeriod);
   const [pendingBaseBilling, setPendingBaseBilling] = useState<"yearly" | "monthly">("yearly");
   const paidPlan = getPaidPlanDetails(billingPeriod);
+  const formatEndDate = (value: string | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString("en-US", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+  const handleCancelPress = () => {
+    const now = new Date();
+    const parsedEnd = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
+    const hasValidEnd = parsedEnd && !Number.isNaN(parsedEnd.getTime()) && parsedEnd > now;
+    const endDate = hasValidEnd
+      ? parsedEnd!
+      : (() => {
+          const next = new Date(now);
+          if (subscriptionPeriod === "monthly") {
+            next.setMonth(next.getMonth() + 1);
+          } else {
+            next.setFullYear(next.getFullYear() + 1);
+          }
+          return next;
+        })();
+    const formattedEnd = formatEndDate(endDate.toISOString());
+    Alert.alert(
+      "Cancel subscription?",
+      `Your plan will end on ${formattedEnd}. You'll be logged out after that date and lose access to your library. Your recipes stay saved and will be available if you sign in again. (${planLabel})`,
+      [
+        { text: "Keep subscription", style: "cancel" },
+        {
+          text: "Cancel subscription",
+          style: "destructive",
+          onPress: () => onCancelSubscription?.(endDate.toISOString()),
+        },
+      ]
+    );
+  };
+  const canceledLabel = subscriptionStatus === "canceled" ? formatEndDate(subscriptionEndsAt) : null;
+  const creditsSectionLayout = React.useRef<{ y: number; height: number } | null>(null);
+  const scrollRef = React.useRef<ScrollView>(null);
+  const screenHeight = Dimensions.get("window").height;
+
+  const scrollToCredits = () => {
+    if (!creditsSectionLayout.current) return;
+    const { y, height } = creditsSectionLayout.current;
+    const target = Math.max(y - (screenHeight / 2 - height / 2), 0);
+    scrollRef.current?.scrollTo({
+      y: target,
+      animated: true,
+    });
+  };
+
+  React.useEffect(() => {
+    if (focusSection !== "credits") return;
+    const timeout = setTimeout(() => {
+      scrollToCredits();
+    }, 50);
+    return () => clearTimeout(timeout);
+  }, [focusSection]);
 
   React.useEffect(() => {
     setBillingPeriod(subscriptionPeriod);
@@ -111,18 +201,48 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
 
   const formatNumber = (value: number) => value.toLocaleString("en-US");
   const currentSubscriptionPrice =
-    subscriptionPeriod === "yearly" ? "CHF 69 / year" : "CHF 9 / month";
+    subscriptionPeriod === "yearly" ? "CHF 69 / year" : "CHF 6.90 / month";
   const currentBasePrice =
-    subscriptionPeriod === "yearly" ? "CHF 8 / year" : "CHF 1 / month";
+    subscriptionPeriod === "yearly" ? "CHF 15 / year" : "CHF 1.50 / month";
   const pendingSubscriptionPrice =
-    pendingSubscriptionBilling === "yearly" ? "CHF 69 / year" : "CHF 9 / month";
+    pendingSubscriptionBilling === "yearly" ? "CHF 69 / year" : "CHF 6.90 / month";
   const pendingBasePrice =
-    pendingBaseBilling === "yearly" ? "CHF 8 / year" : "CHF 1 / month";
+    pendingBaseBilling === "yearly" ? "CHF 15 / year" : "CHF 1.50 / month";
   const pendingBaseAlt =
-    pendingBaseBilling === "yearly" ? "or CHF 1 / month" : "or CHF 8 / year";
+    pendingBaseBilling === "yearly" ? "or CHF 1.50 / month" : "or CHF 15 / year";
   const trialDaysLeft = trialEndsAt
     ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
     : 0;
+  const addonOptions = [
+    {
+      action: "import" as const,
+      title: "+15 recipe imports",
+      price: "CHF 5",
+      description: "Use anytime",
+      quantity: 15,
+    },
+    {
+      action: "translation" as const,
+      title: "+15 recipe translations",
+      price: "CHF 4",
+      description: "Use anytime",
+      quantity: 15,
+    },
+    {
+      action: "optimization" as const,
+      title: "+15 recipe optimizations",
+      price: "CHF 4",
+      description: "Use anytime",
+      quantity: 15,
+    },
+    {
+      action: "ai_message" as const,
+      title: "+100 AI assistant messages",
+      price: "CHF 5",
+      description: "Use anytime",
+      quantity: 100,
+    },
+  ];
 
   const openSubscriptionSettings = async () => {
     const url = "itms-apps://apps.apple.com/account/subscriptions";
@@ -150,7 +270,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
 
   if (isOnboarding) {
     const onboardingPlans: Array<{
-      id: "free" | "paid" | "credit_pack";
+      id: "base" | "premium";
       name: string;
       price: string;
       period?: string;
@@ -160,29 +280,21 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
       note?: string;
     }> = [
       {
-        id: "free",
-        name: FREE_PLAN.name,
-        price: FREE_PLAN.price,
-        description: FREE_PLAN.subtitle,
-        features: FREE_PLAN.includes,
+        id: "base",
+        name: BASE_PLAN.name,
+        price: BASE_PLAN.price,
+        description: BASE_PLAN.subtitle,
+        features: BASE_PLAN.includes,
       },
       {
-        id: "paid",
+        id: "premium",
         name: paidPlan.name,
-        price: billingPeriod === "yearly" ? "CHF 69" : "CHF 7.90",
+        price: billingPeriod === "yearly" ? "CHF 69" : "CHF 6.90",
         period: billingPeriod === "yearly" ? "/ year" : "/ month",
         description: paidPlan.subtitle,
         features: paidPlan.includes,
         popular: true,
         note: paidPlan.note,
-      },
-      {
-        id: "credit_pack",
-        name: "Pay per Use",
-        price: "CHF 6.90",
-        period: "one-time",
-        description: "No subscription",
-        features: ["15 recipe imports", "75k AI credits", "All features included", "Credits never expire"],
       },
     ];
 
@@ -229,7 +341,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                     </View>
                   </View>
                   <View style={styles.planHeaderRight}>
-                    {option.id === "paid" && (
+            {option.id === "premium" && (
                       <View style={styles.billingToggle}>
                       {(["yearly", "monthly"] as const).map((period) => (
                           <Pressable
@@ -281,12 +393,10 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
               pressed && styles.onboardingCardPressed,
             ]}
             onPress={async () => {
-              if (activeSelection === "paid") {
-                await safePlanChange("paid");
-              } else if (activeSelection === "free") {
-                await safePlanChange("free");
-              } else if (activeSelection === "credit_pack") {
-                await onBuyCredits();
+              if (activeSelection === "premium") {
+                await safePlanChange("premium");
+              } else {
+                await safePlanChange("base");
               }
               onContinue?.();
             }}
@@ -301,95 +411,17 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
     );
   }
 
-  return (
-    <View style={styles.screen}>
-      <View style={styles.header}>
-        <Pressable onPress={onBack} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={20} color={colors.gray900} />
-        </Pressable>
-        <Text style={styles.headerTitle}>{title ?? "Plan & Usage"}</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        {!isOnboarding && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Usage</Text>
-            <View style={styles.statsRow}>
-              <View style={[styles.statCard, shadow.md]}>
-                <View style={styles.statIcon}>
-                  <Ionicons name="book-outline" size={18} color={colors.purple600} />
-                </View>
-                <Text style={styles.statValue}>{recipesCount}</Text>
-                <Text style={styles.statLabel}>Recipes saved</Text>
-              </View>
-              <View style={[styles.statCard, shadow.md]}>
-                <View style={styles.statIcon}>
-                  <Ionicons name="download-outline" size={18} color={colors.purple600} />
-                </View>
-                <Text style={styles.statValue}>{formatNumber(usedImports)}</Text>
-                <Text style={styles.statLabel}>
-                  {isSubscribed
-                    ? `of ${formatNumber(planLimits.imports)} monthly recipes${bonusImports > 0 ? ` + ${formatNumber(bonusImports)} extra` : ""}`
-                    : `of ${formatNumber(importLimit)} total imports${bonusImports > 0 ? ` (includes ${formatNumber(bonusImports)} pay-per-use)` : ""}`}
-                </Text>
-                <View style={styles.statBarTrack}>
-                  <View style={[styles.statBarFill, { width: `${importProgress * 100}%` }]} />
-                </View>
-              </View>
-            </View>
-            <View style={styles.statsRow}>
-              <View style={[styles.statCard, shadow.md]}>
-                <View style={styles.statIcon}>
-                  <Ionicons name="sparkles-outline" size={18} color={colors.purple600} />
-                </View>
-                <Text style={styles.statValue}>{formatNumber(usedTokens)}</Text>
-                <Text style={styles.statLabel}>
-                  {plan === "ai_disabled"
-                    ? "AI disabled on this plan"
-                    : isSubscribed
-                    ? `of ${formatNumber(planLimits.tokens)} monthly AI credits${bonusTokens > 0 ? ` + ${formatNumber(bonusTokens)} extra` : ""}`
-                    : `of ${formatNumber(tokenLimit)} total AI credits${bonusTokens > 0 ? ` (includes ${formatNumber(bonusTokens)} pay-per-use)` : ""}`}
-                </Text>
-                <View style={styles.statBarTrack}>
-                  <View style={[styles.statBarFill, { width: `${tokenProgress * 100}%` }]} />
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Plan</Text>
-          <Pressable
-            style={[styles.currentPlanCard, shadow.md]}
-            onPress={() => setShowPlanOptions((prev) => !prev)}
-          >
-            <View style={styles.currentPlanHeader}>
-              <View style={styles.currentPlanHeaderLeft}>
-                <Text style={styles.currentPlanName}>
-                  {isSubscribed ? "Recepify Premium" : "Recepify Base"}
-                </Text>
-                <Text style={styles.currentPlanPrice}>
-                  {isSubscribed ? currentSubscriptionPrice : currentBasePrice}
-                </Text>
-                <Text style={styles.currentPlanSubtitle}>
-                  {isSubscribed
-                    ? "Includes monthly imports + AI credits."
-                    : trialActive
-                    ? `Trial active · ${trialDaysLeft} days left · 15 imports + 75k AI credits`
-                    : "Trial ended. Recepify Base is active, and imports/AI require extra credits."}
-                </Text>
-              </View>
-              <Pressable
-                style={styles.changePlanButton}
-                onPress={() => setShowPlanOptions((prev) => !prev)}
-              >
-                <Text style={styles.changePlanText}>{showPlanOptions ? "Close" : "Change"}</Text>
-              </Pressable>
-            </View>
+  if (showPlanOptions) {
+    return (
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <Pressable onPress={() => setShowPlanOptions(false)} style={styles.headerButton}>
+            <Ionicons name="arrow-back" size={20} color={colors.gray900} />
           </Pressable>
-
-          {showPlanOptions && (
+          <Text style={styles.headerTitle}>Choose your plan</Text>
+        </View>
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.section}>
             <View style={styles.planList}>
               <Pressable
                 style={[
@@ -436,7 +468,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                   ))}
                 </View>
                 <Text style={styles.planNoteText}>
-                  After 14 days, the Base subscription starts and trial credits expire. You can buy credits whenever you need imports, scanning, or the AI cooking assistant.
+                  After 14 days, the Base subscription starts and trial actions expire. You can add more imports, translations, optimizations, or AI messages anytime.
                 </Text>
               </Pressable>
 
@@ -482,7 +514,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                   </View>
                 </View>
                 <View style={styles.planIncludes}>
-                  {["40 recipe imports", "200k AI credits", "AI assistant (ChefGPT)"].map((item) => (
+                  {["25 recipe imports", "25 translations", "25 optimizations", "150 AI messages"].map((item) => (
                     <View key={item} style={styles.planIncludeRow}>
                       <Ionicons name="checkmark" size={12} color={colors.gray500} />
                       <Text style={styles.planIncludeText}>{item}</Text>
@@ -491,13 +523,11 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 </View>
                 <Text style={styles.planNoteText}>Everything from Recepify Base included.</Text>
                 <Text style={[styles.planNoteText, { marginTop: spacing.xs }]}>
-                  Unused imports or AI credits do not roll over.
+                  Unused actions do not roll over.
                 </Text>
               </Pressable>
             </View>
-          )}
 
-          {showPlanOptions && (
             <Pressable
               style={styles.planUpgradeButton}
               onPress={() => {
@@ -509,10 +539,10 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                   );
                   return;
                 }
-                const nextPlan = pendingPlan === "subscription" ? "paid" : "free";
+                const nextPlan = pendingPlan === "subscription" ? "premium" : "base";
                 const nextBilling =
                   pendingPlan === "subscription" ? pendingSubscriptionBilling : pendingBaseBilling;
-                if (plan === "paid" && nextPlan === "free") {
+                if (plan === "premium" && nextPlan === "base") {
                   Alert.alert(
                     "Downgrade plan?",
                     "Downgrades take effect at the end of your current billing period.",
@@ -541,38 +571,195 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
             >
               <Text style={styles.planUpgradeText}>Save changes</Text>
             </Pressable>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.screen}>
+      <View style={styles.header}>
+        <Pressable onPress={onBack} style={styles.headerButton}>
+          <Ionicons name="arrow-back" size={20} color={colors.gray900} />
+        </Pressable>
+        <Text style={styles.headerTitle}>{title ?? "Plan & Usage"}</Text>
+      </View>
+
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
+        {!isOnboarding && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Usage</Text>
+            <View style={styles.statsRow}>
+              <View style={[styles.statCard, shadow.md]}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="book-outline" size={18} color={colors.purple600} />
+                </View>
+                <Text style={styles.statValue}>{recipesCount}</Text>
+                <Text style={styles.statLabel}>Recipes saved</Text>
+              </View>
+              <View style={[styles.statCard, shadow.md]}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="download-outline" size={18} color={colors.purple600} />
+                </View>
+                <Text style={styles.statValue}>{formatNumber(usedImports)}</Text>
+                <Text style={styles.statLabel}>
+                  {isSubscribed
+                    ? `of ${formatNumber(planLimits.imports)} per period`
+                    : `of ${formatNumber(importLimit)} total imports`}
+                </Text>
+                <View style={styles.statBarTrack}>
+                  <View style={[styles.statBarFill, { width: `${importProgress * 100}%` }]} />
+                </View>
+              </View>
+            </View>
+            <View style={styles.statsRow}>
+              <View style={[styles.statCard, shadow.md]}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="language-outline" size={18} color={colors.purple600} />
+                </View>
+                <Text style={styles.statValue}>{formatNumber(usedTranslations)}</Text>
+                <Text style={styles.statLabel}>
+                  {isSubscribed
+                    ? `of ${formatNumber(planLimits.translations)} per period`
+                    : `of ${formatNumber(translationLimit)} total translations`}
+                </Text>
+                <View style={styles.statBarTrack}>
+                  <View style={[styles.statBarFill, { width: `${translationProgress * 100}%` }]} />
+                </View>
+              </View>
+              <View style={[styles.statCard, shadow.md]}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="sparkles-outline" size={18} color={colors.purple600} />
+                </View>
+                <Text style={styles.statValue}>{formatNumber(usedOptimizations)}</Text>
+                <Text style={styles.statLabel}>
+                  {isSubscribed
+                    ? `of ${formatNumber(planLimits.optimizations)} per period`
+                    : `of ${formatNumber(optimizationLimit)} total optimizations`}
+                </Text>
+                <View style={styles.statBarTrack}>
+                  <View style={[styles.statBarFill, { width: `${optimizationProgress * 100}%` }]} />
+                </View>
+              </View>
+            </View>
+            <View style={styles.statsRow}>
+              <View style={[styles.statCard, shadow.md]}>
+                <View style={styles.statIcon}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.purple600} />
+                </View>
+                <Text style={styles.statValue}>{formatNumber(usedAiMessages)}</Text>
+                <Text style={styles.statLabel}>
+                  {isSubscribed
+                    ? `of ${formatNumber(planLimits.aiMessages)} per period`
+                    : `of ${formatNumber(aiMessageLimit)} total AI messages`}
+                </Text>
+                <View style={styles.statBarTrack}>
+                  <View style={[styles.statBarFill, { width: `${aiMessageProgress * 100}%` }]} />
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Plan</Text>
+          <Pressable
+            style={[styles.currentPlanCard, shadow.md]}
+            onPress={() => setShowPlanOptions(true)}
+          >
+            <View style={styles.currentPlanHeader}>
+              <View style={styles.currentPlanHeaderLeft}>
+                <Text style={styles.currentPlanName}>
+                  {isSubscribed ? "Recepify Premium" : "Recepify Base"}
+                </Text>
+                <Text style={styles.currentPlanPrice}>
+                  {isSubscribed ? currentSubscriptionPrice : currentBasePrice}
+                </Text>
+                <Text style={styles.currentPlanSubtitle}>
+                  {isSubscribed
+                    ? "Includes monthly imports, translations, optimizations, and AI messages."
+                    : trialActive
+                    ? `Trial active · ${trialDaysLeft} days left · 10 imports, 10 translations, 10 optimizations, 100 AI messages`
+                    : "Base plan active. Add-ons unlock imports, translations, optimizations, and AI messages."}
+                </Text>
+              </View>
+              <Pressable
+                style={styles.changePlanButton}
+                onPress={() => setShowPlanOptions(true)}
+              >
+                <Text style={styles.changePlanText}>{showPlanOptions ? "Close" : "Change"}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+
+          {variant === "manage" && (
+            <Pressable
+              style={[styles.planCard, styles.cancelCard, styles.cancelInlineCard]}
+              onPress={handleCancelPress}
+            >
+              <View style={styles.planCardHeader}>
+                <View style={styles.cancelRow}>
+                  <View style={styles.cancelIcon}>
+                    <Ionicons name="alert-circle-outline" size={18} color={colors.red500} />
+                  </View>
+                  <View>
+                    <Text style={[styles.planTitle, styles.cancelTitle]}>
+                      {subscriptionStatus === "canceled" ? "Subscription canceled" : "Cancel subscription"}
+                    </Text>
+                    {subscriptionStatus === "canceled" && (
+                      <Text style={[styles.planSubtitle, styles.cancelSubtitle]}>
+                        {canceledLabel ? `Active until ${canceledLabel}` : "Active until the end of your period"}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+            </Pressable>
           )}
+
         </View>
 
         {!showPlanOptions && (
-          <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Extra credits</Text>
+          <View
+            style={styles.section}
+            onLayout={(event) => {
+              const { y, height } = event.nativeEvent.layout;
+              creditsSectionLayout.current = { y, height };
+              if (focusSection === "credits") {
+                setTimeout(() => {
+                  scrollToCredits();
+                }, 50);
+              }
+            }}
+          >
+          <Text style={styles.sectionLabel}>Add-ons</Text>
           <View style={styles.planCard}>
             <View style={styles.planCardHeader}>
               <View>
-                  <Text style={styles.planTitle}>Extra credits</Text>
-                  <Text style={styles.planPrice}>CHF 6 · one-time</Text>
+                <Text style={styles.planTitle}>Extra actions</Text>
+                <Text style={styles.planSubtitle}>Tap to add more anytime. Add-ons never expire.</Text>
               </View>
             </View>
-            <Text style={styles.planSubtitle}>Buy whenever you need more</Text>
-            <View style={styles.planIncludes}>
-                {["15 recipe imports", "75k AI credits", "All features included", "Credits never expire"].map((item) => (
-                <View key={item} style={styles.planIncludeRow}>
-                  <Ionicons name="checkmark" size={12} color={colors.gray500} />
-                  <Text style={styles.planIncludeText}>{item}</Text>
-                </View>
+            <View style={styles.addonList}>
+              {addonOptions.map((option) => (
+                <Pressable
+                  key={option.action}
+                  style={styles.addonRow}
+                  onPress={() => onBuyCredits(option.action, option.quantity)}
+                >
+                  <View>
+                    <Text style={styles.addonTitle}>{option.title}</Text>
+                    <Text style={styles.addonSubtitle}>{option.description}</Text>
+                  </View>
+                  <View style={styles.addonPrice}>
+                    <Text style={styles.addonPriceText}>{option.price}</Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
+                  </View>
+                </Pressable>
               ))}
-              </View>
-              <Pressable
-                style={styles.planUpgradeButton}
-                onPress={onBuyCredits}
-              >
-                <Text style={styles.planUpgradeText}>Buy credits</Text>
-              </Pressable>
-              <Text style={styles.planNote}>
-                Pay per Use credits never expire and stack on top of your monthly limits.
-              </Text>
             </View>
+          </View>
           </View>
         )}
 
@@ -833,6 +1020,32 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: colors.gray600,
   },
+  cancelCard: {
+    borderColor: colors.red500,
+    backgroundColor: colors.white,
+  },
+  cancelInlineCard: {
+    marginTop: spacing.md,
+  },
+  cancelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  cancelIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelTitle: {
+    color: colors.red500,
+  },
+  cancelSubtitle: {
+    color: colors.gray600,
+  },
   planIncludes: {
     gap: spacing.xs,
   },
@@ -845,6 +1058,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: colors.gray700,
+  },
+  addonList: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  addonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.gray100,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  addonTitle: {
+    ...typography.bodySmall,
+    color: colors.gray900,
+    fontWeight: "600",
+  },
+  addonSubtitle: {
+    ...typography.caption,
+    color: colors.gray500,
+  },
+  addonPrice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  addonPriceText: {
+    ...typography.bodySmall,
+    color: colors.gray700,
+    fontWeight: "600",
   },
   planUpgradeButton: {
     marginTop: spacing.sm,

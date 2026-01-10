@@ -14,21 +14,21 @@ interface ImportFromLinkProps {
 export const ImportFromLink: React.FC<ImportFromLinkProps> = ({ onBack, onImport }) => {
   const [url, setUrl] = useState("");
   const [isImporting, setIsImporting] = useState(false);
-  const { plan, usageSummary, bonusImports, trialActive, trialImportsRemaining, navigateTo } = useApp();
-  const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports, trialImportsRemaining);
-  const limitMessage = getImportLimitMessage(plan, trialActive);
-  const openPlans = () => navigateTo("planBilling");
+  const { plan, usageSummary, addonImports, trialActive, trialImportsRemaining, navigateTo } = useApp();
+  const importLimitReached = isImportLimitReached(plan, usageSummary, trialActive, addonImports, trialImportsRemaining);
+  const limitMessage = getImportLimitMessage(plan);
+  const openPlans = () => navigateTo("planBilling", { focus: "credits" });
   const limitTitle = getImportLimitTitle(plan);
   const showLimitAlert = () => {
-    if (plan === "paid" || plan === "premium") {
+    if (plan === "premium") {
       Alert.alert(limitTitle, limitMessage, [
-        { text: "Buy credits", onPress: openPlans },
+        { text: "Buy more", onPress: openPlans },
         { text: "Cancel", style: "cancel" },
       ]);
       return;
     }
     Alert.alert(limitTitle, limitMessage, [
-      { text: "Buy credits", onPress: openPlans },
+      { text: "Buy more", onPress: openPlans },
       { text: "Cancel", style: "cancel" },
     ]);
   };
@@ -131,12 +131,6 @@ export const ImportFromLink: React.FC<ImportFromLinkProps> = ({ onBack, onImport
             </Text>
           )}
         </Pressable>
-        {importLimitReached && (
-          <Text style={styles.limitNote}>
-            {limitMessage}
-          </Text>
-        )}
-
       </View>
     </ScrollView>
   );
@@ -256,12 +250,6 @@ const styles = StyleSheet.create({
   },
   primaryButtonTextDisabled: {
     color: colors.gray400,
-  },
-  limitNote: {
-    marginTop: spacing.md,
-    ...typography.caption,
-    color: colors.gray500,
-    textAlign: "center",
   },
   loadingRow: {
     flexDirection: "row",

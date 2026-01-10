@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Recipe, RecipeCollection, Screen } from "../data/types";
@@ -27,7 +27,10 @@ interface MyRecipesProps {
   onAddToCollection?: (recipeId: string, collectionId: string) => void;
 }
 
-const TAG_FILTER_OPTIONS = RECIPE_TAGS;
+const TAG_FILTER_OPTIONS = RECIPE_TAGS.map((tag) => tag.toLowerCase());
+const TAG_LABELS = new Map(
+  RECIPE_TAGS.map((tag) => [tag.toLowerCase(), tag])
+);
 const MAX_TAG_FILTERS = 3;
 
 const SOURCE_FILTER_OPTIONS = [
@@ -116,6 +119,34 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
       }),
     [tagCounts]
   );
+  const normalizeSource = (value?: string) => {
+    const lower = value?.toLowerCase() ?? "";
+    if (lower === "scan") return "photo";
+    return lower;
+  };
+  const sourceCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    recipes.forEach((recipe) => {
+      const normalized = normalizeSource(recipe.source);
+      if (!normalized) return;
+      const current = counts.get(normalized) ?? 0;
+      counts.set(normalized, current + 1);
+    });
+    return counts;
+  }, [recipes]);
+  const visibleSourceOptions = useMemo(
+    () =>
+      SOURCE_FILTER_OPTIONS.filter(
+        (option) => option.value === "" || (sourceCounts.get(option.value) ?? 0) > 0
+      ),
+    [sourceCounts]
+  );
+
+  useEffect(() => {
+    if (!filters.source) return;
+    if ((sourceCounts.get(filters.source) ?? 0) > 0) return;
+    setFilters((prev) => ({ ...prev, source: "" }));
+  }, [filters.source, sourceCounts]);
 
   const resetFilters = () => {
     setFilters({ tags: [], favoritesOnly: false, source: "" });
@@ -169,7 +200,7 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
           }
         }
         if (filters.source) {
-          const recipeSource = recipe.source?.toLowerCase() ?? "";
+          const recipeSource = normalizeSource(recipe.source);
           if (recipeSource !== filters.source) {
             return false;
           }
@@ -286,14 +317,16 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
         )}
       </View>
 
-      <View style={styles.importSection}>
-        <ImportQuickActions
-          onNavigate={onNavigate}
-          onAddManually={onAddManually}
-          inboxCount={inboxCount}
-          importReadyCount={importReadyCount}
-        />
-      </View>
+      {recipes.length === 0 && (
+        <View style={styles.importSection}>
+          <ImportQuickActions
+            onNavigate={onNavigate}
+            onAddManually={onAddManually}
+            inboxCount={inboxCount}
+            importReadyCount={importReadyCount}
+          />
+        </View>
+      )}
 
       {showFilters && viewType === "recipes" && (
         <View style={styles.filterPanel}>
@@ -311,7 +344,7 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
               <View style={styles.activeTagsRow}>
                 {filters.tags.map((tag) => (
                   <View key={tag} style={styles.activeTagChip}>
-                    <Text style={styles.activeTagText}>{tag}</Text>
+                    <Text style={styles.activeTagText}>{TAG_LABELS.get(tag) ?? tag}</Text>
                     <Pressable onPress={() => toggleTagFilter(tag)}>
                       <Ionicons name="close" size={14} color={colors.white} />
                     </Pressable>
@@ -331,6 +364,7 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
               {["", ...visibleTagOptions].map((tag) => {
                 const isActive = tag ? filters.tags.includes(tag) : filters.tags.length === 0;
                 const countLabel = tag ? ` (${tagCounts.get(tag) ?? 0})` : "";
+                const label = tag ? TAG_LABELS.get(tag) ?? tag : "All";
                 return (
                   <Pressable
                     key={tag || "all"}
@@ -338,7 +372,7 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
                     style={[styles.filterChip, isActive ? styles.filterChipActive : null]}
                   >
                     <Text style={[styles.filterChipText, isActive ? styles.filterChipTextActive : null]}>
-                      {tag || "All"}
+                      {label}
                       {countLabel}
                     </Text>
                   </Pressable>
@@ -362,7 +396,7 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
           <View style={styles.filterSection}>
             <Text style={styles.filterLabel}>Source</Text>
             <View style={styles.filterRow}>
-              {SOURCE_FILTER_OPTIONS.map((option) => (
+              {visibleSourceOptions.map((option) => (
                 <Pressable
                   key={option.value || "all-sources"}
                   onPress={() => setFilters({ ...filters, source: option.value })}

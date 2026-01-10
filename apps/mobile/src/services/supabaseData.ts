@@ -18,8 +18,6 @@ const isRemoteUrl = (value?: string) => Boolean(value && /^https?:\/\//i.test(va
 
 const mapPlanToDbValue = (plan?: PlanTier | null) => {
   if (!plan) return null;
-  if (plan === "free") return "base";
-  if (plan === "paid") return "premium";
   return plan;
 };
 
@@ -100,14 +98,22 @@ export const ensureProfile = async (payload: {
   aiDisabled?: boolean;
   plan?: PlanTier;
   subscriptionPeriod?: "monthly" | "yearly";
+  subscriptionEndsAt?: string | null;
+  subscriptionStatus?: "active" | "canceled" | "expired";
   trialStartedAt?: string;
   trialEndsAt?: string;
   trialImports?: number;
-  trialTokens?: number;
+  trialTranslations?: number;
+  trialOptimizations?: number;
+  trialAiMessages?: number;
   trialImportsUsed?: number;
-  trialTokensUsed?: number;
-  bonusImports?: number;
-  bonusTokens?: number;
+  trialTranslationsUsed?: number;
+  trialOptimizationsUsed?: number;
+  trialAiMessagesUsed?: number;
+  addonImports?: number;
+  addonTranslations?: number;
+  addonOptimizations?: number;
+  addonAiMessages?: number;
 }) => {
   if (!currentUserId) return;
   const updatePayload: Record<string, string | boolean | number | PlanTier | null> = { id: currentUserId };
@@ -117,14 +123,22 @@ export const ensureProfile = async (payload: {
   if (payload.aiDisabled !== undefined) updatePayload.ai_disabled = payload.aiDisabled ?? null;
   if (payload.plan !== undefined) updatePayload.plan = mapPlanToDbValue(payload.plan);
   if (payload.subscriptionPeriod !== undefined) updatePayload.subscription_period = payload.subscriptionPeriod ?? null;
+  if (payload.subscriptionEndsAt !== undefined) updatePayload.subscription_ends_at = payload.subscriptionEndsAt ?? null;
+  if (payload.subscriptionStatus !== undefined) updatePayload.subscription_status = payload.subscriptionStatus ?? null;
   if (payload.trialStartedAt !== undefined) updatePayload.trial_started_at = payload.trialStartedAt ?? null;
   if (payload.trialEndsAt !== undefined) updatePayload.trial_ends_at = payload.trialEndsAt ?? null;
   if (payload.trialImports !== undefined) updatePayload.trial_imports = payload.trialImports ?? null;
-  if (payload.trialTokens !== undefined) updatePayload.trial_tokens = payload.trialTokens ?? null;
+  if (payload.trialTranslations !== undefined) updatePayload.trial_translations = payload.trialTranslations ?? null;
+  if (payload.trialOptimizations !== undefined) updatePayload.trial_optimizations = payload.trialOptimizations ?? null;
+  if (payload.trialAiMessages !== undefined) updatePayload.trial_ai_messages = payload.trialAiMessages ?? null;
   if (payload.trialImportsUsed !== undefined) updatePayload.trial_imports_used = payload.trialImportsUsed ?? null;
-  if (payload.trialTokensUsed !== undefined) updatePayload.trial_tokens_used = payload.trialTokensUsed ?? null;
-  if (payload.bonusImports !== undefined) updatePayload.bonus_imports = payload.bonusImports ?? null;
-  if (payload.bonusTokens !== undefined) updatePayload.bonus_tokens = payload.bonusTokens ?? null;
+  if (payload.trialTranslationsUsed !== undefined) updatePayload.trial_translations_used = payload.trialTranslationsUsed ?? null;
+  if (payload.trialOptimizationsUsed !== undefined) updatePayload.trial_optimizations_used = payload.trialOptimizationsUsed ?? null;
+  if (payload.trialAiMessagesUsed !== undefined) updatePayload.trial_ai_messages_used = payload.trialAiMessagesUsed ?? null;
+  if (payload.addonImports !== undefined) updatePayload.addon_imports = payload.addonImports ?? null;
+  if (payload.addonTranslations !== undefined) updatePayload.addon_translations = payload.addonTranslations ?? null;
+  if (payload.addonOptimizations !== undefined) updatePayload.addon_optimizations = payload.addonOptimizations ?? null;
+  if (payload.addonAiMessages !== undefined) updatePayload.addon_ai_messages = payload.addonAiMessages ?? null;
 
   const { error } = await supabase.from("profiles").upsert(updatePayload);
   if (error) throw error;
@@ -137,32 +151,52 @@ export const fetchProfile = async () => {
   return data ?? null;
 };
 
-export const addPayPerUseCredits = async (payload: { imports: number; tokens: number }) => {
-  if (!currentUserId) return { bonusImports: 0, bonusTokens: 0 };
+export const purchaseAddon = async (payload: { action: "import" | "translation" | "optimization" | "ai_message"; quantity: number }) => {
+  if (!currentUserId) return {
+    addonImports: 0,
+    addonTranslations: 0,
+    addonOptimizations: 0,
+    addonAiMessages: 0,
+  };
   const { data, error } = await supabase
     .from("profiles")
-    .select("bonus_imports, bonus_tokens")
+    .select("addon_imports, addon_translations, addon_optimizations, addon_ai_messages")
     .eq("id", currentUserId)
     .single();
   if (error && error.code !== "PGRST116") throw error;
-  const currentImports = data?.bonus_imports ?? 0;
-  const currentTokens = data?.bonus_tokens ?? 0;
-  const nextImports = currentImports + payload.imports;
-  const nextTokens = currentTokens + payload.tokens;
+  const current = {
+    import: data?.addon_imports ?? 0,
+    translation: data?.addon_translations ?? 0,
+    optimization: data?.addon_optimizations ?? 0,
+    ai_message: data?.addon_ai_messages ?? 0,
+  };
+  const next = { ...current, [payload.action]: (current as any)[payload.action] + payload.quantity };
   const { error: updateError } = await supabase.from("profiles").upsert({
     id: currentUserId,
-    bonus_imports: nextImports,
-    bonus_tokens: nextTokens,
+    addon_imports: next.import,
+    addon_translations: next.translation,
+    addon_optimizations: next.optimization,
+    addon_ai_messages: next.ai_message,
   });
   if (updateError) throw updateError;
-  return { bonusImports: nextImports, bonusTokens: nextTokens };
+  await supabase.from("addon_purchases").insert({
+    owner_id: currentUserId,
+    action_type: payload.action,
+    quantity: payload.quantity,
+  });
+  return {
+    addonImports: next.import,
+    addonTranslations: next.translation,
+    addonOptimizations: next.optimization,
+    addonAiMessages: next.ai_message,
+  };
 };
 
 export const fetchUsageSummary = async (): Promise<UsageSummary | null> => {
   if (!currentUserId) return null;
   const { data, error } = await supabase
     .from("usage_monthly")
-    .select("period_start, import_count, ai_tokens")
+    .select("period_start, import_count, translations_count, optimizations_count, ai_messages_count, ai_tokens")
     .eq("owner_id", currentUserId)
     .order("period_start", { ascending: false })
     .limit(1)
@@ -172,7 +206,9 @@ export const fetchUsageSummary = async (): Promise<UsageSummary | null> => {
   return {
     periodStart: data.period_start,
     importCount: data.import_count ?? 0,
-    aiTokens: data.ai_tokens ?? 0,
+    translationCount: data.translations_count ?? 0,
+    optimizationCount: data.optimizations_count ?? 0,
+    aiMessagesCount: data.ai_messages_count ?? data.ai_tokens ?? 0,
   };
 };
 

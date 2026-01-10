@@ -18,6 +18,7 @@ from .import_utils import (
     find_recipe_nodes,
     ingredients_from_strings,
     instructions_from_strings,
+    normalize_servings,
     pick_best_recipe,
     resolve_schema_image,
     sync_recipe_media_to_supabase,
@@ -501,7 +502,7 @@ def _pinterest_extract_recipe(pin_html: str, pin_url: str, pin_image: Optional[s
     servings = best_node.get("recipeYield") or best_node.get("yield")
     if isinstance(servings, list) and servings:
         servings = servings[0]
-    recipe.servings = _clean_ws(str(servings)) if servings else recipe.servings
+    recipe.servings = normalize_servings(servings) or recipe.servings
 
     ingredients = best_node.get("recipeIngredient") or best_node.get("ingredients")
     if ingredients:

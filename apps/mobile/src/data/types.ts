@@ -23,12 +23,14 @@ export interface NutritionInfo {
   fat?: string;
 }
 
-export type PlanTier = "ai_disabled" | "free" | "paid" | "premium";
+export type PlanTier = "ai_disabled" | "base" | "premium";
 
 export interface UsageSummary {
   periodStart: string;
   importCount: number;
-  aiTokens: number;
+  translationCount: number;
+  optimizationCount: number;
+  aiMessagesCount: number;
 }
 
 export interface Recipe {

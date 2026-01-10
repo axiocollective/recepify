@@ -163,8 +163,8 @@ def _resolve_assistant_models(
     usage_context: Optional[str],
     messages: List[RecipeAssistantMessage],
 ) -> tuple[str, ...]:
-    high_quality = {"infer_ingredients", "generate_steps", "calculate_nutrition", "optimized_with_ai"}
-    low_quality = {"improve_title", "suggest_tags", "estimate_time", "translate_recipe", "generate_description"}
+    high_quality = {"optimized_with_ai", "translated_with_ai"}
+    low_quality: set[str] = set()
     if usage_context in high_quality:
         return ("gpt-4o", "gpt-4o-mini")
     if usage_context in low_quality:
@@ -892,30 +892,29 @@ def _get_or_create_user_settings(session: Session, user_id: UUID) -> UserSetting
 
 
 def _delete_user_data(session: Session, user_id: UUID) -> None:
-    params = {"user_id": str(user_id)}
+    user_id_str = str(user_id)
     session.exec(
         text(
             "delete from recipe_collection_items where collection_id in "
             "(select id from recipe_collections where owner_id = :user_id)"
-        ),
-        params,
+        ).bindparams(user_id=user_id_str)
     )
-    session.exec(text("delete from recipe_collections where owner_id = :user_id"), params)
+    session.exec(text("delete from recipe_collections where owner_id = :user_id").bindparams(user_id=user_id_str))
     session.exec(
-        text("delete from recipe_ingredients where recipe_id in (select id from recipes where owner_id = :user_id)"),
-        params,
+        text("delete from recipe_ingredients where recipe_id in (select id from recipes where owner_id = :user_id)")
+        .bindparams(user_id=user_id_str)
     )
     session.exec(
-        text("delete from recipe_steps where recipe_id in (select id from recipes where owner_id = :user_id)"),
-        params,
+        text("delete from recipe_steps where recipe_id in (select id from recipes where owner_id = :user_id)")
+        .bindparams(user_id=user_id_str)
     )
-    session.exec(text("delete from recipe_likes where owner_id = :user_id"), params)
-    session.exec(text("delete from recipes where owner_id = :user_id"), params)
-    session.exec(text("delete from shopping_list_items where owner_id = :user_id"), params)
-    session.exec(text("delete from shopping_list_item where user_id = :user_id"), params)
-    session.exec(text("delete from usage_monthly where owner_id = :user_id"), params)
-    session.exec(text("delete from import_usage_monthly where owner_id = :user_id"), params)
-    session.exec(text("delete from profiles where id = :user_id"), params)
+    session.exec(text("delete from recipe_likes where owner_id = :user_id").bindparams(user_id=user_id_str))
+    session.exec(text("delete from recipes where owner_id = :user_id").bindparams(user_id=user_id_str))
+    session.exec(text("delete from shopping_list_items where owner_id = :user_id").bindparams(user_id=user_id_str))
+    session.exec(text("delete from shopping_list_item where user_id = :user_id").bindparams(user_id=user_id_str))
+    session.exec(text("delete from usage_monthly where owner_id = :user_id").bindparams(user_id=user_id_str))
+    session.exec(text("delete from import_usage_monthly where owner_id = :user_id").bindparams(user_id=user_id_str))
+    session.exec(text("delete from profiles where id = :user_id").bindparams(user_id=user_id_str))
     session.commit()
 
 
@@ -1356,7 +1355,7 @@ def recipe_assistant(
         tokens_weighted = _apply_token_weight(usage_details["total_tokens"], model_name)
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
-        _increment_ai_usage(session, owner_id, tokens_weighted)
+        _increment_ai_usage(session, owner_id, tokens_weighted, payload.usage_context)
         _log_usage_events(
             session,
             owner_id,
@@ -1409,6 +1408,13 @@ def usage_track(
         )
     )
     session.commit()
+    event_type = (payload.event_type or "").lower()
+    if event_type in {"optimize", "optimization"}:
+        _increment_action_usage(session, owner_id, "optimization")
+    elif event_type in {"translate", "translation"}:
+        _increment_action_usage(session, owner_id, "translation")
+    elif event_type in {"ai_message", "assistant"}:
+        _increment_action_usage(session, owner_id, "ai_message")
     return {"ok": True}
 
 
@@ -1488,7 +1494,7 @@ def recipe_finder(
                 usage_details = _extract_usage_details(response)
                 tokens_weighted = _apply_token_weight(usage_details["total_tokens"], "gpt-4o-mini")
                 owner_id = _resolve_user_id(x_user_email, x_user_id)
-                _increment_ai_usage(session, owner_id, tokens_weighted)
+                _increment_ai_usage(session, owner_id, tokens_weighted, "finder")
                 _log_usage_events(
                     session,
                     owner_id,
@@ -1723,9 +1729,12 @@ def _log_usage_events(
     session.commit()
 
 
-def _increment_ai_usage(session: Session, owner_id: UUID, tokens: int) -> None:
-    if tokens <= 0:
-        return
+def _increment_ai_usage(
+    session: Session,
+    owner_id: UUID,
+    tokens: int,
+    usage_context: Optional[str] = None,
+) -> None:
     period_start = _get_period_start()
     existing = session.exec(
         select(UsageMonthly).where(
@@ -1733,8 +1742,12 @@ def _increment_ai_usage(session: Session, owner_id: UUID, tokens: int) -> None:
             UsageMonthly.period_start == period_start,
         )
     ).first()
+    increment_ai_messages = usage_context not in {"optimized_with_ai", "translated_with_ai"}
     if existing:
-        existing.ai_tokens += tokens
+        if tokens > 0:
+            existing.ai_tokens += tokens
+        if increment_ai_messages:
+            existing.ai_messages_count += 1
         existing.updated_at = datetime.utcnow()
     else:
         session.add(
@@ -1742,7 +1755,10 @@ def _increment_ai_usage(session: Session, owner_id: UUID, tokens: int) -> None:
                 owner_id=owner_id,
                 period_start=period_start,
                 import_count=0,
-                ai_tokens=tokens,
+                translations_count=0,
+                optimizations_count=0,
+                ai_messages_count=1 if increment_ai_messages else 0,
+                ai_tokens=max(0, tokens),
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
             )
@@ -1767,6 +1783,9 @@ def _increment_import_usage(session: Session, owner_id: UUID, source: str) -> No
                 owner_id=owner_id,
                 period_start=period_start,
                 import_count=1,
+                translations_count=0,
+                optimizations_count=0,
+                ai_messages_count=0,
                 ai_tokens=0,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
@@ -1790,6 +1809,39 @@ def _increment_import_usage(session: Session, owner_id: UUID, source: str) -> No
                 period_start=period_start,
                 source=source_key,
                 import_count=1,
+                updated_at=datetime.utcnow(),
+            )
+        )
+    session.commit()
+
+
+def _increment_action_usage(session: Session, owner_id: UUID, action: str) -> None:
+    period_start = _get_period_start()
+    usage = session.exec(
+        select(UsageMonthly).where(
+            UsageMonthly.owner_id == owner_id,
+            UsageMonthly.period_start == period_start,
+        )
+    ).first()
+    if usage:
+        if action == "translation":
+            usage.translations_count += 1
+        elif action == "optimization":
+            usage.optimizations_count += 1
+        elif action == "ai_message":
+            usage.ai_messages_count += 1
+        usage.updated_at = datetime.utcnow()
+    else:
+        session.add(
+            UsageMonthly(
+                owner_id=owner_id,
+                period_start=period_start,
+                import_count=0,
+                translations_count=1 if action == "translation" else 0,
+                optimizations_count=1 if action == "optimization" else 0,
+                ai_messages_count=1 if action == "ai_message" else 0,
+                ai_tokens=0,
+                created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
             )
         )

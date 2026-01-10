@@ -27,10 +27,10 @@ export const ImportQuickActions: React.FC<ImportQuickActionsProps> = ({
   inboxCount = 0,
   importReadyCount = 0,
 }) => {
-  const { plan, usageSummary, bonusImports, trialActive, trialImportsRemaining, navigateTo } = useApp();
-  const importLimitReached = isImportLimitReached(plan, usageSummary, bonusImports, trialImportsRemaining);
-  const limitMessage = getImportLimitMessage(plan, trialActive);
-  const openPlans = () => navigateTo("planBilling");
+  const { plan, usageSummary, addonImports, trialActive, trialImportsRemaining, navigateTo } = useApp();
+  const importLimitReached = isImportLimitReached(plan, usageSummary, trialActive, addonImports, trialImportsRemaining);
+  const limitMessage = getImportLimitMessage(plan);
+  const openPlans = () => navigateTo("planBilling", { focus: "credits" });
   const limitTitle = getImportLimitTitle(plan);
 
   const handleAction = (id: Screen | "manual" | "inbox") => {
@@ -43,15 +43,15 @@ export const ImportQuickActions: React.FC<ImportQuickActionsProps> = ({
       return;
     }
     if ((id === "importFromLink" || id === "scanRecipe") && importLimitReached) {
-      if (plan === "paid" || plan === "premium") {
+      if (plan === "premium") {
         Alert.alert(limitTitle, limitMessage, [
-          { text: "Buy credits", onPress: openPlans },
+          { text: "Buy more", onPress: openPlans },
           { text: "Cancel", style: "cancel" },
         ]);
         return;
       }
       Alert.alert(limitTitle, limitMessage, [
-        { text: "Buy credits", onPress: openPlans },
+        { text: "Buy more", onPress: openPlans },
         { text: "Cancel", style: "cancel" },
       ]);
       return;
