@@ -141,8 +141,12 @@ export const AppNavigator: React.FC = () => {
     setDuplicatePrompt(null);
   };
 
-  const formatActionsUsed = (value: number | null) =>
-    Number(value ?? 0).toLocaleString("en-US");
+  const formatAiCreditUsage = (value: number | null, type: "translate" | "optimize") => {
+    const count = Number(value ?? 0);
+    if (!count) return "No credits used.";
+    const label = type === "translate" ? "translation credit" : "AI optimization credit";
+    return `${count.toLocaleString("en-US")} ${label}${count === 1 ? "" : "s"} used.`;
+  };
 
   const getSourceFromUrl = (url: string) => {
     const lower = url.toLowerCase();
@@ -728,12 +732,12 @@ export const AppNavigator: React.FC = () => {
           <Pressable style={styles.duplicateCard} onPress={() => undefined}>
             <Text style={styles.duplicateTitle}>
               {aiCompletionNotice?.type === "translate"
-                ? "Recipe has been translated"
-                : "Recipe has been optimized"}
+                ? "Recipe translated"
+                : "Recipe optimized"}
             </Text>
             <Text style={styles.duplicateBody}>Please review changes before saving.</Text>
             <Text style={styles.aiCreditsUsed}>
-              {formatActionsUsed(aiCompletionNotice?.creditsUsed)} actions used
+              {formatAiCreditUsage(aiCompletionNotice?.creditsUsed ?? 0, aiCompletionNotice?.type ?? "optimize")}
             </Text>
             <View style={styles.duplicateActions}>
               <Pressable

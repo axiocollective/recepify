@@ -290,6 +290,11 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   const cleanJsonText = (reply: string): string => stripCodeFences(reply);
 
   const formatActionsUsed = (value: number) => value.toLocaleString("en-US");
+  const formatAiCreditUsage = (value: number | null, type: "translate" | "optimize") => {
+    if (!value) return "No credits used.";
+    const label = type === "translate" ? "translation credit" : "AI optimization credit";
+    return `${formatActionsUsed(value)} ${label}${value === 1 ? "" : "s"} used.`;
+  };
 
   const getActionUsedDelta = async (
     beforeCount: number,
@@ -311,14 +316,21 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   ) => {
     const delta = await getActionUsedDelta(beforeCount, field);
     if (!delta) return;
-    Alert.alert("Action used", `${formatActionsUsed(delta)} action used.`);
+    const type = field === "translationCount" ? "translate" : "optimize";
+    const title = type === "translate" ? "Recipe translated" : "Recipe updated";
+    Alert.alert(title, formatAiCreditUsage(delta, type));
   };
 
-  const triggerDisclaimer = (detail?: string | null) => {
+  const showAiResultAlert = (
+    type: "translate" | "optimize",
+    creditsUsed: number | null,
+    detail?: string | null
+  ) => {
+    const title = type === "translate" ? "Recipe translated" : "Recipe optimized";
     const extra = detail ? `\n\n${detail}` : "";
     Alert.alert(
-      "Please review changes",
-      `AI suggestions may not be perfect. Please double-check and adjust the content as needed.${extra}`
+      title,
+      `Please review the changes before saving.\n\n${formatAiCreditUsage(creditsUsed, type)}${extra}`
     );
     setDisclaimerDetail(detail ?? null);
     setShowDisclaimer(false);
@@ -833,10 +845,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
           recipe: formDataRef.current,
         });
       } else {
-        triggerDisclaimer(null);
-        if (actionsUsed) {
-          Alert.alert("Action used", `${formatActionsUsed(actionsUsed)} action used.`);
-        }
+        showAiResultAlert("translate", actionsUsed, null);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to translate the recipe right now.";
@@ -1219,7 +1228,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     if (isOptimizing) return;
     if (aiInputMissing) {
       Alert.alert(
-        "Add a bit more",
+        "Add a bit more information",
         "Please add a title, a short description, and at least one ingredient before using AI."
       );
       return;
@@ -1368,10 +1377,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
           recipe: formDataRef.current,
         });
       } else {
-        triggerDisclaimer(skipDetail);
-        if (actionsUsed) {
-          Alert.alert("Action used", `${formatActionsUsed(actionsUsed)} action used.`);
-        }
+        showAiResultAlert("optimize", actionsUsed, skipDetail);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to optimize the recipe right now.";

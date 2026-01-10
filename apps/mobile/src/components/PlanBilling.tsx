@@ -200,6 +200,20 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
 
 
   const formatNumber = (value: number) => value.toLocaleString("en-US");
+  const formatUsageLabel = (used: number, monthly: number, extra: number, trial: number) => {
+    const parts: string[] = [];
+    parts.push(`${formatNumber(used)} used`);
+    if (monthly > 0) {
+      parts.push(`${formatNumber(monthly)} monthly`);
+    }
+    if (trial > 0) {
+      parts.push(`${formatNumber(trial)} trial`);
+    }
+    if (extra > 0) {
+      parts.push(`${formatNumber(extra)} extra`);
+    }
+    return parts.join(" · ");
+  };
   const currentSubscriptionPrice =
     subscriptionPeriod === "yearly" ? "CHF 69 / year" : "CHF 6.90 / month";
   const currentBasePrice =
@@ -595,18 +609,23 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 <View style={styles.statIcon}>
                   <Ionicons name="book-outline" size={18} color={colors.purple600} />
                 </View>
+                <Text style={styles.statTitle}>Recipes saved</Text>
                 <Text style={styles.statValue}>{recipesCount}</Text>
-                <Text style={styles.statLabel}>Recipes saved</Text>
+                <Text style={styles.statLabel}>Total in your library</Text>
               </View>
               <View style={[styles.statCard, shadow.md]}>
                 <View style={styles.statIcon}>
                   <Ionicons name="download-outline" size={18} color={colors.purple600} />
                 </View>
+                <Text style={styles.statTitle}>Recipe imports</Text>
                 <Text style={styles.statValue}>{formatNumber(usedImports)}</Text>
                 <Text style={styles.statLabel}>
-                  {isSubscribed
-                    ? `of ${formatNumber(planLimits.imports)} per period`
-                    : `of ${formatNumber(importLimit)} total imports`}
+                  {formatUsageLabel(
+                    usedImports,
+                    isSubscribed ? planLimits.imports : 0,
+                    addonImports,
+                    !isSubscribed && trialActive ? trialImportsRemaining : 0
+                  )}
                 </Text>
                 <View style={styles.statBarTrack}>
                   <View style={[styles.statBarFill, { width: `${importProgress * 100}%` }]} />
@@ -618,11 +637,15 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 <View style={styles.statIcon}>
                   <Ionicons name="language-outline" size={18} color={colors.purple600} />
                 </View>
+                <Text style={styles.statTitle}>Recipe translations</Text>
                 <Text style={styles.statValue}>{formatNumber(usedTranslations)}</Text>
                 <Text style={styles.statLabel}>
-                  {isSubscribed
-                    ? `of ${formatNumber(planLimits.translations)} per period`
-                    : `of ${formatNumber(translationLimit)} total translations`}
+                  {formatUsageLabel(
+                    usedTranslations,
+                    isSubscribed ? planLimits.translations : 0,
+                    addonTranslations,
+                    !isSubscribed && trialActive ? trialTranslationsRemaining : 0
+                  )}
                 </Text>
                 <View style={styles.statBarTrack}>
                   <View style={[styles.statBarFill, { width: `${translationProgress * 100}%` }]} />
@@ -632,11 +655,15 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 <View style={styles.statIcon}>
                   <Ionicons name="sparkles-outline" size={18} color={colors.purple600} />
                 </View>
+                <Text style={styles.statTitle}>Recipe optimizations</Text>
                 <Text style={styles.statValue}>{formatNumber(usedOptimizations)}</Text>
                 <Text style={styles.statLabel}>
-                  {isSubscribed
-                    ? `of ${formatNumber(planLimits.optimizations)} per period`
-                    : `of ${formatNumber(optimizationLimit)} total optimizations`}
+                  {formatUsageLabel(
+                    usedOptimizations,
+                    isSubscribed ? planLimits.optimizations : 0,
+                    addonOptimizations,
+                    !isSubscribed && trialActive ? trialOptimizationsRemaining : 0
+                  )}
                 </Text>
                 <View style={styles.statBarTrack}>
                   <View style={[styles.statBarFill, { width: `${optimizationProgress * 100}%` }]} />
@@ -648,11 +675,15 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 <View style={styles.statIcon}>
                   <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.purple600} />
                 </View>
+                <Text style={styles.statTitle}>AI assistant messages</Text>
                 <Text style={styles.statValue}>{formatNumber(usedAiMessages)}</Text>
                 <Text style={styles.statLabel}>
-                  {isSubscribed
-                    ? `of ${formatNumber(planLimits.aiMessages)} per period`
-                    : `of ${formatNumber(aiMessageLimit)} total AI messages`}
+                  {formatUsageLabel(
+                    usedAiMessages,
+                    isSubscribed ? planLimits.aiMessages : 0,
+                    addonAiMessages,
+                    !isSubscribed && trialActive ? trialAiMessagesRemaining : 0
+                  )}
                 </Text>
                 <View style={styles.statBarTrack}>
                   <View style={[styles.statBarFill, { width: `${aiMessageProgress * 100}%` }]} />
@@ -860,6 +891,12 @@ const styles = StyleSheet.create({
   statValue: {
     ...typography.h2,
     color: colors.gray900,
+  },
+  statTitle: {
+    ...typography.bodySmall,
+    color: colors.gray700,
+    fontWeight: "600",
+    marginTop: spacing.sm,
   },
   statLabel: {
     ...typography.caption,
