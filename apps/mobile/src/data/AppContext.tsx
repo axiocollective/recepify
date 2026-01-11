@@ -410,10 +410,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           profile.trial_started_at
             ? new Date(profile.trial_started_at)
             : profileCreatedAt ?? (authCreatedAt ? new Date(authCreatedAt) : now);
-        const trialEnd =
-          profile.trial_ends_at
-            ? new Date(profile.trial_ends_at)
-            : addDays(trialStart, TRIAL_DAYS);
+        const expectedTrialEnd = addDays(trialStart, TRIAL_DAYS);
+        let trialEnd = profile.trial_ends_at ? new Date(profile.trial_ends_at) : expectedTrialEnd;
+        if (trialEnd.getTime() < expectedTrialEnd.getTime()) {
+          trialEnd = expectedTrialEnd;
+          void ensureProfile({ trialEndsAt: trialEnd.toISOString() });
+        }
         const hasTrial = Boolean(profile.trial_started_at);
         if (!hasTrial) {
           void ensureProfile({
