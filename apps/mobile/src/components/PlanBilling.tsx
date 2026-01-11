@@ -764,12 +764,6 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
 
   return (
     <View style={styles.screen}>
-      <View style={styles.appHeader}>
-        <View style={styles.appHeaderRow}>
-          <Ionicons name="sparkles" size={22} color={colors.white} />
-          <Text style={styles.appHeaderTitle}>Recipefy</Text>
-        </View>
-      </View>
       <View style={styles.header}>
         <Pressable onPress={onBack} style={styles.headerButton}>
           <Ionicons name="arrow-back" size={20} color={colors.gray900} />
@@ -884,13 +878,6 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 </Pressable>
               ))}
             </View>
-            <View style={styles.infoCard}>
-              <Ionicons name="information-circle" size={18} color="#2563eb" />
-              <View style={styles.infoTextWrap}>
-                <Text style={styles.infoTitle}>Monthly credits reset on the 1st of each month</Text>
-                <Text style={styles.infoSubtitle}>Extra credits purchased never expire and can be used anytime.</Text>
-              </View>
-            </View>
           </View>
         )}
 
@@ -912,23 +899,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.gray50,
-  },
-  appHeader: {
-    height: 56,
-    backgroundColor: colors.gray900,
-    paddingHorizontal: spacing.lg,
-    justifyContent: "center",
-  },
-  appHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  appHeaderTitle: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: "600",
-    color: colors.white,
   },
   header: {
     paddingHorizontal: spacing.lg,
@@ -1189,30 +1159,6 @@ const styles = StyleSheet.create({
   addonRowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.gray200,
-  },
-  infoCard: {
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: "#eff6ff",
-    flexDirection: "row",
-    gap: spacing.sm,
-    alignItems: "flex-start",
-  },
-  infoTextWrap: {
-    flex: 1,
-  },
-  infoTitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "600",
-    color: "#1d4ed8",
-  },
-  infoSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#2563eb",
-    marginTop: 4,
   },
   currentPlanCard: {
     padding: spacing.lg,
