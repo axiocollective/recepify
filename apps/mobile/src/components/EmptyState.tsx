@@ -23,86 +23,49 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   onCheckInbox,
   inboxCount = 0,
 }) => {
-  const showInbox = inboxCount > 0 && Boolean(onCheckInbox);
-  if (variant === "home") {
-    return (
-      <View style={[styles.container, styles.homeContainer]}>
-        <Text style={styles.homeTitle}>Welcome {userName ?? "there"}</Text>
-        <Text style={styles.homeSubtitle}>Your personal cookbook awaits</Text>
-
-        <View style={styles.actionGroup}>
-          <Pressable onPress={onImportFromLink}>
-            <LinearGradient
-              colors={["#a855f7", "#9333ea"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.primaryButton, shadow.lg]}
-            >
-              <Ionicons name="link-outline" size={20} color={colors.white} />
-              <Text style={styles.primaryButtonText}>Import from Link</Text>
-            </LinearGradient>
-          </Pressable>
-
-          <Pressable style={styles.secondaryButton} onPress={onScanRecipe}>
-            <Ionicons name="camera-outline" size={18} color={colors.gray600} />
-            <Text style={styles.secondaryButtonText}>Scan Recipe</Text>
-          </Pressable>
-
-          <Pressable style={styles.secondaryButton} onPress={onAddManually}>
-            <Ionicons name="add" size={20} color={colors.gray600} />
-            <Text style={styles.secondaryButtonText}>Create Manually</Text>
-          </Pressable>
-
-          {showInbox && (
-            <Pressable style={styles.inboxButton} onPress={onCheckInbox}>
-              <Ionicons name="mail-outline" size={18} color={colors.purple600} />
-              <Text style={styles.inboxButtonText}>Check Inbox</Text>
-              <View style={styles.inboxBadge}>
-                <Text style={styles.inboxBadgeText}>{inboxCount}</Text>
-              </View>
-            </Pressable>
-          )}
-        </View>
-
-      </View>
-    );
-  }
-
+  const showInbox = Boolean(onCheckInbox);
+  const title = variant === "home" ? `Welcome ${userName ?? "there"}` : "Start Your Collection";
+  const subtitle =
+    variant === "home"
+      ? "Your personal cookbook awaits"
+      : "Import recipes from anywhere—cookbooks, websites, or create your own from scratch";
   return (
-    <View style={[styles.container, styles.myRecipesContainer]}>
-      <Text style={styles.myTitle}>Start Your Collection</Text>
-      <Text style={styles.mySubtitle}>
-        Import recipes from anywhere—cookbooks, websites, or create your own from scratch
-      </Text>
+    <View style={[styles.container, variant === "home" ? styles.homeContainer : styles.myRecipesContainer]}>
+      <Text style={styles.homeTitle}>{title}</Text>
+      <Text style={styles.homeSubtitle}>{subtitle}</Text>
 
       <View style={styles.actionGroup}>
-        <Pressable style={styles.primaryDarkButton} onPress={onImportFromLink}>
-          <Ionicons name="link-outline" size={20} color={colors.white} />
-          <Text style={styles.primaryDarkButtonText}>Import from Link</Text>
+        <Pressable onPress={onImportFromLink}>
+          <LinearGradient
+            colors={["#a855f7", "#9333ea"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.primaryButton, shadow.lg]}
+          >
+            <Ionicons name="link-outline" size={20} color={colors.white} />
+            <Text style={styles.primaryButtonText}>Import from Link</Text>
+          </LinearGradient>
         </Pressable>
 
-        <View style={styles.grid}>
-          <Pressable style={styles.gridCard} onPress={onScanRecipe}>
-            <View style={styles.gridIconPurple}>
-              <Ionicons name="camera-outline" size={22} color={colors.purple600} />
-            </View>
-            <Text style={styles.gridLabel}>Scan</Text>
-          </Pressable>
-          <Pressable style={styles.gridCard} onPress={onAddManually}>
-            <View style={styles.gridIconGray}>
-              <Ionicons name="add" size={22} color={colors.gray600} />
-            </View>
-            <Text style={styles.gridLabel}>Manually</Text>
-          </Pressable>
-        </View>
+        <Pressable style={styles.secondaryButton} onPress={onScanRecipe}>
+          <Ionicons name="camera-outline" size={18} color={colors.gray600} />
+          <Text style={styles.secondaryButtonText}>Scan Recipe</Text>
+        </Pressable>
+
+        <Pressable style={styles.secondaryButton} onPress={onAddManually}>
+          <Ionicons name="add" size={20} color={colors.gray600} />
+          <Text style={styles.secondaryButtonText}>Create Manually</Text>
+        </Pressable>
 
         {showInbox && (
           <Pressable style={styles.inboxButton} onPress={onCheckInbox}>
             <Ionicons name="mail-outline" size={18} color={colors.purple600} />
             <Text style={styles.inboxButtonText}>Check Inbox</Text>
-            <View style={styles.inboxBadge}>
-              <Text style={styles.inboxBadgeText}>{inboxCount}</Text>
-            </View>
+            {inboxCount > 0 && (
+              <View style={styles.inboxBadge}>
+                <Text style={styles.inboxBadgeText}>{inboxCount}</Text>
+              </View>
+            )}
           </Pressable>
         )}
       </View>
@@ -148,7 +111,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   primaryButton: {
-    height: 64,
+    height: 52,
     borderRadius: radius.full,
     alignItems: "center",
     justifyContent: "center",
@@ -162,7 +125,7 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   secondaryButton: {
-    height: 56,
+    height: 52,
     borderRadius: radius.full,
     borderWidth: 2,
     borderColor: colors.gray200,
@@ -179,7 +142,7 @@ const styles = StyleSheet.create({
     color: colors.gray900,
   },
   inboxButton: {
-    height: 56,
+    height: 52,
     borderRadius: radius.full,
     borderWidth: 2,
     borderColor: "#e9d5ff",
@@ -209,74 +172,5 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     fontWeight: "700",
     color: colors.white,
-  },
-  myTitle: {
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: "700",
-    color: colors.gray900,
-    textAlign: "center",
-    marginBottom: spacing.sm,
-  },
-  mySubtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.gray600,
-    textAlign: "center",
-    marginBottom: spacing.xxl,
-    maxWidth: 320,
-  },
-  primaryDarkButton: {
-    height: 64,
-    borderRadius: radius.full,
-    backgroundColor: colors.gray900,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: spacing.sm,
-    ...shadow.lg,
-  },
-  primaryDarkButtonText: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: "600",
-    color: colors.white,
-  },
-  grid: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  gridCard: {
-    flex: 1,
-    height: 112,
-    borderRadius: radius.xl,
-    borderWidth: 2,
-    borderColor: colors.gray200,
-    backgroundColor: colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-  },
-  gridIconPurple: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.lg,
-    backgroundColor: "#f3e8ff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  gridIconGray: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.lg,
-    backgroundColor: colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  gridLabel: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "500",
-    color: colors.gray900,
   },
 });

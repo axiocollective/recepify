@@ -471,7 +471,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
     : nutritionMissingOnly
       ? {
           title: "Recipe looks good",
-          body: "Nutrition values are missing. Please add them manually or use AI. 1 recipe import credit used.",
+          body: "Recipe looks good, but nutrition values are missing. Please add them manually or use AI. 1 recipe import credit used.",
         }
       : cookingTimeMissingOnly
       ? {
@@ -569,7 +569,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
             <View style={[styles.importReviewCard, shadow.md]}>
               <View style={styles.importReviewHeader}>
                 <View style={styles.importReviewIcon}>
-                  <Ionicons name="information-circle-outline" size={18} color={colors.gray700} />
+                  <Ionicons name="checkmark" size={18} color={colors.green600} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.importReviewTitle}>{importReviewCopy.title}</Text>
@@ -582,112 +582,113 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
               </View>
               <View style={styles.importReviewActions}>
                 <Pressable style={styles.importApproveButton} onPress={() => onApproveImport?.()}>
-                  <Text style={styles.importApproveText}>Approve</Text>
+                  <Ionicons name="checkmark" size={16} color={colors.white} />
+                  <Text style={styles.importApproveText}>Approve Recipe</Text>
                 </Pressable>
-                <Pressable style={styles.importEditButton} onPress={onEdit}>
-                  <Text style={styles.importEditText}>Edit manually</Text>
-                </Pressable>
-                <View style={styles.importOptimizeWrap}>
-                  {isIncomplete ? (
+                <View style={styles.importActionRow}>
+                  <Pressable style={styles.importEditButton} onPress={onEdit}>
+                    <Ionicons name="create-outline" size={16} color={colors.gray900} />
+                    <Text style={styles.importEditText}>Edit</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.importOptimizeButton,
+                      optimizeBlocked && styles.importOptimizeButtonDisabled,
+                    ]}
+                    onPress={() => {
+                      if (optimizeBlocked) {
+                        showOptimizeLimitAlert();
+                        return;
+                      }
+                      onOptimizeWithAI?.();
+                    }}
+                  >
+                    <LinearGradient
+                      colors={optimizeBlocked ? [colors.gray200, colors.gray200] : ["#a855f7", "#9333ea"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[
+                        styles.importOptimizeButtonInner,
+                        optimizeBlocked && styles.importOptimizeButtonInnerDisabled,
+                      ]}
+                    >
+                      <Ionicons
+                        name="sparkles"
+                        size={16}
+                        color={optimizeBlocked ? colors.gray500 : colors.white}
+                      />
+                      <Text
+                        style={[
+                          styles.importOptimizeText,
+                          optimizeBlocked && styles.importOptimizeTextDisabled,
+                        ]}
+                      >
+                        Optimize
+                      </Text>
+                    </LinearGradient>
+                  </Pressable>
+                </View>
+                {isIncomplete ? (
+                  <Pressable
+                    style={styles.importDeleteButton}
+                    onPress={() => {
+                      Alert.alert(
+                        "Delete recipe?",
+                        "This will permanently remove the recipe.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          { text: "Delete", style: "destructive", onPress: onDelete },
+                        ]
+                      );
+                    }}
+                  >
+                    <View style={styles.importDeleteButtonInner}>
+                      <Ionicons name="trash-outline" size={16} color={colors.white} />
+                      <Text style={styles.importDeleteText}>Delete recipe</Text>
+                    </View>
+                  </Pressable>
+                ) : (
+                  showTranslateAction && (
                     <Pressable
-                      style={styles.importDeleteButton}
+                      style={[
+                        styles.importTranslateButton,
+                        translateBlocked && styles.importTranslateButtonDisabled,
+                      ]}
                       onPress={() => {
-                        Alert.alert(
-                          "Delete recipe?",
-                          "This will permanently remove the recipe.",
-                          [
-                            { text: "Cancel", style: "cancel" },
-                            { text: "Delete", style: "destructive", onPress: onDelete },
-                          ]
-                        );
+                        if (translateBlocked) {
+                          showTranslateLimitAlert();
+                          return;
+                        }
+                        onTranslateWithAI?.();
                       }}
                     >
-                      <View style={styles.importDeleteButtonInner}>
-                        <Ionicons name="trash-outline" size={16} color={colors.white} />
-                        <Text style={styles.importDeleteText}>Delete recipe</Text>
-                      </View>
-                    </Pressable>
-                  ) : (
-                    <>
-                          {showTranslateAction && (
-                        <Pressable
-                          style={[
-                            styles.importTranslateButton,
-                            translateBlocked && styles.importTranslateButtonDisabled,
-                          ]}
-                          onPress={() => {
-                            if (translateBlocked) {
-                              showTranslateLimitAlert();
-                              return;
-                            }
-                            onTranslateWithAI?.();
-                          }}
-                        >
-                          <LinearGradient
-                            colors={translateBlocked ? [colors.gray200, colors.gray200] : ["#3b82f6", "#2563eb"]}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={[
-                              styles.importTranslateButtonInner,
-                              translateBlocked && styles.importTranslateButtonInnerDisabled,
-                            ]}
-                          >
-                            <Ionicons
-                              name="language-outline"
-                              size={16}
-                              color={translateBlocked ? colors.gray500 : colors.white}
-                            />
-                            <Text
-                              style={[
-                                styles.importTranslateText,
-                                translateBlocked && styles.importTranslateTextDisabled,
-                              ]}
-                            >
-                              Translate
-                            </Text>
-                          </LinearGradient>
-                        </Pressable>
-                      )}
-                      <Pressable
+                      <LinearGradient
+                        colors={translateBlocked ? [colors.gray200, colors.gray200] : ["#3b82f6", "#2563eb"]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
                         style={[
-                          styles.importOptimizeButton,
-                          optimizeBlocked && styles.importOptimizeButtonDisabled,
+                          styles.importTranslateButtonInner,
+                          translateBlocked && styles.importTranslateButtonInnerDisabled,
                         ]}
-                        onPress={() => {
-                          if (optimizeBlocked) {
-                          showOptimizeLimitAlert();
-                            return;
-                          }
-                          onOptimizeWithAI?.();
-                        }}
                       >
-                        <LinearGradient
-                          colors={optimizeBlocked ? [colors.gray200, colors.gray200] : ["#a855f7", "#9333ea"]}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
+                        <Ionicons
+                          name="language-outline"
+                          size={16}
+                          color={translateBlocked ? colors.gray500 : colors.white}
+                        />
+                        <Text
                           style={[
-                            styles.importOptimizeButtonInner,
-                            optimizeBlocked && styles.importOptimizeButtonInnerDisabled,
+                            styles.importTranslateText,
+                            translateBlocked && styles.importTranslateTextDisabled,
                           ]}
                         >
-                          <Ionicons
-                            name="sparkles"
-                            size={16}
-                            color={optimizeBlocked ? colors.gray500 : colors.white}
-                          />
-                          <Text
-                            style={[
-                              styles.importOptimizeText,
-                              optimizeBlocked && styles.importOptimizeTextDisabled,
-                            ]}
-                          >
-                            Optimize with AI
-                          </Text>
-                        </LinearGradient>
-                      </Pressable>
-                    </>
-                  )}
-                </View>
+                          Translate to {preferredLanguage === "en" ? "English" : "German"}
+                        </Text>
+                      </LinearGradient>
+                    </Pressable>
+                  )
+                )}
+                <Text style={styles.importReviewFootnote}>• Using AI features costs 1 credit each •</Text>
               </View>
             </View>
           )}
@@ -1128,10 +1129,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   importReviewIcon: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: radius.full,
-    backgroundColor: colors.gray100,
+    backgroundColor: "#dcfce7",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1158,14 +1159,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacing.md,
-    minHeight: 48,
+    minHeight: 52,
+    flexDirection: "row",
+    gap: spacing.sm,
   },
   importApproveText: {
     ...typography.bodySmall,
     color: colors.white,
     fontWeight: "600",
   },
+  importActionRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
   importEditButton: {
+    flex: 1,
     borderRadius: radius.xl,
     borderWidth: 2,
     borderColor: colors.gray200,
@@ -1173,18 +1181,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacing.md,
-    minHeight: 48,
+    minHeight: 52,
+    flexDirection: "row",
+    gap: spacing.sm,
   },
   importEditText: {
     ...typography.bodySmall,
     color: colors.gray900,
     fontWeight: "600",
   },
-  importOptimizeWrap: {
-    position: "relative",
-    gap: spacing.sm,
-  },
   importOptimizeButton: {
+    flex: 1,
     borderRadius: radius.xl,
     overflow: "hidden",
   },
@@ -1197,7 +1204,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.sm,
     paddingVertical: spacing.md,
-    minHeight: 48,
+    minHeight: 52,
   },
   importOptimizeButtonInnerDisabled: {
     backgroundColor: colors.gray200,
@@ -1223,7 +1230,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.sm,
     paddingVertical: spacing.md,
-    minHeight: 48,
+    minHeight: 52,
   },
   importTranslateButtonInnerDisabled: {
     backgroundColor: colors.gray200,
@@ -1235,6 +1242,13 @@ const styles = StyleSheet.create({
   },
   importTranslateTextDisabled: {
     color: colors.gray500,
+  },
+  importReviewFootnote: {
+    textAlign: "center",
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.gray400,
+    marginTop: spacing.xs,
   },
   importDeleteButton: {
     borderRadius: radius.xl,

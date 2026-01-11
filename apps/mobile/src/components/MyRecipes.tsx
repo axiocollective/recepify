@@ -323,7 +323,7 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
           onImportFromLink={() => onNavigate?.("importFromLink")}
           onScanRecipe={() => onNavigate?.("scanRecipe")}
           onAddManually={() => onNavigate?.("import")}
-          onCheckInbox={inboxCount > 0 && onNavigate ? () => onNavigate("importInbox") : undefined}
+          onCheckInbox={onNavigate ? () => onNavigate("importInbox") : undefined}
           inboxCount={inboxCount}
         />
       )}

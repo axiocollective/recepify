@@ -234,7 +234,7 @@ def import_scan(images: List[Dict[str, Optional[str]]]) -> Dict[str, Any]:
     image_paths: List[Path] = []
     raw_texts: List[str] = []
     usage_events: List[Dict[str, Any]] = []
-    for entry in images[:3]:
+    for entry in images[:2]:
         image_bytes = (entry.get("bytes") or b"") if isinstance(entry.get("bytes"), (bytes, bytearray)) else b""
         if not image_bytes:
             continue

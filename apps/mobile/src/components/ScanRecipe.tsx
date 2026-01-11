@@ -22,7 +22,7 @@ interface ScanRecipeProps {
   onScan: (imageData: string[]) => Promise<void>;
 }
 
-const MAX_IMAGES = 3;
+const MAX_IMAGES = 2;
 const MOCK_GALLERY_IMAGES = [
   "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=200&h=200&fit=crop",
   "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=200&h=200&fit=crop",
@@ -122,7 +122,7 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
     }
     if (isScanning) return;
     if (capturedImages.length >= MAX_IMAGES) {
-      Alert.alert("Limit reached", "You can scan up to 3 photos at a time.");
+      Alert.alert("Limit reached", "You can scan up to 2 photos at a time.");
       return;
     }
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -204,7 +204,7 @@ export const ScanRecipe: React.FC<ScanRecipeProps> = ({ onBack, onScan }) => {
             </View>
             <Text style={styles.emptyTitle}>Scan your recipe</Text>
             <Text style={styles.emptySubtitle}>
-              Capture up to 3 photos of your recipe card, cookbook page, or handwritten notes.
+              Capture up to 2 photos of your recipe card, cookbook page, or handwritten notes.
             </Text>
           </View>
         ) : (

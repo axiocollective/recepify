@@ -145,7 +145,7 @@ export const Home: React.FC<HomeProps> = ({
           onImportFromLink={() => onNavigate("importFromLink")}
           onScanRecipe={() => onNavigate("scanRecipe")}
           onAddManually={onAddManually}
-          onCheckInbox={inboxCount > 0 ? () => onNavigate("importInbox") : undefined}
+          onCheckInbox={() => onNavigate("importInbox")}
           inboxCount={inboxCount}
         />
       </ScrollView>

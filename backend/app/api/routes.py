@@ -1256,7 +1256,7 @@ async def import_scan(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded image is empty.")
 
     images: List[Dict[str, Optional[str]]] = []
-    for upload in uploads[:3]:
+    for upload in uploads[:2]:
         contents = await upload.read()
         if not contents:
             continue
