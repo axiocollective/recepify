@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Alert,
   KeyboardAvoidingView,
   Linking,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -68,6 +70,13 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
 }) => {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [screenSize, setScreenSize] = useState({ width: 0, height: 0 });
+  const assistantPosition = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const assistantOffset = useRef({ x: 0, y: 0 });
+  const assistantSize = 64;
+  const assistantPadding = spacing.lg;
+  const assistantTopInset = spacing.xl + 44;
+  const assistantBottomInset = spacing.xl + 88;
   const {
     plan,
     usageSummary,
@@ -117,6 +126,41 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
       navigateTo("planBilling", { focus: "credits" });
     }
   };
+  const clampAssistantPosition = (x: number, y: number) => {
+    if (!screenSize.width || !screenSize.height) {
+      return { x, y };
+    }
+    const minX = assistantPadding;
+    const maxX = Math.max(minX, screenSize.width - assistantSize - assistantPadding);
+    const minY = assistantTopInset;
+    const maxY = Math.max(minY, screenSize.height - assistantSize - assistantBottomInset);
+    return {
+      x: Math.min(Math.max(x, minX), maxX),
+      y: Math.min(Math.max(y, minY), maxY),
+    };
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.abs(gesture.dx) > 3 || Math.abs(gesture.dy) > 3,
+      onPanResponderMove: (_, gesture) => {
+        const next = clampAssistantPosition(
+          assistantOffset.current.x + gesture.dx,
+          assistantOffset.current.y + gesture.dy
+        );
+        assistantPosition.setValue(next);
+      },
+      onPanResponderRelease: (_, gesture) => {
+        const next = clampAssistantPosition(
+          assistantOffset.current.x + gesture.dx,
+          assistantOffset.current.y + gesture.dy
+        );
+        assistantOffset.current = next;
+        assistantPosition.setValue(next);
+      },
+    })
+  ).current;
 
   const showAiLimitAlert = () => {
     Alert.alert(aiLimitTitle, aiLimitMessage, [
@@ -504,8 +548,24 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
             "Some information is missing. You can add what’s missing manually or use AI to fill the gaps. 1 recipe import credit used.",
         };
 
+  useEffect(() => {
+    if (!screenSize.width || !screenSize.height) return;
+    const initial = clampAssistantPosition(
+      (screenSize.width - assistantSize) / 2,
+      screenSize.height - assistantSize - assistantBottomInset
+    );
+    assistantOffset.current = initial;
+    assistantPosition.setValue(initial);
+  }, [screenSize.width, screenSize.height]);
+
   return (
-    <>
+    <View
+      style={styles.screen}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        setScreenSize({ width, height });
+      }}
+    >
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.select({ ios: "padding", android: undefined })}
@@ -1016,7 +1076,15 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
             recipe={recipe}
           />
 
-          <View style={styles.floatingAssistantWrap}>
+          <Animated.View
+            style={[
+              styles.floatingAssistantWrap,
+              {
+                transform: assistantPosition.getTranslateTransform(),
+              },
+            ]}
+            {...panResponder.panHandlers}
+          >
             <Pressable
               style={[styles.floatingAssistant, shadow.lg, aiChatBlocked && styles.floatingAssistantDisabled]}
               onPress={() => {
@@ -1029,14 +1097,17 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
             >
               <Ionicons name="sparkles" size={22} color={aiChatBlocked ? colors.gray500 : colors.white} />
             </Pressable>
-          </View>
+          </Animated.View>
         </>
       )}
-    </>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.white,
@@ -1610,8 +1681,8 @@ const styles = StyleSheet.create({
   },
   floatingAssistantWrap: {
     position: "absolute",
-    bottom: 20,
-    alignSelf: "center",
+    top: 0,
+    left: 0,
     zIndex: 30,
   },
   floatingAssistant: {
