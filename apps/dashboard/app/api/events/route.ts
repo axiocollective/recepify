@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../lib/supabaseAdmin";
 
+type UsageEventRow = {
+  owner_id?: string | null;
+  [key: string]: unknown;
+};
+
 const parseNumber = (value: string | null) => {
   if (!value) return null;
   const parsed = Number(value);
@@ -144,7 +149,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const events = data ?? [];
+  const events = (data ?? []) as UsageEventRow[];
   const ownerIds = Array.from(
     new Set(
       events
