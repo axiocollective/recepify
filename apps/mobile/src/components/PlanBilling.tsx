@@ -675,7 +675,10 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
       key: "imports",
       label: "Recipe Imports",
       used: usedImports,
-      total: planLimits.imports,
+      total: importLimit,
+      monthly: planLimits.imports,
+      trial: trialActive ? trialImportsRemaining : 0,
+      extra: addonImports,
       icon: "download-outline" as const,
       bg: "rgba(168, 85, 247, 0.12)",
       color: "#a855f7",
@@ -684,7 +687,10 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
       key: "translations",
       label: "AI Translations",
       used: usedTranslations,
-      total: planLimits.translations,
+      total: translationLimit,
+      monthly: planLimits.translations,
+      trial: trialActive ? trialTranslationsRemaining : 0,
+      extra: addonTranslations,
       icon: "language-outline" as const,
       bg: "rgba(59, 130, 246, 0.12)",
       color: "#3b82f6",
@@ -693,7 +699,10 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
       key: "optimizations",
       label: "AI Optimizations",
       used: usedOptimizations,
-      total: planLimits.optimizations,
+      total: optimizationLimit,
+      monthly: planLimits.optimizations,
+      trial: trialActive ? trialOptimizationsRemaining : 0,
+      extra: addonOptimizations,
       icon: "sparkles-outline" as const,
       bg: "rgba(236, 72, 153, 0.12)",
       color: "#ec4899",
@@ -702,7 +711,10 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
       key: "messages",
       label: "AI Assistant Messages",
       used: usedAiMessages,
-      total: planLimits.aiMessages,
+      total: aiMessageLimit,
+      monthly: planLimits.aiMessages,
+      trial: trialActive ? trialAiMessagesRemaining : 0,
+      extra: addonAiMessages,
       icon: "chatbubble-ellipses-outline" as const,
       bg: "rgba(34, 197, 94, 0.12)",
       color: "#22c55e",
@@ -777,6 +789,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
           <View style={styles.usageGrid}>
             {usageCards.map((card) => {
               const progress = card.total > 0 ? Math.min(1, card.used / card.total) : 0;
+              const meta = formatUsageLabel(card.used, card.monthly, card.extra, card.trial);
               return (
                 <View key={card.key} style={[styles.usageCard, shadow.md]}>
                   <View style={[styles.usageIcon, { backgroundColor: card.bg }]}>
@@ -787,6 +800,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                     <Text style={styles.usageTotal}>/ {formatNumber(card.total)}</Text>
                   </View>
                   <Text style={styles.usageLabel}>{card.label}</Text>
+                  <Text style={styles.usageMeta}>{meta}</Text>
                   <View style={styles.usageTrack}>
                     <View style={[styles.usageFill, { width: `${progress * 100}%`, backgroundColor: card.color }]} />
                   </View>
@@ -1095,6 +1109,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: colors.gray600,
+    marginBottom: spacing.sm,
+  },
+  usageMeta: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.gray500,
     marginBottom: spacing.sm,
   },
   usageTrack: {

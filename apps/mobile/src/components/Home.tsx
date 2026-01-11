@@ -6,7 +6,7 @@ import { colors, radius, spacing, typography, shadow } from "../theme/theme";
 import { Recipe, RecipeCollection, Screen } from "../data/types";
 import { RecipeThumbnail } from "./RecipeThumbnail";
 import { formatDuration } from "../utils/formatDuration";
-import { ImportQuickActions } from "./ImportQuickActions";
+import { EmptyState } from "./EmptyState";
 
 interface HomeProps {
   onNavigate: (screen: Screen) => void;
@@ -136,35 +136,31 @@ export const Home: React.FC<HomeProps> = ({
       });
   }, [collections, allRecipes]);
 
+  if (!hasRecipes) {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 128 }}>
+        <EmptyState
+          variant="home"
+          userName={userName}
+          onImportFromLink={() => onNavigate("importFromLink")}
+          onScanRecipe={() => onNavigate("scanRecipe")}
+          onAddManually={onAddManually}
+          onCheckInbox={inboxCount > 0 ? () => onNavigate("importInbox") : undefined}
+          inboxCount={inboxCount}
+        />
+      </ScrollView>
+    );
+  }
+
   return (
     <>
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 128 }}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>{greeting().title}</Text>
           <Text style={styles.headerSubtitle}>
-            {hasRecipes ? "What would you like to cook today?" : "Let's add your first recipe"}
+            What would you like to cook today?
           </Text>
         </View>
-
-        {!hasRecipes && (
-          <View style={styles.section}>
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIcon}>
-                <Ionicons name="book-outline" size={36} color={colors.gray400} />
-              </View>
-              <Text style={styles.emptyTitle}>No recipes yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Use the Add Recipe options below to import from links, social, or scan a recipe.
-              </Text>
-            </View>
-            <ImportQuickActions
-              onNavigate={onNavigate}
-              onAddManually={onAddManually}
-              inboxCount={inboxCount}
-              importReadyCount={importReadyCount}
-            />
-          </View>
-        )}
 
         {hasRecipes && homeTags.length > 0 && (
           <View style={styles.tagGridSection}>

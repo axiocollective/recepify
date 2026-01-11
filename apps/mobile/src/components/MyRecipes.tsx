@@ -7,7 +7,7 @@ import { RecipeThumbnail } from "./RecipeThumbnail";
 import { RECIPE_TAGS } from "../../../../packages/shared/constants/recipe-tags";
 import { AddToCollectionModal } from "./AddToCollectionModal";
 import { formatDuration } from "../utils/formatDuration";
-import { ImportQuickActions } from "./ImportQuickActions";
+import { EmptyState } from "./EmptyState";
 
 interface MyRecipesProps {
   recipes: Recipe[];
@@ -318,20 +318,14 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
       </View>
 
       {recipes.length === 0 && (
-        <View style={styles.importSection}>
-          <View style={styles.emptyInlineState}>
-            <Text style={styles.emptyInlineTitle}>No recipes yet</Text>
-            <Text style={styles.emptyInlineSubtitle}>
-              Use the Add Recipe options below to import from links, social, or scan a recipe.
-            </Text>
-          </View>
-          <ImportQuickActions
-            onNavigate={onNavigate}
-            onAddManually={onAddManually}
-            inboxCount={inboxCount}
-            importReadyCount={importReadyCount}
-          />
-        </View>
+        <EmptyState
+          variant="myRecipes"
+          onImportFromLink={() => onNavigate?.("importFromLink")}
+          onScanRecipe={() => onNavigate?.("scanRecipe")}
+          onAddManually={() => onNavigate?.("import")}
+          onCheckInbox={inboxCount > 0 && onNavigate ? () => onNavigate("importInbox") : undefined}
+          inboxCount={inboxCount}
+        />
       )}
 
       {showFilters && viewType === "recipes" && (

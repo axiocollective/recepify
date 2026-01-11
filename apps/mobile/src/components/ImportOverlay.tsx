@@ -1,8 +1,7 @@
 import React from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { colors, radius, spacing, typography, shadow } from "../theme/theme";
+import { colors, radius, spacing, typography } from "../theme/theme";
 import { Screen } from "../data/types";
 
 interface ImportOverlayProps {
@@ -21,6 +20,18 @@ export const ImportOverlay: React.FC<ImportOverlayProps> = ({
   inboxCount = 0,
 }) => {
   const importOptions = [
+    {
+      id: "inbox",
+      icon: "mail-outline" as const,
+      title: "Inbox",
+      description: inboxCount > 0
+        ? `${inboxCount} waiting`
+        : "No recipes waiting",
+      action: () => {
+        onNavigate("importInbox");
+        onClose();
+      },
+    },
     {
       id: "link",
       icon: "link-outline" as const,
@@ -67,48 +78,30 @@ export const ImportOverlay: React.FC<ImportOverlayProps> = ({
           </Pressable>
         </View>
 
-        {inboxCount > 0 && (
-          <Pressable
-            style={styles.inboxWrap}
-            onPress={() => {
-              onNavigate("importInbox");
-              onClose();
-            }}
-          >
-            <LinearGradient
-              colors={[colors.purple500, colors.purple600]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.inboxCard, shadow.md]}
-            >
-              <View style={styles.inboxIcon}>
-                <Ionicons name="mail-outline" size={22} color={colors.white} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inboxTitle}>Inbox</Text>
-                <Text style={styles.inboxSubtitle}>
-                  {inboxCount} recipe{inboxCount !== 1 ? "s" : ""} waiting
-                </Text>
-              </View>
-              <View style={styles.inboxBadge}>
-                <Text style={styles.inboxBadgeText}>{inboxCount}</Text>
-              </View>
-            </LinearGradient>
-          </Pressable>
-        )}
-
         <View style={styles.optionList}>
-          {importOptions.map((option) => (
+          {importOptions.map((option) => {
+            const isInbox = option.id === "inbox";
+            const hasInboxItems = inboxCount > 0;
+            return (
             <Pressable key={option.id} style={styles.option} onPress={option.action}>
-              <View style={styles.optionIcon}>
+              <View
+                style={[
+                  styles.optionIcon,
+                  isInbox && hasInboxItems && styles.optionIconInboxActive,
+                ]}
+              >
                 <Ionicons name={option.icon} size={20} color={colors.white} />
+                {isInbox && hasInboxItems && (
+                  <View style={styles.inboxDot} />
+                )}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.optionTitle}>{option.title}</Text>
                 <Text style={styles.optionSubtitle}>{option.description}</Text>
               </View>
             </Pressable>
-          ))}
+          );
+          })}
         </View>
         <View style={styles.bottomSpacer} />
       </View>
@@ -155,42 +148,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  inboxWrap: {
-    marginBottom: spacing.lg,
-  },
-  inboxCard: {
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  inboxIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.md,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  inboxTitle: {
-    ...typography.bodyBold,
-    color: colors.white,
-  },
-  inboxSubtitle: {
-    ...typography.caption,
-    color: "rgba(255,255,255,0.8)",
-  },
-  inboxBadge: {
-    backgroundColor: colors.white,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  inboxBadgeText: {
-    ...typography.bodyBold,
-    color: colors.purple600,
-  },
   optionList: {
     gap: spacing.sm,
   },
@@ -211,6 +168,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray900,
     alignItems: "center",
     justifyContent: "center",
+  },
+  optionIconInboxActive: {
+    backgroundColor: colors.purple600,
+  },
+  inboxDot: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 12,
+    height: 12,
+    borderRadius: radius.full,
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.purple600,
   },
   optionTitle: {
     ...typography.bodyBold,

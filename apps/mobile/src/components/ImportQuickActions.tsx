@@ -15,10 +15,10 @@ interface ImportQuickActionsProps {
 }
 
 const actions: Array<{ id: Screen | "manual" | "inbox"; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
+  { id: "inbox", label: "Inbox", icon: "mail-outline" },
   { id: "importFromLink", label: "Share Link", icon: "link-outline" },
   { id: "scanRecipe", label: "Scan", icon: "camera-outline" },
   { id: "manual", label: "Manually", icon: "add" },
-  { id: "inbox", label: "Inbox", icon: "mail-outline" },
 ];
 
 export const ImportQuickActions: React.FC<ImportQuickActionsProps> = ({
@@ -64,14 +64,20 @@ export const ImportQuickActions: React.FC<ImportQuickActionsProps> = ({
       <View style={[styles.card, shadow.md]}>
         <Text style={styles.title}>Add Recipe</Text>
         <View style={styles.row}>
-          {actions.map((action) => (
+          {actions.map((action) => {
+            const isInbox = action.id === "inbox";
+            const hasInboxItems = importReadyCount > 0;
+            return (
             <Pressable
               key={action.id}
               onPress={() => handleAction(action.id)}
               style={styles.action}
             >
               <View
-                style={styles.iconWrap}
+                style={[
+                  styles.iconWrap,
+                  isInbox && hasInboxItems && styles.iconWrapInboxActive,
+                ]}
               >
                 <Ionicons
                   name={action.icon}
@@ -86,7 +92,8 @@ export const ImportQuickActions: React.FC<ImportQuickActionsProps> = ({
               </View>
               <Text style={styles.label}>{action.label}</Text>
             </Pressable>
-          ))}
+            );
+          })}
         </View>
       </View>
     </View>
@@ -126,6 +133,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray900,
     alignItems: "center",
     justifyContent: "center",
+  },
+  iconWrapInboxActive: {
+    backgroundColor: colors.purple600,
   },
   label: {
     fontSize: 13,

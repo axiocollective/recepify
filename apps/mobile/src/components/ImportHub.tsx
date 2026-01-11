@@ -13,6 +13,14 @@ interface ImportHubProps {
 export const ImportHub: React.FC<ImportHubProps> = ({ onNavigate, onAddManually, sharedRecipesCount = 0 }) => {
   const methods = [
     {
+      id: "importInbox" as const,
+      icon: "mail-outline" as const,
+      title: "Inbox",
+      description: "View recipes shared via your import inbox.",
+      badge: sharedRecipesCount,
+      action: () => onNavigate("importInbox"),
+    },
+    {
       id: "importFromLink" as const,
       icon: "link-outline" as const,
       title: "From Link",
@@ -33,14 +41,6 @@ export const ImportHub: React.FC<ImportHubProps> = ({ onNavigate, onAddManually,
       description: "Start from scratch and type it out yourself.",
       action: onAddManually,
     },
-    {
-      id: "importInbox" as const,
-      icon: "mail-outline" as const,
-      title: "Inbox",
-      description: "View recipes shared via your import inbox.",
-      badge: sharedRecipesCount,
-      action: () => onNavigate("importInbox"),
-    },
   ];
 
   return (
@@ -56,9 +56,17 @@ export const ImportHub: React.FC<ImportHubProps> = ({ onNavigate, onAddManually,
       </View>
 
       <View style={styles.list}>
-        {methods.map((method) => (
+        {methods.map((method) => {
+          const isInbox = method.id === "importInbox";
+          const hasInboxItems = (method.badge ?? 0) > 0;
+          return (
           <Pressable key={method.id} onPress={method.action} style={styles.card}>
-            <View style={styles.iconWrap}>
+            <View
+              style={[
+                styles.iconWrap,
+                isInbox && hasInboxItems && styles.iconWrapInboxActive,
+              ]}
+            >
               <Ionicons name={method.icon} size={22} color={colors.white} />
               {method.badge && method.badge > 0 && (
                 <View style={styles.badge}>
@@ -71,7 +79,8 @@ export const ImportHub: React.FC<ImportHubProps> = ({ onNavigate, onAddManually,
               <Text style={styles.cardSubtitle}>{method.description}</Text>
             </View>
           </Pressable>
-        ))}
+        );
+      })}
       </View>
 
       <View style={styles.help}>
@@ -146,6 +155,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray900,
     alignItems: "center",
     justifyContent: "center",
+  },
+  iconWrapInboxActive: {
+    backgroundColor: colors.purple600,
   },
   badge: {
     position: "absolute",

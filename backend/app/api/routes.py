@@ -1110,15 +1110,15 @@ def import_web(
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
-        _log_usage_events(
-            session,
-            owner_id,
-            request_id=request_id,
-            event_type="import",
-            source="web",
-            events=_extract_usage_events(recipe_data),
-            import_credits_used=1 if has_data else 0,
-        )
+            _log_usage_events(
+                session,
+                owner_id,
+                request_id=request_id,
+                event_type="import",
+                source="web",
+                events=_extract_usage_events(recipe_data),
+                import_credits_used=1 if has_data else 0,
+            )
     return ImportResponse(recipe=recipe_data)
 
 
@@ -1138,15 +1138,15 @@ def import_tiktok(
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
-        _log_usage_events(
-            session,
-            owner_id,
-            request_id=request_id,
-            event_type="import",
-            source="tiktok",
-            events=_extract_usage_events(recipe_data),
-            import_credits_used=1 if has_data else 0,
-        )
+            _log_usage_events(
+                session,
+                owner_id,
+                request_id=request_id,
+                event_type="import",
+                source="tiktok",
+                events=_extract_usage_events(recipe_data),
+                import_credits_used=1 if has_data else 0,
+            )
     return ImportResponse(recipe=recipe_data, videoPath=video_path)
 
 
@@ -1166,15 +1166,15 @@ def import_instagram(
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
-        _log_usage_events(
-            session,
-            owner_id,
-            request_id=request_id,
-            event_type="import",
-            source="instagram",
-            events=_extract_usage_events(recipe_data),
-            import_credits_used=1 if has_data else 0,
-        )
+            _log_usage_events(
+                session,
+                owner_id,
+                request_id=request_id,
+                event_type="import",
+                source="instagram",
+                events=_extract_usage_events(recipe_data),
+                import_credits_used=1 if has_data else 0,
+            )
     return ImportResponse(recipe=recipe_data, videoPath=video_path)
 
 
@@ -1196,15 +1196,15 @@ def import_pinterest(
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
-        _log_usage_events(
-            session,
-            owner_id,
-            request_id=request_id,
-            event_type="import",
-            source="pinterest",
-            events=_extract_usage_events(recipe_data),
-            import_credits_used=1 if has_data else 0,
-        )
+            _log_usage_events(
+                session,
+                owner_id,
+                request_id=request_id,
+                event_type="import",
+                source="pinterest",
+                events=_extract_usage_events(recipe_data),
+                import_credits_used=1 if has_data else 0,
+            )
     return ImportResponse(recipe=recipe_data)
 
 
@@ -1226,15 +1226,15 @@ def import_youtube(
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
-        _log_usage_events(
-            session,
-            owner_id,
-            request_id=request_id,
-            event_type="import",
-            source="youtube",
-            events=_extract_usage_events(recipe_data),
-            import_credits_used=1 if has_data else 0,
-        )
+            _log_usage_events(
+                session,
+                owner_id,
+                request_id=request_id,
+                event_type="import",
+                source="youtube",
+                events=_extract_usage_events(recipe_data),
+                import_credits_used=1 if has_data else 0,
+            )
     return ImportResponse(recipe=recipe_data)
 
 
@@ -1280,15 +1280,15 @@ async def import_scan(
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
-        _log_usage_events(
-            session,
-            owner_id,
-            request_id=request_id,
-            event_type="scan",
-            source="scan",
-            events=_extract_usage_events(recipe_data),
-            import_credits_used=1 if has_data else 0,
-        )
+            _log_usage_events(
+                session,
+                owner_id,
+                request_id=request_id,
+                event_type="scan",
+                source="scan",
+                events=_extract_usage_events(recipe_data),
+                import_credits_used=1 if has_data else 0,
+            )
     return ImportResponse(recipe=recipe_data)
 
 def _has_import_data(recipe_data: Dict[str, Any]) -> bool:
