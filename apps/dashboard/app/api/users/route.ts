@@ -4,7 +4,7 @@ import { supabaseAdmin } from "../../lib/supabaseAdmin";
 export async function GET() {
   const { data, error } = await supabaseAdmin
     .from("profiles")
-    .select("id, name, plan, subscription_period, trial_ends_at")
+    .select("id, name, plan, subscription_period, trial_ends_at, language, country")
     .order("created_at", { ascending: false });
 
   if (error) {

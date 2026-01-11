@@ -35,26 +35,27 @@ export const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({
               <Ionicons name="language-outline" size={18} color={colors.gray500} />
               <Text style={styles.title}>{title}</Text>
             </View>
-            <Pressable onPress={onClose} style={styles.closeButton}>
-              <Text style={styles.closeText}>×</Text>
-            </Pressable>
+            <Text style={styles.subtitle}>Choose a target language</Text>
           </View>
 
-          <Text style={styles.subtitle}>Choose a target language</Text>
-
           <View style={styles.options}>
-            {LANGUAGE_OPTIONS.map((option) => {
+            {LANGUAGE_OPTIONS.map((option, index) => {
               const isSelected = option.value === selected;
+              const isLast = index === LANGUAGE_OPTIONS.length - 1;
               return (
                 <Pressable
                   key={option.value}
                   onPress={() => onSelect(option.value)}
-                  style={[styles.optionRow, isSelected && styles.optionRowSelected]}
+                  style={[
+                    styles.optionRow,
+                    isSelected && styles.optionRowSelected,
+                    isLast && styles.optionRowLast,
+                  ]}
                 >
                   <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
                     {option.label}
                   </Text>
-                  {isSelected && <Ionicons name="checkmark" size={18} color={colors.gray900} />}
+                  {isSelected && <Ionicons name="checkmark" size={18} color={colors.blue600} />}
                 </Pressable>
               );
             })}
@@ -65,15 +66,18 @@ export const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({
           )}
 
           <View style={styles.actions}>
-            <Pressable style={styles.cancelButton} onPress={onClose}>
-              <Text style={styles.cancelText}>Cancel</Text>
+            <Pressable style={styles.actionButton} onPress={onClose}>
+              <Text style={[styles.actionText, styles.cancelText]}>Cancel</Text>
             </Pressable>
+            <View style={styles.actionDivider} />
             <Pressable
-              style={[styles.confirmButton, isSameLanguage && styles.confirmButtonDisabled]}
+              style={styles.actionButton}
               onPress={() => onConfirm(targetCode)}
               disabled={isSameLanguage}
             >
-              <Text style={styles.confirmText}>Translate</Text>
+              <Text style={[styles.actionText, isSameLanguage && styles.actionTextDisabled]}>
+                Translate
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -85,21 +89,23 @@ export const LanguagePickerModal: React.FC<LanguagePickerModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.4)",
+    backgroundColor: "rgba(0, 0, 0, 0.35)",
     alignItems: "center",
     justifyContent: "center",
     padding: spacing.xl,
   },
   card: {
     width: "100%",
-    borderRadius: radius.xl,
+    borderRadius: 18,
     backgroundColor: colors.white,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: 0,
+    overflow: "hidden",
   },
   header: {
-    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: spacing.xs,
   },
   titleRow: {
     flexDirection: "row",
@@ -110,40 +116,33 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.gray900,
   },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.full,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.gray100,
-  },
-  closeText: {
-    fontSize: 20,
-    color: colors.gray500,
-  },
   subtitle: {
     ...typography.bodySmall,
     color: colors.gray500,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
+    textAlign: "center",
+    marginTop: spacing.xs,
+    marginBottom: spacing.lg,
   },
   options: {
-    gap: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.gray200,
+    borderRadius: radius.lg,
+    overflow: "hidden",
   },
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.gray200,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray200,
+  },
+  optionRowLast: {
+    borderBottomWidth: 0,
   },
   optionRowSelected: {
-    borderColor: colors.gray900,
-    backgroundColor: colors.gray100,
+    backgroundColor: colors.gray50,
   },
   optionText: {
     ...typography.body,
@@ -156,39 +155,34 @@ const styles = StyleSheet.create({
   helperText: {
     ...typography.caption,
     color: colors.gray500,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
+    textAlign: "center",
   },
   actions: {
     flexDirection: "row",
-    gap: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.gray200,
     marginTop: spacing.lg,
   },
-  cancelButton: {
+  actionButton: {
     flex: 1,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.md + 2,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.gray200,
+  },
+  actionDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: colors.gray200,
+  },
+  actionText: {
+    ...typography.bodySmall,
+    color: colors.blue600,
+    fontWeight: "600",
   },
   cancelText: {
-    ...typography.bodySmall,
     color: colors.gray700,
-    fontWeight: "600",
+    fontWeight: "500",
   },
-  confirmButton: {
-    flex: 1,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
-    alignItems: "center",
-    backgroundColor: colors.gray900,
-  },
-  confirmButtonDisabled: {
-    backgroundColor: colors.gray300,
-  },
-  confirmText: {
-    ...typography.bodySmall,
-    color: colors.white,
-    fontWeight: "600",
+  actionTextDisabled: {
+    color: colors.gray400,
   },
 });

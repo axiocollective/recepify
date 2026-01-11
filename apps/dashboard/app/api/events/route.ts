@@ -20,6 +20,34 @@ const resolveOwnerIdsByEmail = async (emailQuery: string) => {
     .map((user) => user.id);
 };
 
+const resolveOwnerIdsByProfileFilters = async (
+  userName: string | null,
+  language: string | null,
+  country: string | null
+) => {
+  let query = supabaseAdmin.from("profiles").select("id");
+  if (userName) {
+    query = query.ilike("name", `%${userName.trim()}%`);
+  }
+  if (language) {
+    query = query.eq("language", language);
+  }
+  if (country) {
+    query = query.eq("country", country);
+  }
+  const { data, error } = await query;
+  if (error || !data) return [];
+  return data.map((row) => row.id);
+};
+
+const intersectIds = (a: string[] | null, b: string[] | null) => {
+  if (!a && !b) return null;
+  if (!a) return b;
+  if (!b) return a;
+  const setB = new Set(b);
+  return a.filter((id) => setB.has(id));
+};
+
 const normalizeDate = (value: string | null, fallback: "start" | "end") => {
   if (!value) return null;
   const trimmed = value.trim();
@@ -52,6 +80,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get("userId");
   const email = searchParams.get("email");
+  const userName = searchParams.get("userName");
+  const language = searchParams.get("language");
+  const country = searchParams.get("country");
   const eventType = searchParams.get("eventType");
   const source = searchParams.get("source");
   const model = searchParams.get("model");
@@ -69,17 +100,24 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
+  let ownerIds: string[] | null = null;
   if (email) {
-    const ownerIds = await resolveOwnerIdsByEmail(email);
-    if (ownerIds.length === 0) {
+    ownerIds = await resolveOwnerIdsByEmail(email);
+  }
+  if (userName || language || country) {
+    const profileIds = await resolveOwnerIdsByProfileFilters(userName, language, country);
+    ownerIds = intersectIds(ownerIds, profileIds);
+  }
+  if (ownerIds && ownerIds.length === 0) {
+    return NextResponse.json({ events: [], hasMore: false, nextOffset: offset });
+  }
+  if (userId) {
+    if (ownerIds && !ownerIds.includes(userId)) {
       return NextResponse.json({ events: [], hasMore: false, nextOffset: offset });
     }
-    if (userId && !ownerIds.includes(userId)) {
-      return NextResponse.json({ events: [], hasMore: false, nextOffset: offset });
-    }
-    query = query.in("owner_id", userId ? [userId] : ownerIds);
-  } else if (userId) {
     query = query.eq("owner_id", userId);
+  } else if (ownerIds) {
+    query = query.in("owner_id", ownerIds);
   }
   if (eventType) query = query.eq("event_type", eventType);
   if (source) query = query.eq("source", source);

@@ -104,6 +104,7 @@ export const ensureProfile = async (payload: {
   subscriptionStatus?: "active" | "canceled" | "expired";
   trialStartedAt?: string;
   trialEndsAt?: string;
+  trialCanceledAt?: string | null;
   trialImports?: number;
   trialTranslations?: number;
   trialOptimizations?: number;
@@ -129,6 +130,7 @@ export const ensureProfile = async (payload: {
   if (payload.subscriptionStatus !== undefined) updatePayload.subscription_status = payload.subscriptionStatus ?? null;
   if (payload.trialStartedAt !== undefined) updatePayload.trial_started_at = payload.trialStartedAt ?? null;
   if (payload.trialEndsAt !== undefined) updatePayload.trial_ends_at = payload.trialEndsAt ?? null;
+  if (payload.trialCanceledAt !== undefined) updatePayload.trial_canceled_at = payload.trialCanceledAt ?? null;
   if (payload.trialImports !== undefined) updatePayload.trial_imports = payload.trialImports ?? null;
   if (payload.trialTranslations !== undefined) updatePayload.trial_translations = payload.trialTranslations ?? null;
   if (payload.trialOptimizations !== undefined) updatePayload.trial_optimizations = payload.trialOptimizations ?? null;

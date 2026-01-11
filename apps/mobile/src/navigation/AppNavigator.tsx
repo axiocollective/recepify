@@ -65,6 +65,7 @@ export const AppNavigator: React.FC = () => {
     trialTranslationsRemaining,
     trialOptimizationsRemaining,
     trialAiMessagesRemaining,
+    trialCanceledAt,
     subscriptionPeriod,
     subscriptionEndsAt,
     subscriptionStatus,
@@ -95,6 +96,7 @@ export const AppNavigator: React.FC = () => {
     refreshUsageSummary,
     purchaseAddon,
     scheduleSubscriptionCancellation,
+    cancelTrial,
     consumeAction,
   } = useApp();
   const [myRecipesInitialTag, setMyRecipesInitialTag] = React.useState<string | null>(null);
@@ -634,6 +636,7 @@ export const AppNavigator: React.FC = () => {
             addonAiMessages={addonAiMessages}
             trialActive={trialActive}
             trialEndsAt={trialEndsAt}
+            trialCanceledAt={trialCanceledAt}
             trialImportsRemaining={trialImportsRemaining}
             trialTranslationsRemaining={trialTranslationsRemaining}
             trialOptimizationsRemaining={trialOptimizationsRemaining}
@@ -647,6 +650,7 @@ export const AppNavigator: React.FC = () => {
             onBuyCredits={(action, quantity) => purchaseAddon(action, quantity)}
             onSubscriptionPeriodChange={(value) => updateProfile({ subscriptionPeriod: value })}
             onCancelSubscription={scheduleSubscriptionCancellation}
+            onCancelTrial={cancelTrial}
             onBack={() => navigateTo("profile")}
           />
         )}

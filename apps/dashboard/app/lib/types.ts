@@ -27,12 +27,26 @@ export type ProfileRow = {
   subscription_period: "monthly" | "yearly" | null;
   created_at: string | null;
   trial_ends_at: string | null;
+  trial_canceled_at?: string | null;
+  subscription_status?: string | null;
+  language?: string | null;
+  country?: string | null;
   bonus_imports: number | null;
   bonus_tokens: number | null;
   trial_imports: number | null;
   trial_tokens: number | null;
   trial_imports_used: number | null;
   trial_tokens_used: number | null;
+  trial_translations?: number | null;
+  trial_translations_used?: number | null;
+  trial_optimizations?: number | null;
+  trial_optimizations_used?: number | null;
+  trial_ai_messages?: number | null;
+  trial_ai_messages_used?: number | null;
+  addon_imports?: number | null;
+  addon_translations?: number | null;
+  addon_optimizations?: number | null;
+  addon_ai_messages?: number | null;
 };
 
 export type UsageSummary = {
@@ -40,19 +54,49 @@ export type UsageSummary = {
   baseUsers: number;
   premiumUsers: number;
   trialUsers: number;
+  canceledUsers: number;
+  canceledTrialUsers: number;
   baseMonthlyUsers: number;
   baseYearlyUsers: number;
   premiumMonthlyUsers: number;
   premiumYearlyUsers: number;
   freeUsers: number;
+  usersByCountry: Array<{ label: string; value: number }>;
+  usersByLanguage: Array<{ label: string; value: number }>;
+  actionTotals: Array<{
+    action: string;
+    events: number;
+    creditsUsed: number;
+    costUsd: number;
+  }>;
+  contextTotals: Array<{
+    context: string;
+    events: number;
+    creditsUsed: number;
+    costUsd: number;
+  }>;
+  creditInventory: Array<{
+    action: string;
+    planAvailable: number;
+    trialAvailable: number;
+    addonRemaining: number;
+    addonsPurchased: number | null;
+    addonsUsed: number | null;
+  }>;
   totalImports: number;
   totalAiCredits: number;
   totalCostUsd: number;
   totalWhisperSeconds: number;
   totalVisionImages: number;
   currentPeriodImportsUsed: number;
+  currentPeriodTranslationsUsed: number;
+  currentPeriodOptimizationsUsed: number;
+  currentPeriodAiMessagesUsed: number;
   currentPeriodAiUsed: number;
   totalImportCreditsAvailable: number;
+  totalTranslationCreditsAvailable: number;
+  totalOptimizationCreditsAvailable: number;
+  totalAiMessageCreditsAvailable: number;
   totalAiCreditsAvailable: number;
   activeUsers: number;
   dailySeries: Array<{ date: string; imports: number; aiCredits: number }>;

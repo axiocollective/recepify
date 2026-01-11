@@ -78,6 +78,7 @@ interface AppContextValue {
   trialOptimizationsRemaining: number;
   trialAiMessagesRemaining: number;
   trialEndsAt: string | null;
+  trialCanceledAt: string | null;
   subscriptionEndsAt: string | null;
   subscriptionStatus: "active" | "canceled" | "expired";
   subscriptionPeriod: "monthly" | "yearly";
@@ -98,6 +99,7 @@ interface AppContextValue {
     subscriptionPeriod?: "monthly" | "yearly";
   }) => void;
   scheduleSubscriptionCancellation: (endsAt: string) => void;
+  cancelTrial: () => void;
   deleteAccount: () => Promise<void>;
   logout: () => void;
   navigateTo: (screen: Screen, options?: { focus?: "credits" }) => void;
@@ -159,6 +161,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [addonAiMessages, setAddonAiMessages] = useState(0);
   const [trialStartsAt, setTrialStartsAt] = useState<string | null>(null);
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+  const [trialCanceledAt, setTrialCanceledAt] = useState<string | null>(null);
   const [trialImports, setTrialImports] = useState(0);
   const [trialTranslations, setTrialTranslations] = useState(0);
   const [trialOptimizations, setTrialOptimizations] = useState(0);
@@ -400,6 +403,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ? profile.subscription_status
             : "active"
         );
+        setTrialCanceledAt(profile.trial_canceled_at ? new Date(profile.trial_canceled_at).toISOString() : null);
         const now = new Date();
         const profileCreatedAt = profile.created_at ? new Date(profile.created_at) : null;
         const trialStart =
@@ -426,28 +430,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
         const trialExpired = trialEnd.getTime() <= now.getTime();
+        const trialCanceled = Boolean(profile.trial_canceled_at);
         if (
           trialExpired &&
           (profile.trial_imports ||
             profile.trial_translations ||
             profile.trial_optimizations ||
             profile.trial_ai_messages ||
-            profile.plan !== "base" ||
-            profile.subscription_period !== "monthly")
+            (!trialCanceled && (profile.plan !== "base" || profile.subscription_period !== "monthly")))
         ) {
           void ensureProfile({
             trialImports: 0,
             trialTranslations: 0,
             trialOptimizations: 0,
             trialAiMessages: 0,
-            plan: "base",
-            subscriptionPeriod: "monthly",
+            ...(trialCanceled ? {} : { plan: "base", subscriptionPeriod: "monthly" }),
           });
         }
-        if (trialExpired && nextPlan !== "base") {
+        if (trialExpired && nextPlan !== "base" && !trialCanceled) {
           setPlan("base");
         }
-        if (trialExpired) {
+        if (trialExpired && !trialCanceled) {
           setSubscriptionPeriod("monthly");
         }
         setTrialStartsAt(trialStart.toISOString());
@@ -488,6 +491,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setTrialAiMessagesUsed(0);
         setSubscriptionEndsAt(null);
         setSubscriptionStatus("active");
+        setTrialCanceledAt(null);
         setNeedsOnboarding(true);
         setImportItems([]);
       }
@@ -811,16 +815,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         trialTranslations: 0,
         trialOptimizations: 0,
         trialAiMessages: 0,
-        plan: "base",
-        subscriptionPeriod: "monthly",
+        ...(trialCanceledAt ? {} : { plan: "base", subscriptionPeriod: "monthly" }),
       });
-      setPlan("base");
-      setSubscriptionPeriod("monthly");
+      if (!trialCanceledAt) {
+        setPlan("base");
+        setSubscriptionPeriod("monthly");
+      }
       if (!trialEndAlertShownRef.current) {
         trialEndAlertShownRef.current = true;
         Alert.alert(
           "Trial ended",
-          "Your trial has ended. You’re now on Recepify Base (monthly). Trial actions and imports have expired.",
+          trialCanceledAt
+            ? "Your trial has ended. Your trial actions have expired."
+            : "Your trial has ended. You’re now on Recepify Base (monthly). Trial actions and imports have expired.",
           [
             { text: "OK" },
             {
@@ -835,7 +842,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
       }
     }
-  }, [trialEndsAt, trialAiMessages, trialImports, trialOptimizations, trialTranslations]);
+  }, [trialEndsAt, trialAiMessages, trialCanceledAt, trialImports, trialOptimizations, trialTranslations]);
 
   useEffect(() => {
     if (!subscriptionEndsAt || !isAuthenticated) return;
@@ -881,6 +888,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSubscriptionEndsAt(endsAt);
     setSubscriptionStatus("canceled");
     void ensureProfile({ subscriptionEndsAt: endsAt, subscriptionStatus: "canceled" });
+  }, []);
+
+  const cancelTrial = useCallback(() => {
+    const now = new Date().toISOString();
+    setTrialCanceledAt(now);
+    void ensureProfile({ trialCanceledAt: now });
   }, []);
 
   const updateProfile = useCallback((payload: { name?: string; email?: string; language?: LanguageValue; country?: string; aiDisabled?: boolean; plan?: PlanTier; subscriptionPeriod?: "monthly" | "yearly" }) => {
@@ -958,6 +971,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAddonAiMessages(0);
     setTrialStartsAt(null);
     setTrialEndsAt(null);
+    setTrialCanceledAt(null);
     setTrialImports(0);
     setTrialTranslations(0);
     setTrialOptimizations(0);
@@ -982,6 +996,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAddonAiMessages(0);
     setTrialStartsAt(null);
     setTrialEndsAt(null);
+    setTrialCanceledAt(null);
     setTrialImports(0);
     setTrialTranslations(0);
     setTrialOptimizations(0);
@@ -1303,6 +1318,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       trialOptimizationsRemaining,
       trialAiMessagesRemaining,
       trialEndsAt,
+      trialCanceledAt,
+      trialCanceledAt,
       subscriptionEndsAt,
       subscriptionStatus,
       subscriptionPeriod,
@@ -1315,6 +1332,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       handleLoadingComplete,
       updateProfile,
       scheduleSubscriptionCancellation,
+      cancelTrial,
+      cancelTrial,
       deleteAccount,
       logout,
       navigateTo,
@@ -1365,6 +1384,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       trialOptimizationsRemaining,
       trialAiMessagesRemaining,
       trialEndsAt,
+      trialCanceledAt,
       subscriptionEndsAt,
       subscriptionStatus,
       subscriptionPeriod,
@@ -1373,6 +1393,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       handleLoadingComplete,
       updateProfile,
       scheduleSubscriptionCancellation,
+      cancelTrial,
       deleteAccount,
       logout,
       navigateTo,

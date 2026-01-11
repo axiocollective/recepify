@@ -11,16 +11,13 @@ interface RecipeThumbnailProps {
 
 export const RecipeThumbnail: React.FC<RecipeThumbnailProps> = ({ imageUrl, title, style }) => {
   const palette = [
-    { background: "#f1f5f9", icon: "#cbd5f5" },
-    { background: "#eff6ff", icon: "#93c5fd" },
-    { background: "#ecfdf5", icon: "#6ee7b7" },
-    { background: "#fffbeb", icon: "#fcd34d" },
-    { background: "#fff1f2", icon: "#fda4af" },
-    { background: "#faf5ff", icon: "#c4b5fd" },
-    { background: "#ecfeff", icon: "#67e8f9" },
-    { background: "#fff7ed", icon: "#fdba74" },
+    { background: "#fff7e6", icon: "#f59e0b" },
+    { background: "#e6fbff", icon: "#38bdf8" },
+    { background: "#fff1e6", icon: "#fb923c" },
+    { background: "#f6efff", icon: "#a855f7" },
   ];
-  const hash = title.charCodeAt(0) + title.charCodeAt(title.length - 1);
+  const safeTitle = title?.trim() || "recipe";
+  const hash = Array.from(safeTitle).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   const { background, icon } = palette[hash % palette.length];
 
   if (!imageUrl) {
@@ -41,6 +38,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
   },
   fallback: {
+    width: "100%",
+    height: "100%",
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",

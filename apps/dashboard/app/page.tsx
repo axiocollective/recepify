@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { BarChart } from "./components/BarChart";
 import { DataTable } from "./components/DataTable";
 import { LineChart } from "./components/LineChart";
+import { StatCard } from "./components/StatCard";
 import type { UsageEvent, UsageSummary } from "./lib/types";
 
 type UserOption = {
@@ -11,6 +13,8 @@ type UserOption = {
   plan: string | null;
   subscription_period: string | null;
   trial_ends_at: string | null;
+  language?: string | null;
+  country?: string | null;
   email?: string | null;
 };
 
@@ -78,6 +82,10 @@ export default function DashboardPage() {
     start: initialRange.start,
     end: initialRange.end,
     userId: "",
+    userName: "",
+    email: "",
+    language: "",
+    country: "",
     eventType: "",
     source: "",
     model: "",
@@ -94,6 +102,10 @@ export default function DashboardPage() {
     if (filters.start) params.set("start", filters.start);
     if (filters.end) params.set("end", filters.end);
     if (filters.userId) params.set("userId", filters.userId);
+    if (filters.userName) params.set("userName", filters.userName);
+    if (filters.email) params.set("email", filters.email);
+    if (filters.language) params.set("language", filters.language);
+    if (filters.country) params.set("country", filters.country);
     if (filters.eventType) params.set("eventType", filters.eventType);
     if (filters.source) params.set("source", filters.source);
     if (filters.model) params.set("model", filters.model);
@@ -114,6 +126,10 @@ export default function DashboardPage() {
   const fetchEvents = async (mode: "replace" | "append" = "replace") => {
     const params = new URLSearchParams();
     if (filters.userId) params.set("userId", filters.userId);
+    if (filters.userName) params.set("userName", filters.userName);
+    if (filters.email) params.set("email", filters.email);
+    if (filters.language) params.set("language", filters.language);
+    if (filters.country) params.set("country", filters.country);
     if (filters.eventType) params.set("eventType", filters.eventType);
     if (filters.source) params.set("source", filters.source);
     if (filters.model) params.set("model", filters.model);
@@ -168,6 +184,14 @@ export default function DashboardPage() {
     );
   });
 
+  const languageOptions = Array.from(
+    new Set(users.map((user) => user.language).filter((value): value is string => Boolean(value)))
+  ).sort((a, b) => a.localeCompare(b));
+
+  const countryOptions = Array.from(
+    new Set(users.map((user) => user.country).filter((value): value is string => Boolean(value)))
+  ).sort((a, b) => a.localeCompare(b));
+
   const selectedUserLabel = (() => {
     if (!filters.userId) return "All users";
     const user = users.find((entry) => entry.id === filters.userId);
@@ -219,11 +243,20 @@ export default function DashboardPage() {
   }));
 
   const importsUsed = summary?.currentPeriodImportsUsed ?? 0;
+  const translationsUsed = summary?.currentPeriodTranslationsUsed ?? 0;
+  const optimizationsUsed = summary?.currentPeriodOptimizationsUsed ?? 0;
+  const aiMessagesUsed = summary?.currentPeriodAiMessagesUsed ?? 0;
   const importsAvailable = summary?.totalImportCreditsAvailable ?? 0;
-  const aiUsed = summary?.currentPeriodAiUsed ?? 0;
-  const aiAvailable = summary?.totalAiCreditsAvailable ?? 0;
+  const translationsAvailable = summary?.totalTranslationCreditsAvailable ?? 0;
+  const optimizationsAvailable = summary?.totalOptimizationCreditsAvailable ?? 0;
+  const aiMessagesAvailable = summary?.totalAiMessageCreditsAvailable ?? 0;
   const importsProgress = importsAvailable > 0 ? Math.min(importsUsed / importsAvailable, 1) : 0;
-  const aiProgress = aiAvailable > 0 ? Math.min(aiUsed / aiAvailable, 1) : 0;
+  const translationsProgress =
+    translationsAvailable > 0 ? Math.min(translationsUsed / translationsAvailable, 1) : 0;
+  const optimizationsProgress =
+    optimizationsAvailable > 0 ? Math.min(optimizationsUsed / optimizationsAvailable, 1) : 0;
+  const aiMessagesProgress =
+    aiMessagesAvailable > 0 ? Math.min(aiMessagesUsed / aiMessagesAvailable, 1) : 0;
 
   return (
     <div className="dashboardRoot">
@@ -261,6 +294,28 @@ export default function DashboardPage() {
         </div>
 
         <div className="filterGroup">
+          <label>
+            User name
+            <input
+              type="text"
+              placeholder="Search by name"
+              value={filters.userName}
+              onChange={(event) =>
+                setFilters((prev) => ({ ...prev, userName: event.target.value }))
+              }
+            />
+          </label>
+          <label>
+            Email
+            <input
+              type="text"
+              placeholder="Search by email"
+              value={filters.email}
+              onChange={(event) =>
+                setFilters((prev) => ({ ...prev, email: event.target.value }))
+              }
+            />
+          </label>
           <div className="userFilter" ref={dropdownRef}>
             <span>Users</span>
             <button
@@ -328,6 +383,38 @@ export default function DashboardPage() {
             </select>
           </label>
           <label>
+            Language
+            <select
+              value={filters.language}
+              onChange={(event) =>
+                setFilters((prev) => ({ ...prev, language: event.target.value }))
+              }
+            >
+              <option value="">All languages</option>
+              {languageOptions.map((lang) => (
+                <option key={lang} value={lang}>
+                  {lang}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Country
+            <select
+              value={filters.country}
+              onChange={(event) =>
+                setFilters((prev) => ({ ...prev, country: event.target.value }))
+              }
+            >
+              <option value="">All countries</option>
+              {countryOptions.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
             Source
             <select
               value={filters.source}
@@ -349,6 +436,9 @@ export default function DashboardPage() {
               onChange={(event) => setFilters((prev) => ({ ...prev, usageContext: event.target.value }))}
             >
               <option value="">All contexts</option>
+              <option value="import">Import</option>
+              <option value="translation">Translation</option>
+              <option value="optimization">Optimization</option>
               <option value="chat">Chat</option>
               <option value="optimized_with_ai">Optimized with AI</option>
             </select>
@@ -360,19 +450,59 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      <section className="sectionBlock">
+        <h2>User overview</h2>
+        <div className="statGrid">
+          <StatCard label="Total users" value={formatNumber(summary?.totalUsers ?? 0)} />
+          <StatCard label="Trial users" value={formatNumber(summary?.trialUsers ?? 0)} accent="orange" />
+          <StatCard label="Base users" value={formatNumber(summary?.baseUsers ?? 0)} />
+          <StatCard label="Premium users" value={formatNumber(summary?.premiumUsers ?? 0)} accent="green" />
+          <StatCard label="Canceled users" value={formatNumber(summary?.canceledUsers ?? 0)} />
+          <StatCard
+            label="Canceled on trial"
+            value={formatNumber(summary?.canceledTrialUsers ?? 0)}
+            accent="orange"
+          />
+          <StatCard
+            label="Monthly billing"
+            value={formatNumber(
+              (summary?.baseMonthlyUsers ?? 0) + (summary?.premiumMonthlyUsers ?? 0)
+            )}
+          />
+          <StatCard
+            label="Yearly billing"
+            value={formatNumber(
+              (summary?.baseYearlyUsers ?? 0) + (summary?.premiumYearlyUsers ?? 0)
+            )}
+          />
+        </div>
+      </section>
+
+      <section className="sectionBlock">
+        <h2>User distribution</h2>
+        <div className="chartGrid">
+          <BarChart title="Users by country" data={summary?.usersByCountry ?? []} />
+          <BarChart
+            title="Users by language"
+            data={summary?.usersByLanguage ?? []}
+            color="#0ea5e9"
+          />
+        </div>
+      </section>
+
       <section className="usageSection">
         <div className="usageHeader">
-          <p className="usageEyebrow">Usage</p>
-          <p className="usageSub">Credits used and remaining balance (Guthaben).</p>
+          <p className="usageEyebrow">Monthly usage</p>
+          <p className="usageSub">Current period usage against available credits.</p>
         </div>
         <div className="usageGrid">
           <div className="usageCard">
             <div className="usageIcon">📥</div>
             <div>
               <div className="usageValue">{formatNumber(importsUsed)}</div>
-              <div className="usageLabel">Recipe imports used</div>
+              <div className="usageLabel">Recipe imports</div>
               <div className="usageSubLabel">
-                Guthaben {formatNumber(importsAvailable)} total imports
+                Available {formatNumber(importsAvailable)} credits
               </div>
               <div className="usageBar">
                 <div className="usageBarFill" style={{ width: `${importsProgress * 100}%` }} />
@@ -380,78 +510,150 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="usageCard">
-            <div className="usageIcon">✨</div>
+            <div className="usageIcon">🌍</div>
             <div>
-              <div className="usageValue">{formatNumber(aiUsed)}</div>
-              <div className="usageLabel">AI credits used</div>
+              <div className="usageValue">{formatNumber(translationsUsed)}</div>
+              <div className="usageLabel">Translations</div>
               <div className="usageSubLabel">
-                Guthaben {formatNumber(aiAvailable)} AI credits
+                Available {formatNumber(translationsAvailable)} credits
               </div>
               <div className="usageBar">
-                <div className="usageBarFill" style={{ width: `${aiProgress * 100}%` }} />
+                <div className="usageBarFill" style={{ width: `${translationsProgress * 100}%` }} />
+              </div>
+            </div>
+          </div>
+          <div className="usageCard">
+            <div className="usageIcon">✨</div>
+            <div>
+              <div className="usageValue">{formatNumber(optimizationsUsed)}</div>
+              <div className="usageLabel">Optimizations</div>
+              <div className="usageSubLabel">
+                Available {formatNumber(optimizationsAvailable)} credits
+              </div>
+              <div className="usageBar">
+                <div className="usageBarFill" style={{ width: `${optimizationsProgress * 100}%` }} />
+              </div>
+            </div>
+          </div>
+          <div className="usageCard">
+            <div className="usageIcon">💬</div>
+            <div>
+              <div className="usageValue">{formatNumber(aiMessagesUsed)}</div>
+              <div className="usageLabel">AI assistant messages</div>
+              <div className="usageSubLabel">
+                Available {formatNumber(aiMessagesAvailable)} credits
+              </div>
+              <div className="usageBar">
+                <div className="usageBarFill" style={{ width: `${aiMessagesProgress * 100}%` }} />
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="overviewGrid">
-        <div className="overviewCard">
-          <h3>User details</h3>
-          <div className="overviewRow">
-            <span>Total users</span>
-            <strong>{formatNumber(summary?.totalUsers ?? 0)}</strong>
-          </div>
-          <div className="overviewRow">
-            <span>Base · monthly</span>
-            <strong>{formatNumber(summary?.baseMonthlyUsers ?? 0)}</strong>
-          </div>
-          <div className="overviewRow">
-            <span>Base · yearly</span>
-            <strong>{formatNumber(summary?.baseYearlyUsers ?? 0)}</strong>
-          </div>
-          <div className="overviewRow">
-            <span>Premium · monthly</span>
-            <strong>{formatNumber(summary?.premiumMonthlyUsers ?? 0)}</strong>
-          </div>
-          <div className="overviewRow">
-            <span>Premium · yearly</span>
-            <strong>{formatNumber(summary?.premiumYearlyUsers ?? 0)}</strong>
-          </div>
-          <div className="overviewRow">
-            <span>Free plan (trial)</span>
-            <strong>{formatNumber(summary?.freeUsers ?? 0)}</strong>
-          </div>
-        </div>
+      <section className="tablesGrid">
+        <DataTable
+          title="Total actions & credits"
+          rows={summary?.actionTotals ?? []}
+          emptyLabel="No actions for this filter."
+          columns={[
+            {
+              key: "action",
+              header: "Action",
+              render: (row) => row.action.replaceAll("_", " "),
+            },
+            {
+              key: "events",
+              header: "Events",
+              render: (row) => formatNumber(row.events),
+            },
+            {
+              key: "credits",
+              header: "Credits used",
+              render: (row) => formatNumber(row.creditsUsed),
+            },
+            {
+              key: "cost",
+              header: "Cost",
+              render: (row) => (row.costUsd ? formatCurrency(row.costUsd) : "—"),
+            },
+          ]}
+        />
+      </section>
 
-        <div className="overviewCard">
-          <h3>Credits & costs</h3>
-          <div className="overviewRow">
-            <span>Total recipe imports</span>
-            <strong>{formatNumber(summary?.totalImports ?? 0)}</strong>
-          </div>
-          <div className="overviewRow">
-            <span>Total GPT tokens</span>
-            <strong>{formatNumber(summary?.totalAiCredits ?? 0)}</strong>
-          </div>
-          <div className="overviewRow">
-            <span>Total Whisper seconds</span>
-            <strong>{formatNumber(Math.round(summary?.totalWhisperSeconds ?? 0))}s</strong>
-          </div>
-          <div className="overviewRow">
-            <span>Total Vision images</span>
-            <strong>{formatNumber(summary?.totalVisionImages ?? 0)}</strong>
-          </div>
-          <div className="overviewRow">
-            <span>Total estimated costs</span>
-            <strong>{formatCurrency(summary?.totalCostUsd ?? 0)}</strong>
-          </div>
-        </div>
+      <section className="tablesGrid">
+        <DataTable
+          title="Usage context totals"
+          rows={summary?.contextTotals ?? []}
+          emptyLabel="No usage context data for this filter."
+          columns={[
+            {
+              key: "context",
+              header: "Context",
+              render: (row) => row.context.replaceAll("_", " "),
+            },
+            {
+              key: "events",
+              header: "Events",
+              render: (row) => formatNumber(row.events),
+            },
+            {
+              key: "credits",
+              header: "Credits used",
+              render: (row) => formatNumber(row.creditsUsed),
+            },
+            {
+              key: "cost",
+              header: "Cost",
+              render: (row) => (row.costUsd ? formatCurrency(row.costUsd) : "—"),
+            },
+          ]}
+        />
+      </section>
+
+      <section className="tablesGrid">
+        <DataTable
+          title="Credits inventory (plan, trial, add-ons)"
+          rows={summary?.creditInventory ?? []}
+          emptyLabel="No credit inventory for this filter."
+          columns={[
+            {
+              key: "action",
+              header: "Action",
+              render: (row) => row.action.replaceAll("_", " "),
+            },
+            {
+              key: "plan",
+              header: "Plan",
+              render: (row) => formatNumber(row.planAvailable),
+            },
+            {
+              key: "trial",
+              header: "Trial",
+              render: (row) => formatNumber(row.trialAvailable),
+            },
+            {
+              key: "addons",
+              header: "Add-ons remaining",
+              render: (row) => formatNumber(row.addonRemaining),
+            },
+            {
+              key: "purchased",
+              header: "Add-ons purchased",
+              render: (row) => (row.addonsPurchased === null ? "—" : formatNumber(row.addonsPurchased)),
+            },
+            {
+              key: "used",
+              header: "Add-ons used",
+              render: (row) => (row.addonsUsed === null ? "—" : formatNumber(row.addonsUsed)),
+            },
+          ]}
+        />
       </section>
 
       <div className="sectionGrid">
         <section className="sectionBlock">
-          <h2>Usage breakdowns</h2>
+          <h2>Imports & actions</h2>
           <div className="chartGrid">
             <LineChart
               title="Recipe imports by source"
@@ -461,23 +663,23 @@ export default function DashboardPage() {
               height={220}
             />
             <LineChart
-              title="Credits used over time"
-              series={actionCreditSeries}
+              title="Actions over time"
+              series={actionCountSeries}
               xLabel="Day"
-              yLabel="Credits"
+              yLabel="Events"
               height={220}
             />
           </div>
         </section>
 
         <section className="sectionBlock">
-          <h2>Actions & context</h2>
+          <h2>Credits & context</h2>
           <div className="chartGrid">
             <LineChart
-              title="Actions over time"
-              series={actionCountSeries}
+              title="Credits used over time"
+              series={actionCreditSeries}
               xLabel="Day"
-              yLabel="Events"
+              yLabel="Credits"
               height={220}
             />
             <LineChart

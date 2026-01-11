@@ -58,6 +58,34 @@ const resolveOwnerIdsByEmail = async (emailQuery: string) => {
     .map((user) => user.id);
 };
 
+const resolveOwnerIdsByProfileFilters = async (
+  userName: string | null,
+  language: string | null,
+  country: string | null
+) => {
+  let query = supabaseAdmin.from("profiles").select("id");
+  if (userName) {
+    query = query.ilike("name", `%${userName.trim()}%`);
+  }
+  if (language) {
+    query = query.eq("language", language);
+  }
+  if (country) {
+    query = query.eq("country", country);
+  }
+  const { data, error } = await query;
+  if (error || !data) return [];
+  return data.map((row) => row.id);
+};
+
+const intersectIds = (a: string[] | null, b: string[] | null) => {
+  if (!a && !b) return null;
+  if (!a) return b;
+  if (!b) return a;
+  const setB = new Set(b);
+  return a.filter((id) => setB.has(id));
+};
+
 const getDateRange = (start?: string | null, end?: string | null) => {
   const endDate = parseDate(end, "end") ?? new Date();
   const startDate =
@@ -72,6 +100,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get("userId");
   const email = searchParams.get("email");
+  const userName = searchParams.get("userName");
+  const language = searchParams.get("language");
+  const country = searchParams.get("country");
   const eventType = searchParams.get("eventType");
   const source = searchParams.get("source");
   const model = searchParams.get("model");
@@ -86,7 +117,7 @@ export async function GET(request: Request) {
   let profilesQuery = supabaseAdmin
     .from("profiles")
     .select(
-      "id, name, plan, subscription_period, trial_ends_at, bonus_imports, bonus_tokens, trial_imports, trial_tokens, trial_imports_used, trial_tokens_used"
+      "id, name, plan, subscription_period, trial_ends_at, trial_canceled_at, subscription_status, language, country, bonus_imports, bonus_tokens, trial_imports, trial_tokens, trial_imports_used, trial_tokens_used, trial_translations, trial_translations_used, trial_optimizations, trial_optimizations_used, trial_ai_messages, trial_ai_messages_used, addon_imports, addon_translations, addon_optimizations, addon_ai_messages"
     );
   let eventsQuery = supabaseAdmin
     .from("usage_events")
@@ -97,7 +128,7 @@ export async function GET(request: Request) {
     .lte("created_at", endIso);
   let monthlyQuery = supabaseAdmin
     .from("usage_monthly")
-    .select("owner_id, period_start, import_count, ai_tokens")
+    .select("owner_id, period_start, import_count, translations_count, optimizations_count, ai_messages_count, ai_tokens")
     .gte("period_start", startIso.slice(0, 10))
     .lte("period_start", endIso.slice(0, 10));
   const currentPeriodKey = toDayKey(
@@ -105,7 +136,7 @@ export async function GET(request: Request) {
   );
   let currentUsageQuery = supabaseAdmin
     .from("usage_monthly")
-    .select("owner_id, import_count, ai_tokens")
+    .select("owner_id, import_count, translations_count, optimizations_count, ai_messages_count, ai_tokens")
     .eq("period_start", currentPeriodKey);
   let monthlyImportsQuery = supabaseAdmin
     .from("import_usage_monthly")
@@ -113,27 +144,98 @@ export async function GET(request: Request) {
     .gte("period_start", startIso.slice(0, 10))
     .lte("period_start", endIso.slice(0, 10));
 
+  let ownerIds: string[] | null = null;
   if (email) {
-    const ownerIds = await resolveOwnerIdsByEmail(email);
-    if (ownerIds.length === 0) {
+    ownerIds = await resolveOwnerIdsByEmail(email);
+  }
+  if (userName || language || country) {
+    const profileIds = await resolveOwnerIdsByProfileFilters(userName, language, country);
+    ownerIds = intersectIds(ownerIds, profileIds);
+  }
+  if (ownerIds && ownerIds.length === 0) {
+    return NextResponse.json({
+      totalUsers: 0,
+      baseUsers: 0,
+      premiumUsers: 0,
+      trialUsers: 0,
+      canceledUsers: 0,
+      canceledTrialUsers: 0,
+      baseMonthlyUsers: 0,
+      baseYearlyUsers: 0,
+      premiumMonthlyUsers: 0,
+      premiumYearlyUsers: 0,
+      freeUsers: 0,
+      usersByCountry: [],
+      usersByLanguage: [],
+      actionTotals: [],
+      contextTotals: [],
+      creditInventory: [],
+      totalImports: 0,
+      totalAiCredits: 0,
+      totalCostUsd: 0,
+      totalWhisperSeconds: 0,
+      totalVisionImages: 0,
+      currentPeriodImportsUsed: 0,
+      currentPeriodTranslationsUsed: 0,
+      currentPeriodOptimizationsUsed: 0,
+      currentPeriodAiMessagesUsed: 0,
+      currentPeriodAiUsed: 0,
+      totalImportCreditsAvailable: 0,
+      totalTranslationCreditsAvailable: 0,
+      totalOptimizationCreditsAvailable: 0,
+      totalAiMessageCreditsAvailable: 0,
+      totalAiCreditsAvailable: 0,
+      activeUsers: 0,
+      dailySeries: [],
+      bySource: [],
+      byModel: [],
+      modelBreakdown: [],
+      actionModelBreakdown: [],
+      importBreakdown: [],
+      sourceImportSeries: [],
+      actionCountSeries: [],
+      actionCreditSeries: [],
+      actionCostSeries: [],
+      contextCountSeries: [],
+      costByUser: [],
+      actionSeries: [],
+      sourceSeries: [],
+      contextSeries: [],
+    } satisfies UsageSummary);
+  }
+  if (userId) {
+    if (ownerIds && !ownerIds.includes(userId)) {
       return NextResponse.json({
         totalUsers: 0,
         baseUsers: 0,
         premiumUsers: 0,
         trialUsers: 0,
+        canceledUsers: 0,
+        canceledTrialUsers: 0,
         baseMonthlyUsers: 0,
         baseYearlyUsers: 0,
         premiumMonthlyUsers: 0,
         premiumYearlyUsers: 0,
         freeUsers: 0,
+        usersByCountry: [],
+        usersByLanguage: [],
+        actionTotals: [],
+        contextTotals: [],
+        creditInventory: [],
         totalImports: 0,
         totalAiCredits: 0,
         totalCostUsd: 0,
         totalWhisperSeconds: 0,
         totalVisionImages: 0,
         currentPeriodImportsUsed: 0,
+        currentPeriodTranslationsUsed: 0,
+        currentPeriodOptimizationsUsed: 0,
+        currentPeriodAiMessagesUsed: 0,
         currentPeriodAiUsed: 0,
         totalImportCreditsAvailable: 0,
+        totalTranslationCreditsAvailable: 0,
+        totalOptimizationCreditsAvailable: 0,
+        totalAiMessageCreditsAvailable: 0,
         totalAiCreditsAvailable: 0,
         activeUsers: 0,
         dailySeries: [],
@@ -153,18 +255,17 @@ export async function GET(request: Request) {
         contextSeries: [],
       } satisfies UsageSummary);
     }
-    profilesQuery = profilesQuery.in("id", ownerIds);
-    eventsQuery = eventsQuery.in("owner_id", userId ? [userId] : ownerIds);
-    monthlyQuery = monthlyQuery.in("owner_id", ownerIds);
-    monthlyImportsQuery = monthlyImportsQuery.in("owner_id", ownerIds);
-    currentUsageQuery = currentUsageQuery.in("owner_id", ownerIds);
-  }
-  if (userId) {
     profilesQuery = profilesQuery.eq("id", userId);
     eventsQuery = eventsQuery.eq("owner_id", userId);
     monthlyQuery = monthlyQuery.eq("owner_id", userId);
     monthlyImportsQuery = monthlyImportsQuery.eq("owner_id", userId);
     currentUsageQuery = currentUsageQuery.eq("owner_id", userId);
+  } else if (ownerIds) {
+    profilesQuery = profilesQuery.in("id", ownerIds);
+    eventsQuery = eventsQuery.in("owner_id", ownerIds);
+    monthlyQuery = monthlyQuery.in("owner_id", ownerIds);
+    monthlyImportsQuery = monthlyImportsQuery.in("owner_id", ownerIds);
+    currentUsageQuery = currentUsageQuery.in("owner_id", ownerIds);
   }
   if (eventType) {
     eventsQuery = eventsQuery.eq("event_type", eventType);
@@ -185,13 +286,23 @@ export async function GET(request: Request) {
     { data: monthlyUsage, error: monthlyError },
     { data: monthlyImports, error: monthlyImportsError },
     { data: currentUsage, error: currentUsageError },
+    { data: planLimits, error: planLimitsError },
   ] = await Promise.all([
     profilesQuery,
     eventsQuery,
     monthlyQuery,
     monthlyImportsQuery,
     currentUsageQuery,
+    supabaseAdmin.from("plan_action_limits").select("plan, imports, translations, optimizations, ai_messages"),
   ]);
+
+  let addonPurchases: Array<{ action_type: string; quantity: number }> = [];
+  const { data: addonData, error: addonError } = await supabaseAdmin
+    .from("addon_purchases")
+    .select("action_type, quantity");
+  if (!addonError && addonData) {
+    addonPurchases = addonData as Array<{ action_type: string; quantity: number }>;
+  }
 
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
@@ -208,6 +319,9 @@ export async function GET(request: Request) {
   if (currentUsageError) {
     return NextResponse.json({ error: currentUsageError.message }, { status: 500 });
   }
+  if (planLimitsError) {
+    return NextResponse.json({ error: planLimitsError.message }, { status: 500 });
+  }
 
   const safeProfiles = (profiles ?? []) as ProfileRow[];
   const safeEvents = (events ?? []) as UsageEvent[];
@@ -215,6 +329,9 @@ export async function GET(request: Request) {
     owner_id: string;
     period_start: string;
     import_count: number;
+    translations_count?: number | null;
+    optimizations_count?: number | null;
+    ai_messages_count?: number | null;
     ai_tokens: number;
   }>;
   const safeMonthlyImports = (monthlyImports ?? []) as Array<{
@@ -225,17 +342,58 @@ export async function GET(request: Request) {
   const safeCurrentUsage = (currentUsage ?? []) as Array<{
     owner_id?: string;
     import_count: number;
+    translations_count?: number | null;
+    optimizations_count?: number | null;
+    ai_messages_count?: number | null;
     ai_tokens: number;
   }>;
 
+  const planLimitsMap = new Map(
+    (planLimits ?? []).map((row) => [
+      row.plan,
+      {
+        imports: Number(row.imports ?? 0),
+        translations: Number(row.translations ?? 0),
+        optimizations: Number(row.optimizations ?? 0),
+        ai_messages: Number(row.ai_messages ?? 0),
+      },
+    ])
+  );
   const now = Date.now();
   let baseUsers = 0;
   let premiumUsers = 0;
   let trialUsers = 0;
+  let canceledUsers = 0;
+  let canceledTrialUsers = 0;
   let baseMonthlyUsers = 0;
   let baseYearlyUsers = 0;
   let premiumMonthlyUsers = 0;
   let premiumYearlyUsers = 0;
+  let totalImportCreditsAvailable = 0;
+  let totalTranslationCreditsAvailable = 0;
+  let totalOptimizationCreditsAvailable = 0;
+  let totalAiMessageCreditsAvailable = 0;
+  let totalPlanImportsAvailable = 0;
+  let totalPlanTranslationsAvailable = 0;
+  let totalPlanOptimizationsAvailable = 0;
+  let totalPlanAiMessagesAvailable = 0;
+  let totalTrialImportsRemaining = 0;
+  let totalTrialTranslationsRemaining = 0;
+  let totalTrialOptimizationsRemaining = 0;
+  let totalTrialAiMessagesRemaining = 0;
+  let totalAiCreditsAvailable = 0;
+  let currentPeriodImportsUsed = 0;
+  let currentPeriodTranslationsUsed = 0;
+  let currentPeriodOptimizationsUsed = 0;
+  let currentPeriodAiMessagesUsed = 0;
+  let currentPeriodAiUsed = 0;
+  let totalAddonImportsRemaining = 0;
+  let totalAddonTranslationsRemaining = 0;
+  let totalAddonOptimizationsRemaining = 0;
+  let totalAddonAiMessagesRemaining = 0;
+  const usersByCountry = new Map<string, number>();
+  const usersByLanguage = new Map<string, number>();
+
   safeProfiles.forEach((profile) => {
     const plan = profile.plan ?? "base";
     const normalizedPlan = plan === "paid" ? "premium" : plan;
@@ -254,24 +412,83 @@ export async function GET(request: Request) {
         baseYearlyUsers += 1;
       }
     }
+    if (profile.subscription_status === "canceled" || profile.subscription_status === "expired") {
+      canceledUsers += 1;
+    }
     const trialEnds = profile.trial_ends_at ? Date.parse(profile.trial_ends_at) : null;
-    if (trialEnds && trialEnds > now) {
+    const trialActive = Boolean(trialEnds && trialEnds > now);
+    if (trialActive) {
       trialUsers += 1;
     }
-    const planLimits =
-      normalizedPlan === "premium"
-        ? { imports: 40, tokens: 200000 }
-        : { imports: 0, tokens: 0 };
-    totalImportCreditsAvailable += planLimits.imports + Math.max(0, profile.bonus_imports ?? 0);
-    totalAiCreditsAvailable += planLimits.tokens + Math.max(0, profile.bonus_tokens ?? 0);
-    if (userId && trialEnds && trialEnds > now) {
-      totalImportCreditsAvailable += Math.max(0, profile.trial_imports ?? 0);
-      totalAiCreditsAvailable += Math.max(0, profile.trial_tokens ?? 0);
+    if (trialActive && profile.trial_canceled_at) {
+      canceledTrialUsers += 1;
     }
+    const planLimits = planLimitsMap.get(normalizedPlan) ?? {
+      imports: 0,
+      translations: 0,
+      optimizations: 0,
+      ai_messages: 0,
+    };
+    const addonImports = Math.max(0, profile.addon_imports ?? 0);
+    const addonTranslations = Math.max(0, profile.addon_translations ?? 0);
+    const addonOptimizations = Math.max(0, profile.addon_optimizations ?? 0);
+    const addonAiMessages = Math.max(0, profile.addon_ai_messages ?? 0);
+    const trialImportsRemaining = trialActive
+      ? Math.max(0, (profile.trial_imports ?? 0) - (profile.trial_imports_used ?? 0))
+      : 0;
+    const trialTranslationsRemaining = trialActive
+      ? Math.max(0, (profile.trial_translations ?? 0) - (profile.trial_translations_used ?? 0))
+      : 0;
+    const trialOptimizationsRemaining = trialActive
+      ? Math.max(0, (profile.trial_optimizations ?? 0) - (profile.trial_optimizations_used ?? 0))
+      : 0;
+    const trialAiMessagesRemaining = trialActive
+      ? Math.max(0, (profile.trial_ai_messages ?? 0) - (profile.trial_ai_messages_used ?? 0))
+      : 0;
+
+    totalImportCreditsAvailable += planLimits.imports + addonImports + trialImportsRemaining;
+    totalTranslationCreditsAvailable +=
+      planLimits.translations + addonTranslations + trialTranslationsRemaining;
+    totalOptimizationCreditsAvailable +=
+      planLimits.optimizations + addonOptimizations + trialOptimizationsRemaining;
+    totalAiMessageCreditsAvailable +=
+      planLimits.ai_messages + addonAiMessages + trialAiMessagesRemaining;
+    totalAiCreditsAvailable +=
+      planLimits.translations +
+      planLimits.optimizations +
+      planLimits.ai_messages +
+      addonTranslations +
+      addonOptimizations +
+      addonAiMessages +
+      trialTranslationsRemaining +
+      trialOptimizationsRemaining +
+      trialAiMessagesRemaining;
+
+    totalAddonImportsRemaining += addonImports;
+    totalAddonTranslationsRemaining += addonTranslations;
+    totalAddonOptimizationsRemaining += addonOptimizations;
+    totalAddonAiMessagesRemaining += addonAiMessages;
+
+    totalPlanImportsAvailable += planLimits.imports;
+    totalPlanTranslationsAvailable += planLimits.translations;
+    totalPlanOptimizationsAvailable += planLimits.optimizations;
+    totalPlanAiMessagesAvailable += planLimits.ai_messages;
+    totalTrialImportsRemaining += trialImportsRemaining;
+    totalTrialTranslationsRemaining += trialTranslationsRemaining;
+    totalTrialOptimizationsRemaining += trialOptimizationsRemaining;
+    totalTrialAiMessagesRemaining += trialAiMessagesRemaining;
+
+    const languageKey = profile.language?.trim() || "Unknown";
+    usersByLanguage.set(languageKey, (usersByLanguage.get(languageKey) ?? 0) + 1);
+    const countryKey = profile.country?.trim() || "Unknown";
+    usersByCountry.set(countryKey, (usersByCountry.get(countryKey) ?? 0) + 1);
   });
 
   for (const entry of safeCurrentUsage) {
     currentPeriodImportsUsed += Number(entry.import_count || 0);
+    currentPeriodTranslationsUsed += Number(entry.translations_count || 0);
+    currentPeriodOptimizationsUsed += Number(entry.optimizations_count || 0);
+    currentPeriodAiMessagesUsed += Number(entry.ai_messages_count || 0);
     currentPeriodAiUsed += Number(entry.ai_tokens || 0);
   }
 
@@ -280,14 +497,12 @@ export async function GET(request: Request) {
   let totalCostUsd = 0;
   let totalWhisperSeconds = 0;
   let totalVisionImages = 0;
-  let totalImportCreditsAvailable = 0;
-  let totalAiCreditsAvailable = 0;
-  let currentPeriodImportsUsed = 0;
-  let currentPeriodAiUsed = 0;
   const activeUsers = new Set<string>();
   const bySource = new Map<string, number>();
   const byModel = new Map<string, number>();
   const byModelCost = new Map<string, { aiCredits: number; costUsd: number; events: number }>();
+  const actionTotals = new Map<string, { events: number; creditsUsed: number; costUsd: number }>();
+  const contextTotals = new Map<string, { events: number; creditsUsed: number; costUsd: number }>();
   const actionModelBreakdown = new Map<
     string,
     { action: string; model: string; credits: number; costUsd: number; events: number }
@@ -400,6 +615,37 @@ export async function GET(request: Request) {
     actionDailyCounts.get(actionKey)!.set(dayKey, (actionDailyCounts.get(actionKey)!.get(dayKey) ?? 0) + 1);
 
     const creditsForAction = isImportCredit ? importCredits : usageUnits;
+    const actionTotalsEntry = actionTotals.get(actionKey) ?? {
+      events: 0,
+      creditsUsed: 0,
+      costUsd: 0,
+    };
+    actionTotalsEntry.events += 1;
+    actionTotalsEntry.creditsUsed += creditsForAction;
+    actionTotalsEntry.costUsd += Number(event.cost_usd || 0);
+    actionTotals.set(actionKey, actionTotalsEntry);
+
+    const contextKey =
+      typeof meta === "object" && meta && (meta as Record<string, unknown>).usage_context
+        ? String((meta as Record<string, unknown>).usage_context)
+        : actionKey === "import" || actionKey === "import_credit"
+          ? "import"
+          : actionKey === "scan"
+            ? "scan"
+            : actionKey === "manual_add"
+              ? "manual"
+              : "";
+    if (contextKey) {
+      const contextEntry = contextTotals.get(contextKey) ?? {
+        events: 0,
+        creditsUsed: 0,
+        costUsd: 0,
+      };
+      contextEntry.events += 1;
+      contextEntry.creditsUsed += creditsForAction;
+      contextEntry.costUsd += Number(event.cost_usd || 0);
+      contextTotals.set(contextKey, contextEntry);
+    }
     if (!actionDailyCredits.has(actionKey)) {
       actionDailyCredits.set(actionKey, new Map());
     }
@@ -410,14 +656,13 @@ export async function GET(request: Request) {
     }
     actionDailyCosts.get(actionKey)!.set(dayKey, (actionDailyCosts.get(actionKey)!.get(dayKey) ?? 0) + Number(event.cost_usd || 0));
 
-    if (event.metadata && typeof event.metadata === "object") {
-      const contextKey = String((event.metadata as Record<string, unknown>).usage_context ?? "");
-      if (contextKey) {
-        if (!contextDailyCounts.has(contextKey)) {
-          contextDailyCounts.set(contextKey, new Map());
-        }
-        contextDailyCounts.get(contextKey)!.set(dayKey, (contextDailyCounts.get(contextKey)!.get(dayKey) ?? 0) + 1);
+    if (contextKey) {
+      if (!contextDailyCounts.has(contextKey)) {
+        contextDailyCounts.set(contextKey, new Map());
       }
+      contextDailyCounts
+        .get(contextKey)!
+        .set(dayKey, (contextDailyCounts.get(contextKey)!.get(dayKey) ?? 0) + 1);
     }
 
     if (event.request_id && ["import", "scan", "import_credit"].includes(actionKey)) {
@@ -476,7 +721,9 @@ export async function GET(request: Request) {
     }
   }
 
-  const hasEventFilters = Boolean(email || eventType || source || model || usageContext);
+  const hasEventFilters = Boolean(
+    email || userName || language || country || eventType || source || model || usageContext
+  );
   if (safeEvents.length === 0 && safeMonthly.length > 0 && !hasEventFilters) {
     for (const entry of safeMonthly) {
       activeUsers.add(entry.owner_id);
@@ -552,24 +799,110 @@ export async function GET(request: Request) {
     }))
     .sort((a, b) => b.totalCostUsd - a.totalCostUsd);
 
+  const addonPurchasedTotals = addonPurchases.reduce(
+    (acc, row) => {
+      const key = row.action_type;
+      if (key === "import") acc.import += row.quantity;
+      if (key === "translation") acc.translation += row.quantity;
+      if (key === "optimization") acc.optimization += row.quantity;
+      if (key === "ai_message") acc.ai_message += row.quantity;
+      return acc;
+    },
+    { import: 0, translation: 0, optimization: 0, ai_message: 0 }
+  );
+
+  const creditInventory = [
+    {
+      action: "imports",
+      planAvailable: totalPlanImportsAvailable,
+      trialAvailable: totalTrialImportsRemaining,
+      addonRemaining: totalAddonImportsRemaining,
+      addonsPurchased: addonPurchases.length ? addonPurchasedTotals.import : null,
+      addonsUsed: addonPurchases.length
+        ? Math.max(addonPurchasedTotals.import - totalAddonImportsRemaining, 0)
+        : null,
+    },
+    {
+      action: "translations",
+      planAvailable: totalPlanTranslationsAvailable,
+      trialAvailable: totalTrialTranslationsRemaining,
+      addonRemaining: totalAddonTranslationsRemaining,
+      addonsPurchased: addonPurchases.length ? addonPurchasedTotals.translation : null,
+      addonsUsed: addonPurchases.length
+        ? Math.max(addonPurchasedTotals.translation - totalAddonTranslationsRemaining, 0)
+        : null,
+    },
+    {
+      action: "optimizations",
+      planAvailable: totalPlanOptimizationsAvailable,
+      trialAvailable: totalTrialOptimizationsRemaining,
+      addonRemaining: totalAddonOptimizationsRemaining,
+      addonsPurchased: addonPurchases.length ? addonPurchasedTotals.optimization : null,
+      addonsUsed: addonPurchases.length
+        ? Math.max(addonPurchasedTotals.optimization - totalAddonOptimizationsRemaining, 0)
+        : null,
+    },
+    {
+      action: "ai_messages",
+      planAvailable: totalPlanAiMessagesAvailable,
+      trialAvailable: totalTrialAiMessagesRemaining,
+      addonRemaining: totalAddonAiMessagesRemaining,
+      addonsPurchased: addonPurchases.length ? addonPurchasedTotals.ai_message : null,
+      addonsUsed: addonPurchases.length
+        ? Math.max(addonPurchasedTotals.ai_message - totalAddonAiMessagesRemaining, 0)
+        : null,
+    },
+  ];
+
   const summary: UsageSummary = {
     totalUsers: hasFilters ? activeUsers.size : safeProfiles.length,
     baseUsers,
     premiumUsers,
     trialUsers,
+    canceledUsers,
+    canceledTrialUsers,
     baseMonthlyUsers,
     baseYearlyUsers,
     premiumMonthlyUsers,
     premiumYearlyUsers,
     freeUsers: trialUsers,
+    usersByCountry: Array.from(usersByCountry.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value),
+    usersByLanguage: Array.from(usersByLanguage.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value),
+    actionTotals: Array.from(actionTotals.entries())
+      .map(([action, values]) => ({
+        action,
+        events: values.events,
+        creditsUsed: Number(values.creditsUsed.toFixed(2)),
+        costUsd: Number(values.costUsd.toFixed(4)),
+      }))
+      .sort((a, b) => b.events - a.events),
+    contextTotals: Array.from(contextTotals.entries())
+      .map(([context, values]) => ({
+        context,
+        events: values.events,
+        creditsUsed: Number(values.creditsUsed.toFixed(2)),
+        costUsd: Number(values.costUsd.toFixed(4)),
+      }))
+      .sort((a, b) => b.events - a.events),
+    creditInventory,
     totalImports,
     totalAiCredits,
     totalCostUsd: Number(totalCostUsd.toFixed(4)),
     totalWhisperSeconds: Number(totalWhisperSeconds.toFixed(2)),
     totalVisionImages: Number(totalVisionImages.toFixed(2)),
     currentPeriodImportsUsed,
+    currentPeriodTranslationsUsed,
+    currentPeriodOptimizationsUsed,
+    currentPeriodAiMessagesUsed,
     currentPeriodAiUsed,
     totalImportCreditsAvailable,
+    totalTranslationCreditsAvailable,
+    totalOptimizationCreditsAvailable,
+    totalAiMessageCreditsAvailable,
     totalAiCreditsAvailable,
     activeUsers: activeUsers.size,
     dailySeries,

@@ -14,6 +14,7 @@ interface PlanBillingProps {
   addonAiMessages?: number;
   trialActive?: boolean;
   trialEndsAt?: string | null;
+  trialCanceledAt?: string | null;
   trialImportsRemaining?: number;
   trialTranslationsRemaining?: number;
   trialOptimizationsRemaining?: number;
@@ -27,6 +28,7 @@ interface PlanBillingProps {
   onBuyCredits: (action: "import" | "translation" | "optimization" | "ai_message", quantity: number) => Promise<void>;
   onSubscriptionPeriodChange: (period: "monthly" | "yearly") => void;
   onCancelSubscription?: (endsAt: string) => void;
+  onCancelTrial?: () => void;
   onBack: () => void;
   onContinue?: () => void;
   continueLabel?: string;
@@ -72,6 +74,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
   addonAiMessages = 0,
   trialActive = false,
   trialEndsAt = null,
+  trialCanceledAt = null,
   trialImportsRemaining = 0,
   trialTranslationsRemaining = 0,
   trialOptimizationsRemaining = 0,
@@ -85,6 +88,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
   onBuyCredits,
   onSubscriptionPeriodChange,
   onCancelSubscription,
+  onCancelTrial,
   onBack,
   onContinue,
   continueLabel,
@@ -135,19 +139,24 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
   };
   const handleCancelPress = () => {
     const now = new Date();
+    const parsedTrialEnd = trialEndsAt ? new Date(trialEndsAt) : null;
+    const hasValidTrialEnd =
+      trialActive && parsedTrialEnd && !Number.isNaN(parsedTrialEnd.getTime()) && parsedTrialEnd > now;
     const parsedEnd = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
     const hasValidEnd = parsedEnd && !Number.isNaN(parsedEnd.getTime()) && parsedEnd > now;
-    const endDate = hasValidEnd
-      ? parsedEnd!
-      : (() => {
-          const next = new Date(now);
-          if (subscriptionPeriod === "monthly") {
-            next.setMonth(next.getMonth() + 1);
-          } else {
-            next.setFullYear(next.getFullYear() + 1);
-          }
-          return next;
-        })();
+    const endDate = hasValidTrialEnd
+      ? parsedTrialEnd!
+      : hasValidEnd
+        ? parsedEnd!
+        : (() => {
+            const next = new Date(now);
+            if (subscriptionPeriod === "monthly") {
+              next.setMonth(next.getMonth() + 1);
+            } else {
+              next.setFullYear(next.getFullYear() + 1);
+            }
+            return next;
+          })();
     const formattedEnd = formatEndDate(endDate.toISOString());
     Alert.alert(
       "Cancel subscription?",
@@ -162,6 +171,25 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
       ]
     );
   };
+  const handleCancelTrialPress = () => {
+    const formattedEnd = formatEndDate(trialEndsAt);
+    Alert.alert(
+      "Cancel trial?",
+      `Your trial will remain active until ${formattedEnd}. You won't be subscribed after the trial ends.`,
+      [
+        { text: "Keep trial", style: "cancel" },
+        {
+          text: "Cancel trial",
+          style: "destructive",
+          onPress: () => onCancelTrial?.(),
+        },
+      ]
+    );
+  };
+  const trialCancelLabel = trialEndsAt ? formatEndDate(trialEndsAt) : null;
+  const trialCancelText = trialCanceledAt && trialCancelLabel
+    ? `Trial ends ${trialCancelLabel}`
+    : `Cancel trial${trialCancelLabel ? ` (ends ${trialCancelLabel})` : ""}`;
   const canceledLabel = subscriptionStatus === "canceled" ? formatEndDate(subscriptionEndsAt) : null;
   const creditsSectionLayout = React.useRef<{ y: number; height: number } | null>(null);
   const scrollRef = React.useRef<ScrollView>(null);
@@ -775,6 +803,17 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
               ))}
             </View>
 
+            {variant === "manage" && trialActive && !isSubscribed && (
+              <Pressable
+                style={[styles.cancelButton, trialCanceledAt && styles.cancelButtonDisabled]}
+                onPress={handleCancelTrialPress}
+                disabled={Boolean(trialCanceledAt)}
+              >
+                <Ionicons name="alert-circle-outline" size={18} color={colors.red600} />
+                <Text style={styles.cancelButtonText}>{trialCancelText}</Text>
+              </Pressable>
+            )}
+
             {variant === "manage" && isSubscribed && (
               <Pressable style={styles.cancelButton} onPress={handleCancelPress}>
                 <Ionicons name="alert-circle-outline" size={18} color={colors.red600} />
@@ -1052,6 +1091,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "row",
     gap: spacing.sm,
+  },
+  cancelButtonDisabled: {
+    opacity: 0.6,
   },
   cancelButtonText: {
     fontSize: 15,
