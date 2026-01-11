@@ -207,7 +207,7 @@ class GlobalRecipe(SQLModel, table=True):
     steps: List[dict] = Field(default_factory=list, sa_column=Column(JSON))
     quality_score: int = Field(default=0)
     is_complete: bool = Field(default=False)
-    missing_fields: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    missing_fields: List[str] = Field(default_factory=list, sa_column=Column(JSONB))
     last_fetched_at: Optional[datetime] = None
     canonical_hash: Optional[str] = Field(default=None, index=True)
     canonical_group_id: Optional[UUID] = Field(default=None, index=True)
