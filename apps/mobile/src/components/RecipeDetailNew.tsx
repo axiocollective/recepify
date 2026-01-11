@@ -673,43 +673,45 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
                     <Ionicons name="create-outline" size={16} color={colors.gray900} />
                     <Text style={styles.importEditText}>Edit</Text>
                   </Pressable>
-                  <Pressable
-                    style={[
-                      styles.importOptimizeButton,
-                      optimizeBlocked && styles.importOptimizeButtonDisabled,
-                    ]}
-                    onPress={() => {
-                      if (optimizeBlocked) {
-                        showOptimizeLimitAlert();
-                        return;
-                      }
-                      onOptimizeWithAI?.();
-                    }}
-                  >
-                    <LinearGradient
-                      colors={optimizeBlocked ? [colors.gray200, colors.gray200] : ["#a855f7", "#9333ea"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
+                  {!isIncomplete && (
+                    <Pressable
                       style={[
-                        styles.importOptimizeButtonInner,
-                        optimizeBlocked && styles.importOptimizeButtonInnerDisabled,
+                        styles.importOptimizeButton,
+                        optimizeBlocked && styles.importOptimizeButtonDisabled,
                       ]}
+                      onPress={() => {
+                        if (optimizeBlocked) {
+                          showOptimizeLimitAlert();
+                          return;
+                        }
+                        onOptimizeWithAI?.();
+                      }}
                     >
-                      <Ionicons
-                        name="sparkles"
-                        size={16}
-                        color={optimizeBlocked ? colors.gray500 : colors.white}
-                      />
-                      <Text
+                      <LinearGradient
+                        colors={optimizeBlocked ? [colors.gray200, colors.gray200] : ["#a855f7", "#9333ea"]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
                         style={[
-                          styles.importOptimizeText,
-                          optimizeBlocked && styles.importOptimizeTextDisabled,
+                          styles.importOptimizeButtonInner,
+                          optimizeBlocked && styles.importOptimizeButtonInnerDisabled,
                         ]}
                       >
-                        Optimize
-                      </Text>
-                    </LinearGradient>
-                  </Pressable>
+                        <Ionicons
+                          name="sparkles"
+                          size={16}
+                          color={optimizeBlocked ? colors.gray500 : colors.white}
+                        />
+                        <Text
+                          style={[
+                            styles.importOptimizeText,
+                            optimizeBlocked && styles.importOptimizeTextDisabled,
+                          ]}
+                        >
+                          Optimize
+                        </Text>
+                      </LinearGradient>
+                    </Pressable>
+                  )}
                 </View>
                 {isIncomplete ? (
                   <Pressable
