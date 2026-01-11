@@ -2,7 +2,8 @@ from datetime import datetime, date
 from typing import List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, JSON
+from sqlalchemy import Column, JSON, String
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -201,7 +202,7 @@ class GlobalRecipe(SQLModel, table=True):
     nutrition_fat: Optional[str] = None
     media_video_url: Optional[str] = None
     media_image_url: Optional[str] = None
-    tags: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    tags: List[str] = Field(default_factory=list, sa_column=Column(ARRAY(String)))
     ingredients: List[dict] = Field(default_factory=list, sa_column=Column(JSON))
     steps: List[dict] = Field(default_factory=list, sa_column=Column(JSON))
     quality_score: int = Field(default=0)
@@ -213,4 +214,3 @@ class GlobalRecipe(SQLModel, table=True):
     supersedes_id: Optional[UUID] = None
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-
