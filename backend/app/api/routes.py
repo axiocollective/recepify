@@ -1110,7 +1110,6 @@ def import_web(
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
-            _increment_import_usage(session, owner_id, "web")
         _log_usage_events(
             session,
             owner_id,
@@ -1139,7 +1138,6 @@ def import_tiktok(
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
-            _increment_import_usage(session, owner_id, "tiktok")
         _log_usage_events(
             session,
             owner_id,
@@ -1168,7 +1166,6 @@ def import_instagram(
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
-            _increment_import_usage(session, owner_id, "instagram")
         _log_usage_events(
             session,
             owner_id,
@@ -1199,7 +1196,6 @@ def import_pinterest(
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
-            _increment_import_usage(session, owner_id, "pinterest")
         _log_usage_events(
             session,
             owner_id,
@@ -1230,7 +1226,6 @@ def import_youtube(
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
-            _increment_import_usage(session, owner_id, "youtube")
         _log_usage_events(
             session,
             owner_id,
@@ -1285,7 +1280,6 @@ async def import_scan(
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
-            _increment_import_usage(session, owner_id, "scan")
         _log_usage_events(
             session,
             owner_id,
@@ -1408,13 +1402,6 @@ def usage_track(
         )
     )
     session.commit()
-    event_type = (payload.event_type or "").lower()
-    if event_type in {"optimize", "optimization"}:
-        _increment_action_usage(session, owner_id, "optimization")
-    elif event_type in {"translate", "translation"}:
-        _increment_action_usage(session, owner_id, "translation")
-    elif event_type in {"ai_message", "assistant"}:
-        _increment_action_usage(session, owner_id, "ai_message")
     return {"ok": True}
 
 
@@ -1742,12 +1729,9 @@ def _increment_ai_usage(
             UsageMonthly.period_start == period_start,
         )
     ).first()
-    increment_ai_messages = usage_context not in {"optimized_with_ai", "translated_with_ai"}
     if existing:
         if tokens > 0:
             existing.ai_tokens += tokens
-        if increment_ai_messages:
-            existing.ai_messages_count += 1
         existing.updated_at = datetime.utcnow()
     else:
         session.add(
@@ -1757,7 +1741,7 @@ def _increment_ai_usage(
                 import_count=0,
                 translations_count=0,
                 optimizations_count=0,
-                ai_messages_count=1 if increment_ai_messages else 0,
+                ai_messages_count=0,
                 ai_tokens=max(0, tokens),
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),

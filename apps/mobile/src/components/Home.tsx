@@ -148,6 +148,15 @@ export const Home: React.FC<HomeProps> = ({
 
         {!hasRecipes && (
           <View style={styles.section}>
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="book-outline" size={36} color={colors.gray400} />
+              </View>
+              <Text style={styles.emptyTitle}>No recipes yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Use the Add Recipe options below to import from links, social, or scan a recipe.
+              </Text>
+            </View>
             <ImportQuickActions
               onNavigate={onNavigate}
               onAddManually={onAddManually}
@@ -322,6 +331,31 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingVertical: spacing.lg,
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
+  },
+  emptyTitle: {
+    ...typography.h2,
+    color: colors.gray900,
+    marginBottom: spacing.sm,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    ...typography.bodySmall,
+    color: colors.gray500,
+    textAlign: "center",
   },
   sectionHeader: {
     paddingHorizontal: spacing.xl,

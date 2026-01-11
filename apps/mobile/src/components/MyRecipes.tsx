@@ -319,6 +319,12 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
 
       {recipes.length === 0 && (
         <View style={styles.importSection}>
+          <View style={styles.emptyInlineState}>
+            <Text style={styles.emptyInlineTitle}>No recipes yet</Text>
+            <Text style={styles.emptyInlineSubtitle}>
+              Use the Add Recipe options below to import from links, social, or scan a recipe.
+            </Text>
+          </View>
           <ImportQuickActions
             onNavigate={onNavigate}
             onAddManually={onAddManually}
@@ -424,11 +430,13 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
       )}
 
       {viewType === "recipes" ? (
+        recipes.length === 0 ? null : (
         <View style={styles.countRow}>
           <Text style={styles.countText}>
             {filteredRecipes.length} {filteredRecipes.length === 1 ? "recipe" : "recipes"}
           </Text>
         </View>
+        )
       ) : selectedCollection ? (
         <View style={styles.collectionHeader}>
           <Pressable style={styles.collectionBack} onPress={() => setSelectedCollectionId(null)}>
@@ -461,16 +469,7 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
       )}
 
       {viewType === "recipes" ? (
-        recipes.length === 0 ? (
-          <View style={styles.emptyStateSimple}>
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyCardTitle}>No recipes yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Use the Add Recipe section above to import from links, social, or scan a recipe.
-              </Text>
-            </View>
-          </View>
-        ) : filteredRecipes.length === 0 ? (
+        recipes.length === 0 ? null : filteredRecipes.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
               <Text style={styles.emptyEmoji}>🔎</Text>
@@ -1440,6 +1439,23 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   emptySubtitle: {
+    ...typography.bodySmall,
+    color: colors.gray500,
+    textAlign: "center",
+  },
+  emptyInlineState: {
+    alignItems: "center",
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  emptyInlineTitle: {
+    ...typography.h2,
+    color: colors.gray900,
+    marginBottom: spacing.sm,
+    textAlign: "center",
+  },
+  emptyInlineSubtitle: {
     ...typography.bodySmall,
     color: colors.gray500,
     textAlign: "center",

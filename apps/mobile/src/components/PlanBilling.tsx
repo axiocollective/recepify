@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Alert, Dimensions, Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Dimensions, Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PlanTier, UsageSummary } from "../data/types";
 import { getPlanLimits } from "../data/usageLimits";
@@ -37,7 +37,7 @@ interface PlanBillingProps {
 
 const BASE_PLAN = {
   id: "base" as const,
-  name: "Recepify Base",
+  name: "Recipefy Base",
   price: "CHF 15 / year",
   subtitle: "Your personal recipe library",
   includes: [
@@ -51,7 +51,7 @@ const BASE_PLAN = {
 
 const getPaidPlanDetails = (billingPeriod: "yearly" | "monthly") => ({
   id: "premium" as const,
-  name: "Recepify Premium",
+  name: "Recipefy Premium",
   price: billingPeriod === "yearly" ? "CHF 69 / year" : "CHF 6.90 / month",
   subtitle: billingPeriod === "yearly" ? "Best price overall" : "Most flexible",
   includes: [
@@ -103,7 +103,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
   const optimizationLimit = planLimits.optimizations + addonOptimizations + (plan === "base" ? trialOptimizationsRemaining : 0);
   const aiMessageLimit = planLimits.aiMessages + addonAiMessages + (plan === "base" ? trialAiMessagesRemaining : 0);
   const isSubscribed = plan === "premium";
-  const planLabel = plan === "premium" ? "Recepify Premium" : "Recepify Base";
+  const planLabel = plan === "premium" ? "Recipefy Premium" : "Recipefy Base";
   const importProgress =
     importLimit > 0 ? Math.min(1, usedImports / importLimit) : usedImports > 0 ? 1 : 0;
   const translationProgress =
@@ -113,8 +113,7 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
   const aiMessageProgress =
     aiMessageLimit > 0 ? Math.min(1, usedAiMessages / aiMessageLimit) : usedAiMessages > 0 ? 1 : 0;
   const hasDevPlanSwitch = process.env.EXPO_PUBLIC_DEV_PLAN_SWITCH === "true";
-  const [allowPlanSwitch, setAllowPlanSwitch] = useState(hasDevPlanSwitch);
-  const canSwitchPlans = allowPlanSwitchOverride ?? allowPlanSwitch;
+  const canSwitchPlans = allowPlanSwitchOverride ?? hasDevPlanSwitch;
   const [selectedPlan, setSelectedPlan] = useState<"base" | "premium">("base");
   const activeSelection = isOnboarding ? selectedPlan : plan;
   const [billingPeriod, setBillingPeriod] = useState<"yearly" | "monthly">(subscriptionPeriod);
@@ -231,28 +230,28 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
       action: "import" as const,
       title: "+15 recipe imports",
       price: "CHF 5",
-      description: "Use anytime",
+      description: "Never expire",
       quantity: 15,
     },
     {
       action: "translation" as const,
       title: "+15 recipe translations",
       price: "CHF 4",
-      description: "Use anytime",
+      description: "Never expire",
       quantity: 15,
     },
     {
       action: "optimization" as const,
       title: "+15 recipe optimizations",
       price: "CHF 4",
-      description: "Use anytime",
+      description: "Never expire",
       quantity: 15,
     },
     {
       action: "ai_message" as const,
       title: "+100 AI assistant messages",
       price: "CHF 5",
-      description: "Use anytime",
+      description: "Never expire",
       quantity: 100,
     },
   ];
@@ -279,6 +278,26 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
     } catch {
       Alert.alert("Plan update failed", "Please try again in a moment.");
     }
+  };
+
+  const confirmAddonPurchase = (option: typeof addonOptions[number]) => {
+    Alert.alert(
+      "Confirm purchase",
+      `Buy ${option.title} for ${option.price}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Buy",
+          onPress: async () => {
+            try {
+              await onBuyCredits(option.action, option.quantity);
+            } catch {
+              Alert.alert("Purchase failed", "Please try again in a moment.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (isOnboarding) {
@@ -453,50 +472,80 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
   }
 
   if (showPlanOptions) {
+    const isCurrentBase = plan === "base";
+    const isCurrentPremium = plan === "premium";
+    const nextPlanId = pendingPlan === "subscription" ? "premium" : "base";
+    const showConfirm = nextPlanId !== plan;
     return (
       <View style={styles.screen}>
         <View style={styles.header}>
           <Pressable onPress={() => setShowPlanOptions(false)} style={styles.headerButton}>
             <Ionicons name="arrow-back" size={20} color={colors.gray900} />
           </Pressable>
-          <Text style={styles.headerTitle}>Choose your plan</Text>
+          <Text style={styles.headerTitle}>Change Plan</Text>
         </View>
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.section}>
+            <Text style={styles.planModalSubtitle}>Choose the plan that fits you</Text>
+            <View style={styles.modalToggle}>
+              {(["monthly", "yearly"] as const).map((period) => (
+                <Pressable
+                  key={period}
+                  onPress={() => {
+                    setPendingBaseBilling(period);
+                    setPendingSubscriptionBilling(period);
+                  }}
+                  style={[styles.modalToggleChip, pendingBaseBilling === period && styles.modalToggleChipActive]}
+                >
+                  <Text
+                    style={[
+                      styles.modalToggleText,
+                      pendingBaseBilling === period && styles.modalToggleTextActive,
+                    ]}
+                  >
+                    {period === "monthly" ? "Monthly" : "Yearly"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
             <View style={styles.planList}>
               <Pressable
                 style={[
                   styles.planCard,
-                  pendingPlan === "base" && styles.planCardSelected,
+                  pendingPlan === "base" && !isCurrentBase && styles.planCardSelected,
+                  isCurrentBase && styles.planCardCurrent,
                 ]}
-                onPress={() => setPendingPlan("base")}
+                onPress={() => {
+                  if (isCurrentBase) return;
+                  setPendingPlan("base");
+                }}
               >
+                {pendingPlan === "base" && !isCurrentBase && (
+                  <View style={styles.planOptionCheck}>
+                    <Ionicons name="checkmark" size={14} color={colors.white} />
+                  </View>
+                )}
+                {isCurrentBase && (
+                  <View style={styles.planCurrentBadge}>
+                    <Ionicons name="checkmark" size={12} color={colors.white} />
+                    <Text style={styles.planCurrentBadgeText}>Current</Text>
+                  </View>
+                )}
                 <View style={styles.planCardHeader}>
                   <View style={styles.planHeaderLeft}>
-                    <Text style={[styles.planTitle, pendingPlan === "base" && styles.planTitleSelected]}>
-                      Recepify Base
+                    <Text style={styles.planOptionTitle}>
+                      Recipefy Base
                     </Text>
-                    <Text style={styles.planPrice}>{pendingBasePrice}</Text>
-                    <Text style={styles.planSubtitle}>{pendingBaseAlt}</Text>
-                  </View>
-                  <View style={styles.planHeaderRight}>
-                    <View style={styles.billingToggle}>
-                      {(["yearly", "monthly"] as const).map((period) => (
-                        <Pressable
-                          key={period}
-                          onPress={() => setPendingBaseBilling(period)}
-                          style={[styles.billingChip, pendingBaseBilling === period && styles.billingChipActive]}
-                        >
-                          <Text
-                            style={[
-                              styles.billingChipText,
-                              pendingBaseBilling === period && styles.billingChipTextActive,
-                            ]}
-                          >
-                            {period === "yearly" ? "Yearly" : "Monthly"}
-                          </Text>
-                        </Pressable>
-                      ))}
+                    <Text style={styles.planBillingLabel}>
+                      Billed {pendingBaseBilling === "yearly" ? "yearly" : "monthly"}
+                    </Text>
+                    <View style={styles.planPriceRow}>
+                      <Text style={styles.planPriceAmount}>
+                        {pendingBaseBilling === "yearly" ? "CHF 15" : "CHF 1.50"}
+                      </Text>
+                      <Text style={styles.planPricePeriod}>
+                        / {pendingBaseBilling === "yearly" ? "year" : "month"}
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -516,41 +565,40 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
               <Pressable
                 style={[
                   styles.planCard,
-                  pendingPlan === "subscription" && styles.planCardSelected,
+                  pendingPlan === "subscription" && !isCurrentPremium && styles.planCardSelected,
+                  isCurrentPremium && styles.planCardCurrent,
                 ]}
-                onPress={() => setPendingPlan("subscription")}
+                onPress={() => {
+                  if (isCurrentPremium) return;
+                  setPendingPlan("subscription");
+                }}
               >
+                {pendingPlan === "subscription" && !isCurrentPremium && (
+                  <View style={styles.planOptionCheck}>
+                    <Ionicons name="checkmark" size={14} color={colors.white} />
+                  </View>
+                )}
+                {isCurrentPremium && (
+                  <View style={styles.planCurrentBadge}>
+                    <Ionicons name="checkmark" size={12} color={colors.white} />
+                    <Text style={styles.planCurrentBadgeText}>Current</Text>
+                  </View>
+                )}
                 <View style={styles.planCardHeader}>
                   <View style={styles.planHeaderLeft}>
-                    <Text style={[styles.planTitle, pendingPlan === "subscription" && styles.planTitleSelected]}>
-                      Recepify Premium
+                    <Text style={styles.planOptionTitle}>
+                      Recipefy Premium
                     </Text>
-                    <Text style={styles.planPrice}>{pendingSubscriptionPrice}</Text>
-                    <Text style={styles.planSubtitle}>
-                      {pendingSubscriptionBilling === "yearly" ? "Best price overall" : "More flexibility"}
+                    <Text style={styles.planBillingLabel}>
+                      Billed {pendingSubscriptionBilling === "yearly" ? "yearly" : "monthly"}
                     </Text>
-                  </View>
-                  <View style={styles.planHeaderRight}>
-                    <View style={styles.billingToggle}>
-                      {(["yearly", "monthly"] as const).map((period) => (
-                        <Pressable
-                          key={period}
-                          onPress={() => setPendingSubscriptionBilling(period)}
-                          style={[
-                            styles.billingChip,
-                            pendingSubscriptionBilling === period && styles.billingChipActive,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.billingChipText,
-                              pendingSubscriptionBilling === period && styles.billingChipTextActive,
-                            ]}
-                          >
-                            {period === "yearly" ? "Yearly" : "Monthly"}
-                          </Text>
-                        </Pressable>
-                      ))}
+                    <View style={styles.planPriceRow}>
+                      <Text style={styles.planPriceAmount}>
+                        {pendingSubscriptionBilling === "yearly" ? "CHF 69" : "CHF 6.90"}
+                      </Text>
+                      <Text style={styles.planPricePeriod}>
+                        / {pendingSubscriptionBilling === "yearly" ? "year" : "month"}
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -562,64 +610,126 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                     </View>
                   ))}
                 </View>
-                <Text style={styles.planNoteText}>Everything from Recepify Base included.</Text>
+                <Text style={styles.planNoteText}>Everything from Recipefy Base included.</Text>
                 <Text style={[styles.planNoteText, { marginTop: spacing.xs }]}>
                   Unused actions do not roll over.
                 </Text>
               </Pressable>
             </View>
 
-            <Pressable
-              style={styles.planUpgradeButton}
-              onPress={() => {
-                if (!canSwitchPlans) {
-                  Alert.alert(
-                    "Manage subscription",
-                    "Plan changes are handled in the App Store.",
-                    [{ text: "Open App Store", onPress: openSubscriptionSettings }, { text: "Close" }]
-                  );
-                  return;
-                }
-                const nextPlan = pendingPlan === "subscription" ? "premium" : "base";
-                const nextBilling =
-                  pendingPlan === "subscription" ? pendingSubscriptionBilling : pendingBaseBilling;
-                if (plan === "premium" && nextPlan === "base") {
-                  Alert.alert(
-                    "Downgrade plan?",
-                    "Downgrades take effect at the end of your current billing period.",
-                    [
-                      { text: "Keep current plan", style: "cancel" },
-                      {
-                        text: "Continue",
-                        onPress: () => {
-                          void safePlanChange(nextPlan).then(() => {
-                            onSubscriptionPeriodChange(nextBilling);
-                            setShowPlanOptions(false);
-                            Alert.alert("Plan updated", "Your changes have been saved.");
-                          });
+            {showConfirm && (
+              <Pressable
+                style={styles.planUpgradeButton}
+                onPress={() => {
+                  if (!canSwitchPlans) {
+                    Alert.alert(
+                      "Manage subscription",
+                      "Plan changes are handled in the App Store.",
+                      [{ text: "Open App Store", onPress: openSubscriptionSettings }, { text: "Close" }]
+                    );
+                    return;
+                  }
+                  const nextPlan = pendingPlan === "subscription" ? "premium" : "base";
+                  const nextBilling =
+                    pendingPlan === "subscription" ? pendingSubscriptionBilling : pendingBaseBilling;
+                  if (plan === "premium" && nextPlan === "base") {
+                    Alert.alert(
+                      "Downgrade plan?",
+                      "Downgrades take effect at the end of your current billing period.",
+                      [
+                        { text: "Keep current plan", style: "cancel" },
+                        {
+                          text: "Continue",
+                          onPress: () => {
+                            void safePlanChange(nextPlan).then(() => {
+                              onSubscriptionPeriodChange(nextBilling);
+                              setShowPlanOptions(false);
+                              Alert.alert("Plan updated", "Your changes have been saved.");
+                            });
+                          },
                         },
-                      },
-                    ]
-                  );
-                  return;
-                }
-                void safePlanChange(nextPlan).then(() => {
-                  onSubscriptionPeriodChange(nextBilling);
-                  setShowPlanOptions(false);
-                  Alert.alert("Plan updated", "Your changes have been saved.");
-                });
-              }}
-            >
-              <Text style={styles.planUpgradeText}>Save changes</Text>
-            </Pressable>
+                      ]
+                    );
+                    return;
+                  }
+                  void safePlanChange(nextPlan).then(() => {
+                    onSubscriptionPeriodChange(nextBilling);
+                    setShowPlanOptions(false);
+                    Alert.alert("Plan updated", "Your changes have been saved.");
+                  });
+                }}
+              >
+                <Text style={styles.planUpgradeText}>
+                  Confirm Change to {pendingPlan === "subscription" ? "Recipefy Premium" : "Recipefy Base"}
+                </Text>
+              </Pressable>
+            )}
           </View>
         </ScrollView>
       </View>
     );
   }
 
+  const usageCards = [
+    {
+      key: "imports",
+      label: "Recipe Imports",
+      used: usedImports,
+      total: planLimits.imports,
+      icon: "download-outline" as const,
+      bg: "rgba(168, 85, 247, 0.12)",
+      color: "#a855f7",
+    },
+    {
+      key: "translations",
+      label: "AI Translations",
+      used: usedTranslations,
+      total: planLimits.translations,
+      icon: "language-outline" as const,
+      bg: "rgba(59, 130, 246, 0.12)",
+      color: "#3b82f6",
+    },
+    {
+      key: "optimizations",
+      label: "AI Optimizations",
+      used: usedOptimizations,
+      total: planLimits.optimizations,
+      icon: "sparkles-outline" as const,
+      bg: "rgba(236, 72, 153, 0.12)",
+      color: "#ec4899",
+    },
+    {
+      key: "messages",
+      label: "AI Assistant Messages",
+      used: usedAiMessages,
+      total: planLimits.aiMessages,
+      icon: "chatbubble-ellipses-outline" as const,
+      bg: "rgba(34, 197, 94, 0.12)",
+      color: "#22c55e",
+    },
+  ];
+
+  const planFeatures = isSubscribed
+    ? [
+        "25 recipe imports per month",
+        "25 AI translations per month",
+        "25 AI optimizations per month",
+        "150 AI assistant messages per month",
+      ]
+    : [
+        "Unlimited manual recipes",
+        "Collections & favorites",
+        "Buy credits for imports, translations, optimizations & AI assistant messages",
+      ];
+
   return (
     <View style={styles.screen}>
+      <View style={styles.appHeader}>
+        <View style={styles.appHeaderRow}>
+          <Ionicons name="sparkles" size={22} color={colors.white} />
+          <Text style={styles.appHeaderTitle}>Recipefy</Text>
+        </View>
+      </View>
       <View style={styles.header}>
         <Pressable onPress={onBack} style={styles.headerButton}>
           <Ionicons name="arrow-back" size={20} color={colors.gray900} />
@@ -628,154 +738,62 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
       </View>
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
-        {!isOnboarding && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Usage</Text>
-            <View style={styles.statsRow}>
-              <View style={[styles.statCard, shadow.md]}>
-                <View style={styles.statIcon}>
-                  <Ionicons name="book-outline" size={18} color={colors.purple600} />
-                </View>
-                <Text style={styles.statTitle}>Recipes saved</Text>
-                <Text style={styles.statValue}>{recipesCount}</Text>
-                <Text style={styles.statLabel}>Total in your library</Text>
-              </View>
-              <View style={[styles.statCard, shadow.md]}>
-                <View style={styles.statIcon}>
-                  <Ionicons name="download-outline" size={18} color={colors.purple600} />
-                </View>
-                <Text style={styles.statTitle}>Recipe imports</Text>
-                <Text style={styles.statValue}>{formatNumber(usedImports)}</Text>
-                <Text style={styles.statLabel}>
-                  {formatUsageLabel(
-                    usedImports,
-                    planLimits.imports,
-                    addonImports,
-                    !isSubscribed && trialActive ? trialImportsRemaining : 0
-                  )}
-                </Text>
-                <View style={styles.statBarTrack}>
-                  <View style={[styles.statBarFill, { width: `${importProgress * 100}%` }]} />
-                </View>
-              </View>
-            </View>
-            <View style={styles.statsRow}>
-              <View style={[styles.statCard, shadow.md]}>
-                <View style={styles.statIcon}>
-                  <Ionicons name="language-outline" size={18} color={colors.purple600} />
-                </View>
-                <Text style={styles.statTitle}>Recipe translations</Text>
-                <Text style={styles.statValue}>{formatNumber(usedTranslations)}</Text>
-                <Text style={styles.statLabel}>
-                  {formatUsageLabel(
-                    usedTranslations,
-                    planLimits.translations,
-                    addonTranslations,
-                    !isSubscribed && trialActive ? trialTranslationsRemaining : 0
-                  )}
-                </Text>
-                <View style={styles.statBarTrack}>
-                  <View style={[styles.statBarFill, { width: `${translationProgress * 100}%` }]} />
-                </View>
-              </View>
-              <View style={[styles.statCard, shadow.md]}>
-                <View style={styles.statIcon}>
-                  <Ionicons name="sparkles-outline" size={18} color={colors.purple600} />
-                </View>
-                <Text style={styles.statTitle}>Recipe optimizations</Text>
-                <Text style={styles.statValue}>{formatNumber(usedOptimizations)}</Text>
-                <Text style={styles.statLabel}>
-                  {formatUsageLabel(
-                    usedOptimizations,
-                    planLimits.optimizations,
-                    addonOptimizations,
-                    !isSubscribed && trialActive ? trialOptimizationsRemaining : 0
-                  )}
-                </Text>
-                <View style={styles.statBarTrack}>
-                  <View style={[styles.statBarFill, { width: `${optimizationProgress * 100}%` }]} />
-                </View>
-              </View>
-            </View>
-            <View style={styles.statsRow}>
-              <View style={[styles.statCard, shadow.md]}>
-                <View style={styles.statIcon}>
-                  <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.purple600} />
-                </View>
-                <Text style={styles.statTitle}>AI assistant messages</Text>
-                <Text style={styles.statValue}>{formatNumber(usedAiMessages)}</Text>
-                <Text style={styles.statLabel}>
-                  {formatUsageLabel(
-                    usedAiMessages,
-                    planLimits.aiMessages,
-                    addonAiMessages,
-                    !isSubscribed && trialActive ? trialAiMessagesRemaining : 0
-                  )}
-                </Text>
-                <View style={styles.statBarTrack}>
-                  <View style={[styles.statBarFill, { width: `${aiMessageProgress * 100}%` }]} />
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Plan</Text>
-          <Pressable
-            style={[styles.currentPlanCard, shadow.md]}
-            onPress={() => setShowPlanOptions(true)}
-          >
-            <View style={styles.currentPlanHeader}>
-              <View style={styles.currentPlanHeaderLeft}>
-                <Text style={styles.currentPlanName}>
-                  {isSubscribed ? "Recepify Premium" : "Recepify Base"}
-                </Text>
-                <Text style={styles.currentPlanPrice}>
+          <View style={[styles.planCardNew, shadow.md]}>
+            <View style={styles.planHeader}>
+              <View style={styles.planHeaderLeftNew}>
+                <Text style={styles.planName}>{isSubscribed ? "Recipefy Premium" : "Recipefy Base"}</Text>
+                <Text style={styles.planPriceNew}>
                   {isSubscribed ? currentSubscriptionPrice : currentBasePrice}
                 </Text>
-                <Text style={styles.currentPlanSubtitle}>
-                  {isSubscribed
-                    ? "Includes monthly imports, translations, optimizations, and AI assistant messages."
-                    : trialActive
-                    ? `Trial active · ${trialDaysLeft} days left · 10 imports, 10 translations, 10 optimizations, 50 AI assistant messages`
-                    : "Base plan active. Add-ons unlock imports, translations, optimizations, and AI assistant messages."}
-                </Text>
               </View>
-              <Pressable
-                style={styles.changePlanButton}
-                onPress={() => setShowPlanOptions(true)}
-              >
-                <Text style={styles.changePlanText}>{showPlanOptions ? "Close" : "Change"}</Text>
+              <Pressable style={styles.changeButton} onPress={() => setShowPlanOptions(true)}>
+                <Text style={styles.changeButtonText}>Change</Text>
               </Pressable>
             </View>
-          </Pressable>
 
-          {variant === "manage" && (
-            <Pressable
-              style={[styles.planCard, styles.cancelCard, styles.cancelInlineCard]}
-              onPress={handleCancelPress}
-            >
-              <View style={styles.planCardHeader}>
-                <View style={styles.cancelRow}>
-                  <View style={styles.cancelIcon}>
-                    <Ionicons name="alert-circle-outline" size={18} color={colors.red500} />
+            <View style={styles.planFeatureList}>
+              {planFeatures.map((feature) => (
+                <View key={feature} style={styles.planFeatureRow}>
+                  <View style={styles.planCheck}>
+                    <Ionicons name="checkmark" size={12} color="#16a34a" />
                   </View>
-                  <View>
-                    <Text style={[styles.planTitle, styles.cancelTitle]}>
-                      {subscriptionStatus === "canceled" ? "Subscription canceled" : "Cancel subscription"}
-                    </Text>
-                    {subscriptionStatus === "canceled" && (
-                      <Text style={[styles.planSubtitle, styles.cancelSubtitle]}>
-                        {canceledLabel ? `Active until ${canceledLabel}` : "Active until the end of your period"}
-                      </Text>
-                    )}
+                  <Text style={styles.planFeatureText}>{feature}</Text>
+                </View>
+              ))}
+            </View>
+
+            {variant === "manage" && isSubscribed && (
+              <Pressable style={styles.cancelButton} onPress={handleCancelPress}>
+                <Ionicons name="alert-circle-outline" size={18} color={colors.red600} />
+                <Text style={styles.cancelButtonText}>Cancel subscription</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.usageHeader}>MONTHLY USAGE</Text>
+          <View style={styles.usageGrid}>
+            {usageCards.map((card) => {
+              const progress = card.total > 0 ? Math.min(1, card.used / card.total) : 0;
+              return (
+                <View key={card.key} style={[styles.usageCard, shadow.md]}>
+                  <View style={[styles.usageIcon, { backgroundColor: card.bg }]}>
+                    <Ionicons name={card.icon} size={18} color={card.color} />
+                  </View>
+                  <View style={styles.usageNumbers}>
+                    <Text style={styles.usageValue}>{formatNumber(card.used)}</Text>
+                    <Text style={styles.usageTotal}>/ {formatNumber(card.total)}</Text>
+                  </View>
+                  <Text style={styles.usageLabel}>{card.label}</Text>
+                  <View style={styles.usageTrack}>
+                    <View style={[styles.usageFill, { width: `${progress * 100}%`, backgroundColor: card.color }]} />
                   </View>
                 </View>
-              </View>
-            </Pressable>
-          )}
-
+              );
+            })}
+          </View>
         </View>
 
         {!showPlanOptions && (
@@ -791,20 +809,16 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
               }
             }}
           >
-          <Text style={styles.sectionLabel}>Add-ons</Text>
-          <View style={styles.planCard}>
-            <View style={styles.planCardHeader}>
-              <View>
-                <Text style={styles.planTitle}>Extra actions</Text>
-                <Text style={styles.planSubtitle}>Tap to add more anytime. Add-ons never expire.</Text>
-              </View>
+            <View style={styles.addonHeaderRow}>
+              <Text style={styles.usageHeader}>Buy extra credits</Text>
+              <Text style={styles.addonHelper}>Never expire</Text>
             </View>
-            <View style={styles.addonList}>
-              {addonOptions.map((option) => (
+            <View style={[styles.addonCard, shadow.md]}>
+              {addonOptions.map((option, index) => (
                 <Pressable
                   key={option.action}
-                  style={styles.addonRow}
-                  onPress={() => onBuyCredits(option.action, option.quantity)}
+                  style={[styles.addonRow, index < addonOptions.length - 1 && styles.addonRowDivider]}
+                  onPress={() => confirmAddonPurchase(option)}
                 >
                   <View>
                     <Text style={styles.addonTitle}>{option.title}</Text>
@@ -817,22 +831,17 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
                 </Pressable>
               ))}
             </View>
-          </View>
-          </View>
-        )}
-
-        {!isOnboarding && hasDevPlanSwitch && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Developer</Text>
-            <View style={styles.devToggle}>
-              <View>
-                <Text style={styles.devToggleTitle}>Local plan switching</Text>
-                <Text style={styles.devToggleSubtitle}>Override App Store for testing.</Text>
+            <View style={styles.infoCard}>
+              <Ionicons name="information-circle" size={18} color="#2563eb" />
+              <View style={styles.infoTextWrap}>
+                <Text style={styles.infoTitle}>Monthly credits reset on the 1st of each month</Text>
+                <Text style={styles.infoSubtitle}>Extra credits purchased never expire and can be used anytime.</Text>
               </View>
-              <Switch value={allowPlanSwitch} onValueChange={setAllowPlanSwitch} />
             </View>
           </View>
         )}
+
+
 
         {onContinue && (
           <View style={styles.section}>
@@ -849,11 +858,28 @@ export const PlanBilling: React.FC<PlanBillingProps> = ({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.gray50,
+  },
+  appHeader: {
+    height: 56,
+    backgroundColor: colors.gray900,
+    paddingHorizontal: spacing.lg,
+    justifyContent: "center",
+  },
+  appHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  appHeaderTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "600",
+    color: colors.white,
   },
   header: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.gray200,
     flexDirection: "row",
@@ -869,19 +895,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerTitle: {
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 20,
+    lineHeight: 26,
     fontWeight: "600",
     color: colors.gray900,
   },
   content: {
     paddingBottom: 120,
-    paddingTop: spacing.lg,
-    gap: spacing.xxl,
+    paddingTop: spacing.md,
+    gap: spacing.lg,
   },
   section: {
     gap: spacing.md,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
   sectionLabel: {
     ...typography.caption,
@@ -939,6 +965,192 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: radius.full,
     backgroundColor: colors.purple600,
+  },
+  planCardNew: {
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    gap: spacing.md,
+  },
+  planHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  planHeaderLeftNew: {
+    gap: 4,
+  },
+  planName: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "600",
+    color: colors.gray900,
+  },
+  planPriceNew: {
+    fontSize: 15,
+    lineHeight: 20,
+    color: colors.gray500,
+  },
+  changeButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray100,
+  },
+  changeButtonText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "600",
+    color: colors.gray900,
+  },
+  planFeatureList: {
+    gap: spacing.sm,
+  },
+  planFeatureRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+  },
+  planCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: radius.full,
+    backgroundColor: "#dcfce7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  planFeatureText: {
+    fontSize: 15,
+    lineHeight: 20,
+    color: colors.gray600,
+  },
+  cancelButton: {
+    height: 48,
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: "#fecaca",
+    backgroundColor: "#fef2f2",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "600",
+    color: colors.red600,
+  },
+  usageHeader: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    color: colors.gray500,
+    marginBottom: spacing.sm,
+    marginLeft: 2,
+  },
+  usageGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+  },
+  usageCard: {
+    width: "48%",
+    borderRadius: radius.md,
+    padding: spacing.md,
+    backgroundColor: colors.white,
+  },
+  usageIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
+  usageNumbers: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  usageValue: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "700",
+    color: colors.gray900,
+  },
+  usageTotal: {
+    fontSize: 15,
+    lineHeight: 20,
+    color: colors.gray400,
+  },
+  usageLabel: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.gray600,
+    marginBottom: spacing.sm,
+  },
+  usageTrack: {
+    height: 6,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.full,
+    overflow: "hidden",
+  },
+  usageFill: {
+    height: "100%",
+    borderRadius: radius.full,
+  },
+  addonHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  addonHelper: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.gray400,
+  },
+  addonCard: {
+    borderRadius: radius.xl,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    overflow: "hidden",
+  },
+  addonRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray200,
+  },
+  infoCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: "#eff6ff",
+    flexDirection: "row",
+    gap: spacing.sm,
+    alignItems: "flex-start",
+  },
+  infoTextWrap: {
+    flex: 1,
+  },
+  infoTitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+    color: "#1d4ed8",
+  },
+  infoSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#2563eb",
+    marginTop: 4,
   },
   currentPlanCard: {
     padding: spacing.lg,
@@ -1036,20 +1248,91 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.gray900,
   },
+  planModalSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.gray500,
+    marginBottom: spacing.sm,
+  },
+  modalToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.gray100,
+    borderRadius: radius.full,
+    padding: 4,
+    alignSelf: "flex-start",
+    marginBottom: spacing.lg,
+  },
+  modalToggleChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+  },
+  modalToggleChipActive: {
+    backgroundColor: colors.white,
+    ...shadow.md,
+  },
+  modalToggleText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "500",
+    color: colors.gray500,
+  },
+  modalToggleTextActive: {
+    color: colors.gray900,
+  },
   planList: {
     gap: spacing.md,
   },
   planCard: {
     padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
+    borderRadius: radius.xl,
+    borderWidth: 2,
     borderColor: colors.gray200,
     backgroundColor: colors.white,
-    gap: spacing.sm,
+    gap: spacing.md,
+    position: "relative",
   },
   planCardSelected: {
-    borderColor: colors.purple600,
-    backgroundColor: colors.purple100,
+    borderColor: "#e9d5ff",
+    backgroundColor: "#f5f3ff",
+  },
+  planCardCurrent: {
+    borderColor: colors.gray300,
+    backgroundColor: colors.white,
+  },
+  planOptionCheck: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    backgroundColor: colors.purple600,
+    alignItems: "center",
+    justifyContent: "center",
+    ...shadow.md,
+  },
+  planCurrentBadge: {
+    position: "absolute",
+    top: -10,
+    right: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.gray900,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  planCurrentBadgeText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "700",
+    color: colors.white,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
   },
   planCardHeader: {
     flexDirection: "row",
@@ -1060,29 +1343,34 @@ const styles = StyleSheet.create({
   planHeaderLeft: {
     flex: 1,
   },
-  planHeaderRight: {
-    alignItems: "flex-end",
-    gap: spacing.xs,
-  },
-  planTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "600",
+  planOptionTitle: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: "700",
     color: colors.gray900,
   },
-  planTitleSelected: {
-    color: colors.purple600,
-  },
-  planPrice: {
+  planBillingLabel: {
     fontSize: 13,
     lineHeight: 18,
-    color: colors.gray600,
-    marginTop: 2,
+    color: colors.gray500,
+    marginTop: 4,
   },
-  planSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.gray600,
+  planPriceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  planPriceAmount: {
+    fontSize: 36,
+    lineHeight: 42,
+    fontWeight: "700",
+    color: colors.gray900,
+  },
+  planPricePeriod: {
+    fontSize: 15,
+    lineHeight: 20,
+    color: colors.gray500,
   },
   cancelCard: {
     borderColor: colors.red500,
@@ -1131,18 +1419,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: colors.gray100,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
   addonTitle: {
-    ...typography.bodySmall,
-    color: colors.gray900,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: "600",
+    color: colors.gray900,
   },
   addonSubtitle: {
-    ...typography.caption,
+    fontSize: 13,
+    lineHeight: 18,
     color: colors.gray500,
   },
   addonPrice: {
@@ -1151,34 +1439,36 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   addonPriceText: {
-    ...typography.bodySmall,
+    fontSize: 15,
+    lineHeight: 20,
     color: colors.gray700,
     fontWeight: "600",
   },
-  planUpgradeButton: {
+  planNoteText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.gray500,
     marginTop: spacing.sm,
-    backgroundColor: colors.gray900,
+  },
+  planUpgradeButton: {
+    marginTop: spacing.md,
+    backgroundColor: colors.purple600,
     borderRadius: radius.full,
-    paddingVertical: spacing.sm,
+    paddingVertical: 16,
     alignItems: "center",
+    ...shadow.lg,
   },
   planUpgradeButtonDisabled: {
     backgroundColor: colors.gray100,
   },
   planUpgradeText: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 17,
+    lineHeight: 22,
     fontWeight: "600",
     color: colors.white,
   },
   planUpgradeTextDisabled: {
     color: colors.gray500,
-  },
-  planNote: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.gray500,
-    textAlign: "center",
   },
   continueButton: {
     minHeight: 56,
