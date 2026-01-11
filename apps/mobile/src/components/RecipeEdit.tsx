@@ -780,13 +780,14 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const applyTranslatedRecipe = (payload: Partial<Recipe>) => {
+  const applyTranslatedRecipe = (payload: Partial<Recipe>, languageCode?: "de" | "en") => {
     setFormData((prev) => ({
       ...prev,
       title: payload.title ?? prev.title,
       description: payload.description ?? prev.description,
       ingredients: payload.ingredients ?? prev.ingredients,
       steps: payload.steps ?? prev.steps,
+      languageCode: languageCode ?? prev.languageCode,
     }));
   };
 
@@ -819,12 +820,15 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     const translatedSteps = Array.isArray((parsed as Record<string, unknown>).steps)
       ? ((parsed as Record<string, unknown>).steps as unknown[]).map((step) => String(step ?? ""))
       : snapshot.steps;
-    applyTranslatedRecipe({
+    applyTranslatedRecipe(
+      {
       title: String((parsed as Record<string, unknown>).title ?? snapshot.title ?? ""),
       description: String((parsed as Record<string, unknown>).description ?? snapshot.description ?? ""),
       ingredients: translatedIngredients,
       steps: translatedSteps,
-    });
+      },
+      targetLanguage
+    );
     refreshUsageSummary();
   };
 
