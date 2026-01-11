@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Optional, Tuple
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from uuid import UUID, uuid4
@@ -158,7 +158,10 @@ def _should_reimport(existing: Optional[GlobalRecipe]) -> bool:
         return True
     if not existing.last_fetched_at:
         return True
-    return datetime.utcnow() - existing.last_fetched_at > timedelta(days=FRESH_DAYS)
+    last_fetched_at = existing.last_fetched_at
+    if last_fetched_at.tzinfo is None:
+        last_fetched_at = last_fetched_at.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - last_fetched_at > timedelta(days=FRESH_DAYS)
 
 
 def _to_recipe_payload(global_recipe: GlobalRecipe) -> Dict[str, Any]:
