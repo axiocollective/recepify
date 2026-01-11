@@ -20,7 +20,9 @@ import { colors, radius, spacing, typography, shadow } from "../theme/theme";
 import { RecipeThumbnail } from "./RecipeThumbnail";
 import { RecipeAssistantChat } from "./RecipeAssistantChat";
 import { AddToCollectionModal } from "./AddToCollectionModal";
+import { LanguagePickerModal } from "./LanguagePickerModal";
 import { useApp } from "../data/AppContext";
+import { type LanguageValue } from "../data/languages";
 import {
   getAiLimitMessage,
   getAiLimitTitle,
@@ -40,7 +42,7 @@ interface RecipeDetailProps {
   onAddToShoppingList?: (ingredients: Ingredient[], recipeName: string, recipeId: string) => void;
   onApproveImport?: () => void;
   onOptimizeWithAI?: () => void;
-  onTranslateWithAI?: () => void;
+  onTranslateWithAI?: (targetLanguage: "en" | "de") => void;
   isNewImport?: boolean;
   aiDisabled?: boolean;
   onUpdateViewSettings?: (payload: { servings: number; unitSystem: "metric" | "us" }) => void;
@@ -71,6 +73,8 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [screenSize, setScreenSize] = useState({ width: 0, height: 0 });
+  const [isTranslatePickerOpen, setIsTranslatePickerOpen] = useState(false);
+  const [translateTarget, setTranslateTarget] = useState<LanguageValue>("English");
   const assistantPosition = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const assistantOffset = useRef({ x: 0, y: 0 });
   const assistantSize = 64;
@@ -90,6 +94,10 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
     navigateTo,
     userLanguage,
   } = useApp();
+
+  useEffect(() => {
+    setTranslateTarget(userLanguage);
+  }, [userLanguage]);
   const translationLimitReached = isTranslationLimitReached(
     plan,
     usageSummary,
@@ -112,7 +120,6 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
     trialAiMessagesRemaining
   );
   const isPremium = plan === "premium";
-  const translateBlocked = aiDisabled || translationLimitReached;
   const optimizeBlocked = aiDisabled || optimizationLimitReached;
   const aiLimitMessage = aiDisabled
     ? "AI features are disabled on your plan. Upgrade to re-enable ChefGPT."
@@ -507,9 +514,7 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
     hasNutrition &&
     !hasServings;
   const hasMissingDetails = !isIncomplete && !looksGood;
-  const preferredLanguage = userLanguage?.toLowerCase().startsWith("de") ? "de" : "en";
   const recipeLanguage = detectRecipeLanguage(recipe);
-  const showTranslateAction = recipeLanguage !== preferredLanguage;
 
   const importReviewCopy = isIncomplete
     ? {
@@ -726,45 +731,23 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
                     </View>
                   </Pressable>
                 ) : (
-                  showTranslateAction && (
-                    <Pressable
-                      style={[
-                        styles.importTranslateButton,
-                        translateBlocked && styles.importTranslateButtonDisabled,
-                      ]}
-                      onPress={() => {
-                        if (translateBlocked) {
-                          showTranslateLimitAlert();
-                          return;
-                        }
-                        onTranslateWithAI?.();
-                      }}
+                  <Pressable
+                    style={styles.importTranslateButton}
+                    onPress={() => {
+                      setTranslateTarget(userLanguage);
+                      setIsTranslatePickerOpen(true);
+                    }}
+                  >
+                    <LinearGradient
+                      colors={["#3b82f6", "#2563eb"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.importTranslateButtonInner}
                     >
-                      <LinearGradient
-                        colors={translateBlocked ? [colors.gray200, colors.gray200] : ["#3b82f6", "#2563eb"]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={[
-                          styles.importTranslateButtonInner,
-                          translateBlocked && styles.importTranslateButtonInnerDisabled,
-                        ]}
-                      >
-                        <Ionicons
-                          name="language-outline"
-                          size={16}
-                          color={translateBlocked ? colors.gray500 : colors.white}
-                        />
-                        <Text
-                          style={[
-                            styles.importTranslateText,
-                            translateBlocked && styles.importTranslateTextDisabled,
-                          ]}
-                        >
-                          Translate to {preferredLanguage === "en" ? "English" : "German"}
-                        </Text>
-                      </LinearGradient>
-                    </Pressable>
-                  )
+                      <Ionicons name="language-outline" size={16} color={colors.white} />
+                      <Text style={styles.importTranslateText}>Translate</Text>
+                    </LinearGradient>
+                  </Pressable>
                 )}
                 <Text style={styles.importReviewFootnote}>• Using AI features costs 1 credit each •</Text>
               </View>
@@ -1068,6 +1051,23 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
         />
       )}
 
+      <LanguagePickerModal
+        visible={isTranslatePickerOpen}
+        selected={translateTarget}
+        currentLanguageCode={recipeLanguage}
+        onSelect={setTranslateTarget}
+        onConfirm={(target) => {
+          if (aiDisabled || translationLimitReached) {
+            setIsTranslatePickerOpen(false);
+            showTranslateLimitAlert();
+            return;
+          }
+          setIsTranslatePickerOpen(false);
+          onTranslateWithAI?.(target);
+        }}
+        onClose={() => setIsTranslatePickerOpen(false)}
+      />
+
       {!isIncomplete && (
         <>
           <RecipeAssistantChat
@@ -1311,9 +1311,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     overflow: "hidden",
   },
-  importTranslateButtonDisabled: {
-    opacity: 0.85,
-  },
   importTranslateButtonInner: {
     flexDirection: "row",
     alignItems: "center",
@@ -1322,16 +1319,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     minHeight: 52,
   },
-  importTranslateButtonInnerDisabled: {
-    backgroundColor: colors.gray200,
-  },
   importTranslateText: {
     ...typography.bodySmall,
     color: colors.white,
     fontWeight: "600",
-  },
-  importTranslateTextDisabled: {
-    color: colors.gray500,
   },
   importReviewFootnote: {
     textAlign: "center",

@@ -17,10 +17,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { Ingredient, Recipe } from "../data/types";
 import { colors, radius, spacing, typography, shadow } from "../theme/theme";
+import { LanguagePickerModal } from "./LanguagePickerModal";
 import { askRecipeAssistant, trackUsageEvent } from "../services/assistantApi";
 import { fetchUsageSummary } from "../services/supabaseData";
 import { POPULAR_RECIPE_TAG_COUNT, RECIPE_TAGS } from "../../../../packages/shared/constants/recipe-tags";
 import { useApp } from "../data/AppContext";
+import { type LanguageCode, type LanguageValue } from "../data/languages";
 import {
   getOptimizationLimitMessage,
   getTranslationLimitMessage,
@@ -43,6 +45,7 @@ interface RecipeEditProps {
     recipe: Recipe;
   }) => void;
   suppressAiAlerts?: boolean;
+  initialTranslateLanguage?: LanguageCode;
 }
 
 const popularTags = RECIPE_TAGS.slice(0, POPULAR_RECIPE_TAG_COUNT);
@@ -58,6 +61,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   onAiActionHandled,
   onAiActionComplete,
   suppressAiAlerts = false,
+  initialTranslateLanguage,
 }) => {
   const normalizeTimeValue = (value?: string | null) => {
     if (!value) return "";
@@ -80,6 +84,8 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   const [isSuggestingTags, setIsSuggestingTags] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [isTranslatePickerOpen, setIsTranslatePickerOpen] = useState(false);
+  const [translateTarget, setTranslateTarget] = useState<LanguageValue>("English");
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [disclaimerDetail, setDisclaimerDetail] = useState<string | null>(null);
   const [newTagDraft, setNewTagDraft] = useState("");
@@ -98,6 +104,10 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     navigateTo,
     userLanguage,
   } = useApp();
+
+  useEffect(() => {
+    setTranslateTarget(userLanguage);
+  }, [userLanguage]);
   const optimizationLimitReached = isOptimizationLimitReached(
     plan,
     usageSummary,
@@ -727,7 +737,6 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   const canEstimateTotalTime = hasIngredients && hasSteps;
   const recipeLanguage = getRecipeLanguage(formData);
   const preferredLanguage = userLanguage?.toLowerCase().startsWith("de") ? "de" : "en";
-  const isInPreferredLanguage = recipeLanguage === preferredLanguage;
 
   const visibleTags = useMemo(
     () => (showAllTags ? RECIPE_TAGS : RECIPE_TAGS.slice(0, POPULAR_RECIPE_TAG_COUNT)),
@@ -832,13 +841,13 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     refreshUsageSummary();
   };
 
-  const handleTranslate = async () => {
+  const handleTranslate = async (targetLanguage: LanguageCode) => {
     if (isTranslating || isOptimizing) return;
     if (aiDisabled || translationLimitReached) {
       showTranslateLimitAlert();
       return;
     }
-    if (isInPreferredLanguage) {
+    if (targetLanguage === recipeLanguage) {
       return;
     }
     try {
@@ -865,7 +874,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     }
     try {
       await runWithMinimumDuration(2000, async () => {
-        await handleTranslateRecipe(recipeLanguage, preferredLanguage);
+        await handleTranslateRecipe(recipeLanguage, targetLanguage);
       });
       const actionsUsed = await getActionUsedDelta(actionsBefore, "translationCount");
       if (suppressAiAlerts) {
@@ -1434,12 +1443,12 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     if (!initialAiAction || didAutoRun.current || hideAi) return;
     didAutoRun.current = true;
     if (initialAiAction === "translate") {
-      void handleTranslate();
+      void handleTranslate(initialTranslateLanguage ?? preferredLanguage);
     } else {
       void handleOptimize();
     }
     onAiActionHandled?.();
-  }, [handleOptimize, handleTranslate, initialAiAction, onAiActionHandled]);
+  }, [handleOptimize, handleTranslate, initialAiAction, initialTranslateLanguage, onAiActionHandled, preferredLanguage]);
 
   const handleApproveImport = () => {
     const updated = { ...formData, isImported: true, isImportApproved: true };
@@ -1466,8 +1475,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
 
   const processingActive = isOptimizing || isTranslating;
   const optimizeDisabled = isOptimizing || isTranslating || aiDisabled || optimizationLimitReached;
-  const translateDisabled =
-    isOptimizing || isTranslating || aiDisabled || translationLimitReached || isInPreferredLanguage;
+  const translateBusy = isOptimizing || isTranslating;
   const contentScale = contentAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 0.98],
@@ -1513,27 +1521,24 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
           {!hideAi && (
             <View style={styles.aiTopRow}>
               <Pressable
-                onPress={handleTranslate}
-                disabled={translateDisabled}
+                onPress={() => {
+                  if (translateBusy) return;
+                  setTranslateTarget(userLanguage);
+                  setIsTranslatePickerOpen(true);
+                }}
                 style={({ pressed }) => [
                   styles.aiTopButton,
-                  pressed && !translateDisabled && styles.aiTopButtonPressed,
+                  pressed && !translateBusy && styles.aiTopButtonPressed,
                 ]}
               >
                 <LinearGradient
-                  colors={translateDisabled ? [colors.gray200, colors.gray200] : ["#3b82f6", "#2563eb"]}
+                  colors={["#3b82f6", "#2563eb"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.aiTopGradient}
                 >
-                  <Ionicons
-                    name="language-outline"
-                    size={18}
-                    color={translateDisabled ? colors.gray500 : colors.white}
-                  />
-                  <Text style={[styles.aiTopText, translateDisabled && styles.aiTopTextDisabled]}>
-                    Translate
-                  </Text>
+                  <Ionicons name="language-outline" size={18} color={colors.white} />
+                  <Text style={styles.aiTopText}>Translate</Text>
                 </LinearGradient>
               </Pressable>
               <Pressable
@@ -1872,6 +1877,18 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
         </ScrollView>
       </Animated.View>
 
+      <LanguagePickerModal
+        visible={isTranslatePickerOpen}
+        selected={translateTarget}
+        currentLanguageCode={recipeLanguage}
+        onSelect={setTranslateTarget}
+        onConfirm={(target) => {
+          setIsTranslatePickerOpen(false);
+          void handleTranslate(target);
+        }}
+        onClose={() => setIsTranslatePickerOpen(false)}
+      />
+
       {processingActive && (
         <View style={styles.processingOverlay} pointerEvents="none">
           <View style={styles.processingCardWrap}>
@@ -1925,7 +1942,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
                   {isTranslating ? "ChefGPT is translating..." : "ChefGPT does its magic"}
                 </Text>
                 <Text style={styles.processingSubtitle}>
-                  {isTranslating ? "Translating your recipe to English" : "Analyzing and optimizing your recipe"}
+                  {isTranslating ? "Translating your recipe" : "Analyzing and optimizing your recipe"}
                 </Text>
                 <View style={styles.processingDots}>
                   <Animated.View

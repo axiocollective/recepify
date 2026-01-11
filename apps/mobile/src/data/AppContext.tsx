@@ -12,6 +12,7 @@ import {
   ShoppingListItem,
   UsageSummary,
 } from "./types";
+import { getLanguageValue, type LanguageValue } from "./languages";
 import {
   getPlanLimits,
   getImportLimitMessage,
@@ -60,7 +61,7 @@ interface AppContextValue {
   connectedAccounts: Record<string, boolean>;
   userName: string;
   userEmail: string;
-  userLanguage: "English" | "German";
+  userLanguage: LanguageValue;
   userCountry: string;
   needsOnboarding: boolean;
   profileReady: boolean;
@@ -90,7 +91,7 @@ interface AppContextValue {
   updateProfile: (payload: {
     name?: string;
     email?: string;
-    language?: "English" | "German";
+    language?: LanguageValue;
     country?: string;
     aiDisabled?: boolean;
     plan?: PlanTier;
@@ -145,7 +146,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
-  const [userLanguage, setUserLanguage] = useState<"English" | "German">("English");
+  const [userLanguage, setUserLanguage] = useState<LanguageValue>("English");
   const [userCountry, setUserCountry] = useState("United States");
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [profileReady, setProfileReady] = useState(false);
@@ -372,7 +373,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]);
       if (profile) {
         setUserName(profile.name ?? "");
-        setUserLanguage(profile.language === "German" ? "German" : "English");
+        setUserLanguage(getLanguageValue(profile.language ?? "English"));
         setUserCountry(profile.country ?? "United States");
         setNeedsOnboarding(!profile.language || !profile.country);
         const nextAiDisabled = Boolean(profile.ai_disabled);
@@ -882,7 +883,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     void ensureProfile({ subscriptionEndsAt: endsAt, subscriptionStatus: "canceled" });
   }, []);
 
-  const updateProfile = useCallback((payload: { name?: string; email?: string; language?: "English" | "German"; country?: string; aiDisabled?: boolean; plan?: PlanTier; subscriptionPeriod?: "monthly" | "yearly" }) => {
+  const updateProfile = useCallback((payload: { name?: string; email?: string; language?: LanguageValue; country?: string; aiDisabled?: boolean; plan?: PlanTier; subscriptionPeriod?: "monthly" | "yearly" }) => {
     const nextName = payload.name ?? userName;
     const nextLanguage = payload.language ?? userLanguage;
     const nextCountry = payload.country ?? userCountry;

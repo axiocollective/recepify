@@ -3,15 +3,16 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, shadow, spacing, typography } from "../theme/theme";
 import { PRIVACY_POLICY_TEXT, PRIVACY_POLICY_TITLE, TERMS_OF_USE_TEXT, TERMS_OF_USE_TITLE } from "../content/legal";
+import { LANGUAGE_OPTIONS, type LanguageValue } from "../data/languages";
 
 interface ProfileProps {
   name: string;
   email: string;
-  language: "English" | "German";
+  language: LanguageValue;
   country: string;
   onNameChange: (value: string) => void;
   onEmailChange: (value: string) => void;
-  onLanguageChange: (value: "English" | "German") => void;
+  onLanguageChange: (value: LanguageValue) => void;
   onCountryChange: (value: string) => void;
   onLogout: () => void;
   onDeleteAccount: () => Promise<void>;
@@ -58,7 +59,7 @@ export const Profile: React.FC<ProfileProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [countryQuery, setCountryQuery] = useState("");
 
-  const languageOptions: Array<"English" | "German"> = ["English", "German"];
+  const languageOptions = LANGUAGE_OPTIONS.map((option) => option.value);
   const countryOptions = [
     "Austria",
     "Belgium",

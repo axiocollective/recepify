@@ -13,12 +13,13 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useApp } from "../data/AppContext";
 import { colors, radius, shadow, spacing, typography } from "../theme/theme";
+import { LANGUAGE_OPTIONS, type LanguageValue } from "../data/languages";
 
 interface OnboardingWelcomeProps {
   onContinue: () => void;
 }
 
-const LANGUAGES = ["English", "Deutsch"] as const;
+const LANGUAGES = LANGUAGE_OPTIONS;
 const COUNTRIES = [
   "United States",
   "Germany",
@@ -46,7 +47,7 @@ const COUNTRIES = [
 export const OnboardingWelcome: React.FC<OnboardingWelcomeProps> = ({ onContinue }) => {
   const { updateProfile } = useApp();
   const [name, setName] = useState("");
-  const [selectedLanguage, setSelectedLanguage] = useState<(typeof LANGUAGES)[number]>("English");
+  const [selectedLanguage, setSelectedLanguage] = useState<LanguageValue>("English");
   const [selectedCountry, setSelectedCountry] = useState("United States");
   const [activeMenu, setActiveMenu] = useState<"language" | "country" | null>(null);
   const [countrySearch, setCountrySearch] = useState("");
@@ -63,8 +64,7 @@ export const OnboardingWelcome: React.FC<OnboardingWelcomeProps> = ({ onContinue
   };
 
   const handleContinue = () => {
-    const languageValue = selectedLanguage === "Deutsch" ? "German" : "English";
-    updateProfile({ name: name.trim(), language: languageValue, country: selectedCountry });
+    updateProfile({ name: name.trim(), language: selectedLanguage, country: selectedCountry });
     onContinue();
   };
 
@@ -173,17 +173,17 @@ export const OnboardingWelcome: React.FC<OnboardingWelcomeProps> = ({ onContinue
                 <Text style={styles.menuTitle}>Choose your language</Text>
                 {LANGUAGES.map((language) => (
                   <Pressable
-                    key={language}
+                    key={language.value}
                     onPress={() => {
-                      setSelectedLanguage(language);
+                      setSelectedLanguage(language.value);
                       closeMenus();
                     }}
                     style={[
                       styles.dropdownItem,
-                      selectedLanguage === language && styles.dropdownItemActive,
+                      selectedLanguage === language.value && styles.dropdownItemActive,
                     ]}
                   >
-                    <Text style={styles.dropdownItemText}>{language}</Text>
+                    <Text style={styles.dropdownItemText}>{language.label}</Text>
                   </Pressable>
                 ))}
               </>

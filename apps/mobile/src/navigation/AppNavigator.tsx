@@ -100,6 +100,7 @@ export const AppNavigator: React.FC = () => {
   const [myRecipesInitialTag, setMyRecipesInitialTag] = React.useState<string | null>(null);
   const [newlyImportedRecipeId, setNewlyImportedRecipeId] = React.useState<string | null>(null);
   const [pendingAiAction, setPendingAiAction] = React.useState<"optimize" | "translate" | null>(null);
+  const [pendingTranslateLanguage, setPendingTranslateLanguage] = React.useState<"en" | "de" | null>(null);
   const [aiReturnToDetail, setAiReturnToDetail] = React.useState(false);
   const [aiCompletionNotice, setAiCompletionNotice] = React.useState<{
     type: "optimize" | "translate";
@@ -683,8 +684,9 @@ export const AppNavigator: React.FC = () => {
               setAiReturnToDetail(true);
               setCurrentScreen("recipeEdit");
             }}
-            onTranslateWithAI={() => {
+            onTranslateWithAI={(targetLanguage) => {
               setPendingAiAction("translate");
+              setPendingTranslateLanguage(targetLanguage);
               setAiReturnToDetail(true);
               setCurrentScreen("recipeEdit");
             }}
@@ -727,7 +729,11 @@ export const AppNavigator: React.FC = () => {
             isNewRecipe={!recipes.some((recipe) => recipe.id === selectedRecipe.id)}
             aiDisabled={aiDisabled}
             initialAiAction={pendingAiAction}
-            onAiActionHandled={() => setPendingAiAction(null)}
+            initialTranslateLanguage={pendingTranslateLanguage ?? undefined}
+            onAiActionHandled={() => {
+              setPendingAiAction(null);
+              setPendingTranslateLanguage(null);
+            }}
             suppressAiAlerts={aiReturnToDetail}
             onAiActionComplete={(payload) => {
               if (!aiReturnToDetail) return;
