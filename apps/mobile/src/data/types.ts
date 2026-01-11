@@ -59,6 +59,8 @@ export interface Recipe {
   notes?: string;
   addedDate?: Date;
   nutrition?: NutritionInfo;
+  globalRecipeId?: string;
+  languageCode?: string;
 }
 
 export type Screen =

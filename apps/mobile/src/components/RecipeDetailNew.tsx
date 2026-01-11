@@ -1,5 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
 import { LinearGradient } from "expo-linear-gradient";
@@ -496,7 +506,15 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
 
   return (
     <>
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 200 }}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.select({ ios: "padding", android: undefined })}
+      >
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={{ paddingBottom: 200 }}
+          keyboardShouldPersistTaps="handled"
+        >
         <View style={styles.hero}>
           <RecipeThumbnail imageUrl={recipe.thumbnail} title={recipe.title} style={styles.heroImage} />
           <View style={styles.heroOverlay} />
@@ -976,7 +994,8 @@ export const RecipeDetailNew: React.FC<RecipeDetailProps> = ({
             <Text style={styles.primaryButtonText}>Start Cooking</Text>
           </Pressable>
         </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {canManageCollections && (
         <AddToCollectionModal

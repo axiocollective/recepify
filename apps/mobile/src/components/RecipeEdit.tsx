@@ -1,5 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Animated,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -1462,9 +1474,16 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   });
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.select({ ios: "padding", android: undefined })}
+    >
       <Animated.View style={[styles.container, { opacity: contentOpacity, transform: [{ scale: contentScale }] }]}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} stickyHeaderIndices={[0]}>
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 120 }}
+          stickyHeaderIndices={[0]}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Pressable onPress={onBack} style={styles.headerButton}>
@@ -1997,7 +2016,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
           </View>
         </Animated.View>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 

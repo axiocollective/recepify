@@ -176,3 +176,77 @@ class UsageEvent(SQLModel, table=True):
     cost_usd: Optional[float] = Field(default=None)
     metadata_: dict = Field(default_factory=dict, sa_column=Column("metadata", JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class GlobalRecipe(SQLModel, table=True):
+    __tablename__ = "global_recipes"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    source_url: str
+    source_url_normalized: Optional[str] = Field(default=None, index=True)
+    source_domain: Optional[str] = None
+    source_platform: Optional[str] = None
+    language_code: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    meal_type: Optional[str] = None
+    difficulty: Optional[str] = None
+    prep_time: Optional[str] = None
+    cook_time: Optional[str] = None
+    total_time: Optional[str] = None
+    servings: Optional[str] = None
+    nutrition_calories: Optional[str] = None
+    nutrition_protein: Optional[str] = None
+    nutrition_carbs: Optional[str] = None
+    nutrition_fat: Optional[str] = None
+    media_video_url: Optional[str] = None
+    media_image_url: Optional[str] = None
+    tags: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    ingredients: List[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    steps: List[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    quality_score: int = Field(default=0)
+    is_complete: bool = Field(default=False)
+    missing_fields: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    last_fetched_at: Optional[datetime] = None
+    canonical_hash: Optional[str] = Field(default=None, index=True)
+    canonical_group_id: Optional[UUID] = Field(default=None, index=True)
+    supersedes_id: Optional[UUID] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class GlobalRecipe(SQLModel, table=True):
+    __tablename__ = "global_recipes"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    source_url: str
+    source_url_normalized: Optional[str] = Field(default=None, index=True)
+    source_domain: Optional[str] = None
+    source_platform: Optional[str] = None
+    language_code: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    meal_type: Optional[str] = None
+    difficulty: Optional[str] = None
+    prep_time: Optional[str] = None
+    cook_time: Optional[str] = None
+    total_time: Optional[str] = None
+    servings: Optional[str] = None
+    nutrition_calories: Optional[str] = None
+    nutrition_protein: Optional[str] = None
+    nutrition_carbs: Optional[str] = None
+    nutrition_fat: Optional[str] = None
+    media_video_url: Optional[str] = None
+    media_image_url: Optional[str] = None
+    tags: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    ingredients: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    steps: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    quality_score: int = Field(default=0)
+    is_complete: bool = Field(default=False)
+    missing_fields: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    last_fetched_at: Optional[datetime] = None
+    canonical_hash: Optional[str] = Field(default=None, index=True)
+    canonical_group_id: Optional[UUID] = Field(default=None, index=True)
+    supersedes_id: Optional[UUID] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)

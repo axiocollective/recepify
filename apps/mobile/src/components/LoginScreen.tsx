@@ -1,5 +1,16 @@
 import React, { useState } from "react";
-import { Image, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../services/supabaseClient";
 import { colors, radius, shadow, spacing, typography } from "../theme/theme";
@@ -60,81 +71,90 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLogin }) => 
 
   return (
     <SafeAreaView style={styles.container}>
-      <Pressable style={styles.backButton} onPress={onBack}>
-        <Ionicons name="arrow-back" size={20} color={colors.gray900} />
-      </Pressable>
+      <KeyboardAvoidingView
+        style={styles.keyboard}
+        behavior={Platform.select({ ios: "padding", android: undefined })}
+      >
+        <Pressable style={styles.backButton} onPress={onBack}>
+          <Ionicons name="arrow-back" size={20} color={colors.gray900} />
+        </Pressable>
 
-      <View style={styles.content}>
-        <View style={styles.logo}>
-          <View style={styles.logoImageWrap}>
-            <Image source={require("../../assets/logo.png")} style={styles.logoImage} resizeMode="contain" />
-          </View>
-        </View>
-        <Text style={styles.title}>{isSignUp ? "Create Account" : "Sign In"}</Text>
-        <Text style={styles.subtitle}>
-          {isSignUp ? "Create your Recipefy account with email" : "Enter your credentials to continue"}
-        </Text>
-
-        <View style={styles.form}>
-          <View style={styles.field}>
-            <Text style={styles.label}>Username or Email</Text>
-            <View style={styles.inputWrap}>
-              <Ionicons name="person-outline" size={20} color={colors.gray400} style={styles.inputIcon} />
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Enter your email"
-                placeholderTextColor={colors.gray400}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                style={styles.input}
-              />
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.logo}>
+            <View style={styles.logoImageWrap}>
+              <Image source={require("../../assets/logo.png")} style={styles.logoImage} resizeMode="contain" />
             </View>
           </View>
+          <Text style={styles.title}>{isSignUp ? "Create Account" : "Sign In"}</Text>
+          <Text style={styles.subtitle}>
+            {isSignUp ? "Create your Recipefy account with email" : "Enter your credentials to continue"}
+          </Text>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputWrap}>
-              <Ionicons name="mail-outline" size={20} color={colors.gray400} style={styles.inputIcon} />
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                placeholderTextColor={colors.gray400}
-                secureTextEntry
-                style={styles.input}
-              />
+          <View style={styles.form}>
+            <View style={styles.field}>
+              <Text style={styles.label}>Username or Email</Text>
+              <View style={styles.inputWrap}>
+                <Ionicons name="person-outline" size={20} color={colors.gray400} style={styles.inputIcon} />
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Enter your email"
+                  placeholderTextColor={colors.gray400}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  style={styles.input}
+                />
+              </View>
             </View>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.inputWrap}>
+                <Ionicons name="mail-outline" size={20} color={colors.gray400} style={styles.inputIcon} />
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Enter your password"
+                  placeholderTextColor={colors.gray400}
+                  secureTextEntry
+                  style={styles.input}
+                />
+              </View>
+            </View>
+
+            {infoMessage && <Text style={styles.infoText}>{infoMessage}</Text>}
+            {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.submit,
+                pressed && styles.buttonPressed,
+                isSubmitting && styles.submitDisabled,
+              ]}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+            >
+              <Text style={styles.submitText}>
+                {isSubmitting ? "Working..." : isSignUp ? "Create account" : "Sign In"}
+              </Text>
+            </Pressable>
+
+            {isSignUp ? (
+              <Pressable onPress={() => setIsSignUp(false)}>
+                <Text style={styles.toggleText}>Already have an account? Sign in</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={() => setIsSignUp(true)}>
+                <Text style={styles.toggleText}>No account yet? Create one</Text>
+              </Pressable>
+            )}
           </View>
-
-          {infoMessage && <Text style={styles.infoText}>{infoMessage}</Text>}
-          {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.submit,
-              pressed && styles.buttonPressed,
-              isSubmitting && styles.submitDisabled,
-            ]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            <Text style={styles.submitText}>
-              {isSubmitting ? "Working..." : isSignUp ? "Create account" : "Sign In"}
-            </Text>
-          </Pressable>
-
-          {isSignUp ? (
-            <Pressable onPress={() => setIsSignUp(false)}>
-              <Text style={styles.toggleText}>Already have an account? Sign in</Text>
-            </Pressable>
-          ) : (
-            <Pressable onPress={() => setIsSignUp(true)}>
-              <Text style={styles.toggleText}>No account yet? Create one</Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -146,6 +166,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xxl,
   },
+  keyboard: {
+    flex: 1,
+  },
   backButton: {
     width: 44,
     height: 44,
@@ -155,7 +178,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.lg,

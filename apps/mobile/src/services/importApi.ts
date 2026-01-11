@@ -42,6 +42,9 @@ type BackendRecipe = {
 type ImportResponse = {
   recipe: BackendRecipe;
   videoPath?: string | null;
+  globalRecipeId?: string | null;
+  languageCode?: string | null;
+  cacheHit?: boolean | null;
 };
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -218,6 +221,8 @@ const mapImportedRecipe = (payload: ImportResponse): Recipe => {
       carbs: recipe.nutritionCarbs || undefined,
       fat: recipe.nutritionFat || undefined,
     },
+    globalRecipeId: payload.globalRecipeId ?? undefined,
+    languageCode: payload.languageCode ?? undefined,
   };
 };
 

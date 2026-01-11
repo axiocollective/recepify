@@ -82,6 +82,8 @@ const mapRecipeRow = (
     addedDate: row.created_at ? new Date(row.created_at) : undefined,
     isImported: row.is_imported ?? false,
     isImportApproved: row.is_import_approved ?? false,
+    globalRecipeId: row.global_recipe_id ?? undefined,
+    languageCode: row.language_code ?? undefined,
     nutrition: {
       calories: row.nutrition_calories ?? undefined,
       protein: row.nutrition_protein ?? undefined,
@@ -291,6 +293,8 @@ export const saveRecipe = async (recipe: Recipe): Promise<Recipe> => {
     is_imported: recipe.isImported ?? false,
     is_import_approved: recipe.isImportApproved ?? false,
     raw_import_data: (recipe as any).rawImportData ?? null,
+    global_recipe_id: recipe.globalRecipeId ?? null,
+    language_code: recipe.languageCode ?? null,
     prep_time: recipe.prepTime ?? null,
     cook_time: recipe.cookTime ?? null,
     total_time: recipe.totalTime ?? null,

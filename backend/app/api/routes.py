@@ -49,6 +49,7 @@ from ..services import import_tiktok as tiktok_service
 from ..services import import_youtube as youtube_service
 from ..services import import_web as web_service
 from ..services.import_utils import get_openai_client
+from ..services.import_cache import import_with_cache, detect_language
 
 
 _SETTINGS = get_settings()
@@ -65,6 +66,9 @@ class ImportRequest(BaseModel):
 class ImportResponse(BaseModel):
     recipe: Union[RecipeReadDTO, Dict[str, Any]]
     videoPath: Optional[str] = None
+    globalRecipeId: Optional[UUID] = None
+    languageCode: Optional[str] = None
+    cacheHit: bool = False
 
 
 class RecipeAssistantRecipe(BaseModel):
@@ -1101,7 +1105,12 @@ def import_web(
 ) -> ImportResponse:
     request_id = uuid4()
     try:
-        recipe_data = web_service.import_web(payload.url)
+        recipe_data, _, global_recipe, cache_hit, language_code = import_with_cache(
+            session,
+            payload.url,
+            "web",
+            lambda url: (web_service.import_web(url), None),
+        )
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     except ValueError as exc:
@@ -1119,7 +1128,12 @@ def import_web(
                 events=_extract_usage_events(recipe_data),
                 import_credits_used=1 if has_data else 0,
             )
-    return ImportResponse(recipe=recipe_data)
+    return ImportResponse(
+        recipe=recipe_data,
+        globalRecipeId=global_recipe.id if global_recipe else None,
+        languageCode=language_code,
+        cacheHit=cache_hit,
+    )
 
 
 @router.post("/import/tiktok", response_model=ImportResponse)
@@ -1131,7 +1145,12 @@ def import_tiktok(
 ) -> ImportResponse:
     request_id = uuid4()
     try:
-        recipe_data, video_path = tiktok_service.import_tiktok(payload.url)
+        recipe_data, video_path, global_recipe, cache_hit, language_code = import_with_cache(
+            session,
+            payload.url,
+            "tiktok",
+            lambda url: tiktok_service.import_tiktok(url),
+        )
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     has_data = _has_import_data(recipe_data)
@@ -1147,7 +1166,13 @@ def import_tiktok(
                 events=_extract_usage_events(recipe_data),
                 import_credits_used=1 if has_data else 0,
             )
-    return ImportResponse(recipe=recipe_data, videoPath=video_path)
+    return ImportResponse(
+        recipe=recipe_data,
+        videoPath=video_path,
+        globalRecipeId=global_recipe.id if global_recipe else None,
+        languageCode=language_code,
+        cacheHit=cache_hit,
+    )
 
 
 @router.post("/import/instagram", response_model=ImportResponse)
@@ -1159,7 +1184,12 @@ def import_instagram(
 ) -> ImportResponse:
     request_id = uuid4()
     try:
-        recipe_data, video_path = instagram_service.import_instagram(payload.url)
+        recipe_data, video_path, global_recipe, cache_hit, language_code = import_with_cache(
+            session,
+            payload.url,
+            "instagram",
+            lambda url: instagram_service.import_instagram(url),
+        )
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     has_data = _has_import_data(recipe_data)
@@ -1175,7 +1205,13 @@ def import_instagram(
                 events=_extract_usage_events(recipe_data),
                 import_credits_used=1 if has_data else 0,
             )
-    return ImportResponse(recipe=recipe_data, videoPath=video_path)
+    return ImportResponse(
+        recipe=recipe_data,
+        videoPath=video_path,
+        globalRecipeId=global_recipe.id if global_recipe else None,
+        languageCode=language_code,
+        cacheHit=cache_hit,
+    )
 
 
 @router.post("/import/pinterest", response_model=ImportResponse)
@@ -1187,7 +1223,12 @@ def import_pinterest(
 ) -> ImportResponse:
     request_id = uuid4()
     try:
-        recipe_data = pinterest_service.import_pinterest(payload.url)
+        recipe_data, _, global_recipe, cache_hit, language_code = import_with_cache(
+            session,
+            payload.url,
+            "pinterest",
+            lambda url: (pinterest_service.import_pinterest(url), None),
+        )
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     except ValueError as exc:
@@ -1205,7 +1246,12 @@ def import_pinterest(
                 events=_extract_usage_events(recipe_data),
                 import_credits_used=1 if has_data else 0,
             )
-    return ImportResponse(recipe=recipe_data)
+    return ImportResponse(
+        recipe=recipe_data,
+        globalRecipeId=global_recipe.id if global_recipe else None,
+        languageCode=language_code,
+        cacheHit=cache_hit,
+    )
 
 
 @router.post("/import/youtube", response_model=ImportResponse)
@@ -1217,7 +1263,12 @@ def import_youtube(
 ) -> ImportResponse:
     request_id = uuid4()
     try:
-        recipe_data = youtube_service.import_youtube(payload.url)
+        recipe_data, _, global_recipe, cache_hit, language_code = import_with_cache(
+            session,
+            payload.url,
+            "youtube",
+            lambda url: (youtube_service.import_youtube(url), None),
+        )
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
     except ValueError as exc:
@@ -1235,7 +1286,12 @@ def import_youtube(
                 events=_extract_usage_events(recipe_data),
                 import_credits_used=1 if has_data else 0,
             )
-    return ImportResponse(recipe=recipe_data)
+    return ImportResponse(
+        recipe=recipe_data,
+        globalRecipeId=global_recipe.id if global_recipe else None,
+        languageCode=language_code,
+        cacheHit=cache_hit,
+    )
 
 
 @router.post("/import/scan", response_model=ImportResponse)
@@ -1277,6 +1333,7 @@ async def import_scan(
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     has_data = _has_import_data(recipe_data)
+    language_code = detect_language(recipe_data)
     if x_user_email or x_user_id:
         owner_id = _resolve_user_id(x_user_email, x_user_id)
         if has_data:
@@ -1289,7 +1346,7 @@ async def import_scan(
                 events=_extract_usage_events(recipe_data),
                 import_credits_used=1 if has_data else 0,
             )
-    return ImportResponse(recipe=recipe_data)
+    return ImportResponse(recipe=recipe_data, languageCode=language_code)
 
 def _has_import_data(recipe_data: Dict[str, Any]) -> bool:
     ingredients = recipe_data.get("ingredients") or []
