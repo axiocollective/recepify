@@ -37,6 +37,7 @@ type RecipeAssistantRequest = {
 
 type RecipeAssistantResponse = {
   reply: string;
+  model?: string | null;
 };
 
 type UsageTrackRequest = {

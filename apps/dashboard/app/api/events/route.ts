@@ -86,7 +86,6 @@ export async function GET(request: Request) {
   const eventType = searchParams.get("eventType");
   const source = searchParams.get("source");
   const model = searchParams.get("model");
-  const usageContext = searchParams.get("usageContext");
   const start = normalizeDate(searchParams.get("start"), "start");
   const end = normalizeDate(searchParams.get("end"), "end");
   const minCredits = parseNumber(searchParams.get("minCredits"));
@@ -119,12 +118,23 @@ export async function GET(request: Request) {
   } else if (ownerIds) {
     query = query.in("owner_id", ownerIds);
   }
-  if (eventType) query = query.eq("event_type", eventType);
+  if (eventType) {
+    if (eventType === "translation" || eventType === "translate") {
+      query = query
+        .eq("event_type", "ai_assistant")
+        .filter("metadata->>usage_context", "eq", "translated_with_ai");
+    } else if (eventType === "optimization" || eventType === "optimize") {
+      query = query
+        .eq("event_type", "ai_assistant")
+        .filter("metadata->>usage_context", "eq", "optimized_with_ai");
+    } else {
+      query = query.eq("event_type", eventType);
+    }
+  }
   if (source) query = query.eq("source", source);
   if (model) query = query.eq("model_name", model);
   if (start) query = query.gte("created_at", start);
   if (end) query = query.lte("created_at", end);
-  if (usageContext) query = query.filter("metadata->>usage_context", "eq", usageContext);
   if (minCredits !== null) query = query.gte("ai_credits_used", minCredits);
   if (maxCredits !== null) query = query.lte("ai_credits_used", maxCredits);
 

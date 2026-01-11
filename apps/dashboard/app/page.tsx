@@ -89,7 +89,6 @@ export default function DashboardPage() {
     eventType: "",
     source: "",
     model: "",
-    usageContext: "",
   });
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [userQuery, setUserQuery] = useState("");
@@ -109,7 +108,6 @@ export default function DashboardPage() {
     if (filters.eventType) params.set("eventType", filters.eventType);
     if (filters.source) params.set("source", filters.source);
     if (filters.model) params.set("model", filters.model);
-    if (filters.usageContext) params.set("usageContext", filters.usageContext);
     const response = await fetch(`/api/summary?${params.toString()}`);
     if (!response.ok) return;
     const data = (await response.json()) as UsageSummary;
@@ -133,7 +131,6 @@ export default function DashboardPage() {
     if (filters.eventType) params.set("eventType", filters.eventType);
     if (filters.source) params.set("source", filters.source);
     if (filters.model) params.set("model", filters.model);
-    if (filters.usageContext) params.set("usageContext", filters.usageContext);
     if (filters.start) params.set("start", filters.start);
     if (filters.end) params.set("end", filters.end);
     const offset = mode === "append" ? eventsOffset : 0;
@@ -378,6 +375,7 @@ export default function DashboardPage() {
               <option value="scan">Scan</option>
               <option value="manual_add">Manual add</option>
               <option value="optimize">Optimize with AI</option>
+              <option value="translation">Translation</option>
               <option value="ai_assistant">AI assistant</option>
               <option value="import_credit">Import credit</option>
             </select>
@@ -427,20 +425,6 @@ export default function DashboardPage() {
               <option value="pinterest">Pinterest</option>
               <option value="youtube">YouTube</option>
               <option value="scan">Scan</option>
-            </select>
-          </label>
-          <label>
-            Usage context
-            <select
-              value={filters.usageContext}
-              onChange={(event) => setFilters((prev) => ({ ...prev, usageContext: event.target.value }))}
-            >
-              <option value="">All contexts</option>
-              <option value="import">Import</option>
-              <option value="translation">Translation</option>
-              <option value="optimization">Optimization</option>
-              <option value="chat">Chat</option>
-              <option value="optimized_with_ai">Optimized with AI</option>
             </select>
           </label>
         </div>

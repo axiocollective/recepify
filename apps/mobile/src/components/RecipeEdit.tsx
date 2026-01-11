@@ -43,6 +43,7 @@ interface RecipeEditProps {
     type: "optimize" | "translate";
     creditsUsed: number | null;
     recipe: Recipe;
+    modelName?: string | null;
   }) => void;
   suppressAiAlerts?: boolean;
   initialTranslateLanguage?: LanguageCode;
@@ -63,6 +64,16 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   suppressAiAlerts = false,
   initialTranslateLanguage,
 }) => {
+  const lastAiModelRef = useRef<string | null>(null);
+
+  const askAssistantWithModel = async (payload: Parameters<typeof askRecipeAssistant>[0]) => {
+    const response = await askRecipeAssistant(payload);
+    if (response.model) {
+      lastAiModelRef.current = response.model;
+    }
+    return response;
+  };
+
   const normalizeTimeValue = (value?: string | null) => {
     if (!value) return "";
     const match = String(value).match(/\d+/);
@@ -319,6 +330,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     const label = type === "translate" ? "translation credit" : "AI optimization credit";
     return `${formatActionsUsed(value)} ${label}${value === 1 ? "" : "s"} used.`;
   };
+  const formatAiModel = (modelName?: string | null) => (modelName ? `Model: ${modelName}` : "");
 
   const getActionUsedDelta = async (
     beforeCount: number,
@@ -349,13 +361,16 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
   const showAiResultAlert = (
     type: "translate" | "optimize",
     creditsUsed: number | null,
-    detail?: string | null
+    detail?: string | null,
+    modelName?: string | null
   ) => {
     const title = type === "translate" ? "Recipe translated" : "Recipe optimized";
+    const modelLine = formatAiModel(modelName);
+    const modelBlock = modelLine ? `\n\n${modelLine}` : "";
     const extra = detail ? `\n\n${detail}` : "";
     Alert.alert(
       title,
-      `Please review the changes before saving.\n\n${formatAiCreditUsage(creditsUsed, type)}${extra}`
+      `Please review the changes before saving.\n\n${formatAiCreditUsage(creditsUsed, type)}${modelBlock}${extra}`
     );
     setDisclaimerDetail(detail ?? null);
     setShowDisclaimer(false);
@@ -751,7 +766,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     setIsEstimatingTotalTime(true);
     const actionsBefore = usageSummary?.optimizationCount ?? 0;
     try {
-      const response = await askRecipeAssistant({
+      const response = await askAssistantWithModel({
         recipe: buildRecipePayload(snapshot),
         messages: [
           {
@@ -802,7 +817,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
 
   const handleTranslateRecipe = async (sourceLanguage: "de" | "en", targetLanguage: "de" | "en") => {
     const snapshot = formDataRef.current;
-    const response = await askRecipeAssistant({
+    const response = await askAssistantWithModel({
       recipe: buildRecipePayload(snapshot),
       messages: [
         {
@@ -877,14 +892,16 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
         await handleTranslateRecipe(recipeLanguage, targetLanguage);
       });
       const actionsUsed = await getActionUsedDelta(actionsBefore, "translationCount");
+      const modelName = lastAiModelRef.current;
       if (suppressAiAlerts) {
         onAiActionComplete?.({
           type: "translate",
           creditsUsed: actionsUsed,
           recipe: formDataRef.current,
+          modelName,
         });
       } else {
-        showAiResultAlert("translate", actionsUsed, null);
+        showAiResultAlert("translate", actionsUsed, null, modelName);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to translate the recipe right now.";
@@ -974,7 +991,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     const snapshotLanguage = getRecipeLanguage(snapshot);
     const snapshotLanguageLabel = snapshotLanguage === "de" ? "German" : "English";
     try {
-      const response = await askRecipeAssistant({
+      const response = await askAssistantWithModel({
         recipe: buildRecipePayload(snapshot),
         messages: [
           {
@@ -1028,7 +1045,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     try {
       const snapshotLanguage = getRecipeLanguage(snapshot);
       const snapshotLanguageLabel = snapshotLanguage === "de" ? "German" : "English";
-      const response = await askRecipeAssistant({
+      const response = await askAssistantWithModel({
         recipe: buildRecipePayload(snapshot),
         messages: [
           {
@@ -1095,7 +1112,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     const snapshotLanguage = getRecipeLanguage(snapshot);
     const snapshotLanguageLabel = snapshotLanguage === "de" ? "German" : "English";
     try {
-      const response = await askRecipeAssistant({
+      const response = await askAssistantWithModel({
         recipe: buildRecipePayload(snapshot),
         messages: [
           {
@@ -1139,7 +1156,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     const snapshotLanguage = getRecipeLanguage(snapshot);
     const snapshotLanguageLabel = snapshotLanguage === "de" ? "German" : "English";
     try {
-      const response = await askRecipeAssistant({
+      const response = await askAssistantWithModel({
         recipe: buildRecipePayload(snapshot),
         messages: [
           {
@@ -1181,7 +1198,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     const allowedTags = RECIPE_TAGS;
     const allowedLower = new Map(allowedTags.map((tag) => [tag.toLowerCase(), tag]));
     try {
-      const response = await askRecipeAssistant({
+      const response = await askAssistantWithModel({
         recipe: buildRecipePayload(snapshot),
         messages: [
           {
@@ -1216,7 +1233,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     const snapshot = formDataRef.current;
     const snapshotLanguage = getRecipeLanguage(snapshot);
     const snapshotLanguageLabel = snapshotLanguage === "de" ? "German" : "English";
-    const response = await askRecipeAssistant({
+    const response = await askAssistantWithModel({
       recipe: buildRecipePayload(snapshot),
       messages: [
         {
@@ -1239,7 +1256,7 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
     const snapshot = formDataRef.current;
     const snapshotLanguage = getRecipeLanguage(snapshot);
     const snapshotLanguageLabel = snapshotLanguage === "de" ? "German" : "English";
-    const response = await askRecipeAssistant({
+    const response = await askAssistantWithModel({
       recipe: buildRecipePayload(snapshot),
       messages: [
         {
@@ -1421,14 +1438,16 @@ export const RecipeEdit: React.FC<RecipeEditProps> = ({
       }
       const skipDetail = detailLines.length ? detailLines.join(" ") : null;
       const actionsUsed = await getActionUsedDelta(actionsBefore, "optimizationCount");
+      const modelName = lastAiModelRef.current;
       if (suppressAiAlerts) {
         onAiActionComplete?.({
           type: "optimize",
           creditsUsed: actionsUsed ?? 0,
           recipe: formDataRef.current,
+          modelName,
         });
       } else {
-        showAiResultAlert("optimize", actionsUsed, skipDetail);
+        showAiResultAlert("optimize", actionsUsed, skipDetail, modelName);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to optimize the recipe right now.";

@@ -106,7 +106,6 @@ export async function GET(request: Request) {
   const eventType = searchParams.get("eventType");
   const source = searchParams.get("source");
   const model = searchParams.get("model");
-  const usageContext = searchParams.get("usageContext");
   const { startDate, endDate } = getDateRange(
     searchParams.get("start"),
     searchParams.get("end")
@@ -268,16 +267,23 @@ export async function GET(request: Request) {
     currentUsageQuery = currentUsageQuery.in("owner_id", ownerIds);
   }
   if (eventType) {
-    eventsQuery = eventsQuery.eq("event_type", eventType);
+    if (eventType === "translation" || eventType === "translate") {
+      eventsQuery = eventsQuery
+        .eq("event_type", "ai_assistant")
+        .filter("metadata->>usage_context", "eq", "translated_with_ai");
+    } else if (eventType === "optimization" || eventType === "optimize") {
+      eventsQuery = eventsQuery
+        .eq("event_type", "ai_assistant")
+        .filter("metadata->>usage_context", "eq", "optimized_with_ai");
+    } else {
+      eventsQuery = eventsQuery.eq("event_type", eventType);
+    }
   }
   if (source) {
     eventsQuery = eventsQuery.eq("source", source);
   }
   if (model) {
     eventsQuery = eventsQuery.eq("model_name", model);
-  }
-  if (usageContext) {
-    eventsQuery = eventsQuery.filter("metadata->>usage_context", "eq", usageContext);
   }
 
   const [
@@ -552,6 +558,17 @@ export async function GET(request: Request) {
     const aiCredits = Number(event.ai_credits_used || 0);
     const isImportCredit = event.event_type === "import_credit";
     const meta = typeof event.metadata === "object" && event.metadata ? event.metadata : null;
+    const usageContext =
+      meta && (meta as Record<string, unknown>).usage_context
+        ? String((meta as Record<string, unknown>).usage_context)
+        : "";
+    const isTrackingOnly =
+      ["translate", "optimize"].includes(String(event.event_type || "")) &&
+      !event.model_name &&
+      aiCredits === 0 &&
+      importCredits === 0 &&
+      Number(event.tokens_total || 0) === 0 &&
+      event.cost_usd == null;
     const modelProvider = event.model_provider ?? "";
     const audioSeconds = meta ? Number((meta as Record<string, unknown>).audio_seconds || 0) : 0;
     const visionImages = meta ? Number((meta as Record<string, unknown>).images || 0) : 0;
@@ -595,7 +612,11 @@ export async function GET(request: Request) {
     entry.events += 1;
     byModelCost.set(modelKey, entry);
 
-    const actionKey = event.event_type ?? "unknown";
+    let actionKey = event.event_type ?? "unknown";
+    if (actionKey === "ai_assistant" && usageContext) {
+      if (usageContext === "translated_with_ai") actionKey = "translate";
+      if (usageContext === "optimized_with_ai") actionKey = "optimize";
+    }
     const actionModelKey = `${actionKey}|${modelKey}`;
     const actionEntry = actionModelBreakdown.get(actionModelKey) ?? {
       action: actionKey,
@@ -604,15 +625,19 @@ export async function GET(request: Request) {
       costUsd: 0,
       events: 0,
     };
-    actionEntry.credits += isImportCredit ? importCredits : usageUnits;
-    actionEntry.costUsd += Number(event.cost_usd || 0);
-    actionEntry.events += 1;
-    actionModelBreakdown.set(actionModelKey, actionEntry);
-
-    if (!actionDailyCounts.has(actionKey)) {
-      actionDailyCounts.set(actionKey, new Map());
+    if (!isTrackingOnly) {
+      actionEntry.credits += isImportCredit ? importCredits : usageUnits;
+      actionEntry.costUsd += Number(event.cost_usd || 0);
+      actionEntry.events += 1;
+      actionModelBreakdown.set(actionModelKey, actionEntry);
     }
-    actionDailyCounts.get(actionKey)!.set(dayKey, (actionDailyCounts.get(actionKey)!.get(dayKey) ?? 0) + 1);
+
+    if (!isTrackingOnly) {
+      if (!actionDailyCounts.has(actionKey)) {
+        actionDailyCounts.set(actionKey, new Map());
+      }
+      actionDailyCounts.get(actionKey)!.set(dayKey, (actionDailyCounts.get(actionKey)!.get(dayKey) ?? 0) + 1);
+    }
 
     const creditsForAction = isImportCredit ? importCredits : usageUnits;
     const actionTotalsEntry = actionTotals.get(actionKey) ?? {
@@ -620,49 +645,62 @@ export async function GET(request: Request) {
       creditsUsed: 0,
       costUsd: 0,
     };
-    actionTotalsEntry.events += 1;
-    actionTotalsEntry.creditsUsed += creditsForAction;
-    actionTotalsEntry.costUsd += Number(event.cost_usd || 0);
-    actionTotals.set(actionKey, actionTotalsEntry);
+    if (!isTrackingOnly) {
+      actionTotalsEntry.events += 1;
+      actionTotalsEntry.creditsUsed += creditsForAction;
+      actionTotalsEntry.costUsd += Number(event.cost_usd || 0);
+      actionTotals.set(actionKey, actionTotalsEntry);
+    }
 
     const contextKey =
-      typeof meta === "object" && meta && (meta as Record<string, unknown>).usage_context
-        ? String((meta as Record<string, unknown>).usage_context)
-        : actionKey === "import" || actionKey === "import_credit"
-          ? "import"
-          : actionKey === "scan"
-            ? "scan"
-            : actionKey === "manual_add"
-              ? "manual"
-              : "";
+      usageContext ||
+      (actionKey === "import" || actionKey === "import_credit"
+        ? "import"
+        : actionKey === "scan"
+          ? "scan"
+          : actionKey === "manual_add"
+            ? "manual"
+            : "");
     if (contextKey) {
       const contextEntry = contextTotals.get(contextKey) ?? {
         events: 0,
         creditsUsed: 0,
         costUsd: 0,
       };
-      contextEntry.events += 1;
-      contextEntry.creditsUsed += creditsForAction;
-      contextEntry.costUsd += Number(event.cost_usd || 0);
-      contextTotals.set(contextKey, contextEntry);
+      if (!isTrackingOnly) {
+        contextEntry.events += 1;
+        contextEntry.creditsUsed += creditsForAction;
+        contextEntry.costUsd += Number(event.cost_usd || 0);
+        contextTotals.set(contextKey, contextEntry);
+      }
     }
-    if (!actionDailyCredits.has(actionKey)) {
-      actionDailyCredits.set(actionKey, new Map());
+    if (!isTrackingOnly) {
+      if (!actionDailyCredits.has(actionKey)) {
+        actionDailyCredits.set(actionKey, new Map());
+      }
+      actionDailyCredits
+        .get(actionKey)!
+        .set(dayKey, (actionDailyCredits.get(actionKey)!.get(dayKey) ?? 0) + creditsForAction);
     }
-    actionDailyCredits.get(actionKey)!.set(dayKey, (actionDailyCredits.get(actionKey)!.get(dayKey) ?? 0) + creditsForAction);
 
-    if (!actionDailyCosts.has(actionKey)) {
-      actionDailyCosts.set(actionKey, new Map());
+    if (!isTrackingOnly) {
+      if (!actionDailyCosts.has(actionKey)) {
+        actionDailyCosts.set(actionKey, new Map());
+      }
+      actionDailyCosts
+        .get(actionKey)!
+        .set(dayKey, (actionDailyCosts.get(actionKey)!.get(dayKey) ?? 0) + Number(event.cost_usd || 0));
     }
-    actionDailyCosts.get(actionKey)!.set(dayKey, (actionDailyCosts.get(actionKey)!.get(dayKey) ?? 0) + Number(event.cost_usd || 0));
 
     if (contextKey) {
-      if (!contextDailyCounts.has(contextKey)) {
-        contextDailyCounts.set(contextKey, new Map());
+      if (!isTrackingOnly) {
+        if (!contextDailyCounts.has(contextKey)) {
+          contextDailyCounts.set(contextKey, new Map());
+        }
+        contextDailyCounts
+          .get(contextKey)!
+          .set(dayKey, (contextDailyCounts.get(contextKey)!.get(dayKey) ?? 0) + 1);
       }
-      contextDailyCounts
-        .get(contextKey)!
-        .set(dayKey, (contextDailyCounts.get(contextKey)!.get(dayKey) ?? 0) + 1);
     }
 
     if (event.request_id && ["import", "scan", "import_credit"].includes(actionKey)) {
@@ -722,7 +760,7 @@ export async function GET(request: Request) {
   }
 
   const hasEventFilters = Boolean(
-    email || userName || language || country || eventType || source || model || usageContext
+    email || userName || language || country || eventType || source || model
   );
   if (safeEvents.length === 0 && safeMonthly.length > 0 && !hasEventFilters) {
     for (const entry of safeMonthly) {
@@ -778,7 +816,7 @@ export async function GET(request: Request) {
   const sourceImportSeries = buildSeries(sourceImportDaily);
   const contextCountSeries = buildSeries(contextDailyCounts);
 
-  const hasFilters = Boolean(userId || email || eventType || source || model || usageContext);
+  const hasFilters = Boolean(userId || email || eventType || source || model);
   const { data: authData } = await supabaseAdmin.auth.admin.listUsers({
     page: 1,
     perPage: 1000,

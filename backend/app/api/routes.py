@@ -105,6 +105,7 @@ class RecipeAssistantRequest(BaseModel):
 
 class RecipeAssistantResponse(BaseModel):
     reply: str
+    model: Optional[str] = None
 
 
 class UsageTrackRequest(BaseModel):
@@ -1427,7 +1428,7 @@ def recipe_assistant(
             ],
             import_credits_used=0,
         )
-    return RecipeAssistantResponse(reply=reply_payload)
+    return RecipeAssistantResponse(reply=reply_payload, model=model_name)
 
 
 @router.post("/usage/track")

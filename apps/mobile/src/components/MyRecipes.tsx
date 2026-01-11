@@ -690,13 +690,36 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
             </View>
           ) : (
             collections.map((collection) => (
+              (() => {
+                const collectionThumbs = collection.recipeIds
+                  .map((id) => recipes.find((recipe) => recipe.id === id)?.thumbnail)
+                  .filter(Boolean) as string[];
+                const previewThumbs =
+                  collectionThumbs.length > 0
+                    ? Array.from({ length: 4 }, (_, index) => collectionThumbs[index % collectionThumbs.length])
+                    : [];
+
+                return (
               <Pressable
                 key={collection.id}
                 style={styles.collectionCard}
                 onPress={() => setSelectedCollectionId(collection.id)}
               >
-                <View style={styles.collectionIcon}>
-                  <Ionicons name="folder-open" size={20} color={colors.white} />
+                <View style={styles.collectionThumbGrid}>
+                  {previewThumbs.length > 0 ? (
+                    previewThumbs.map((thumb, index) => (
+                      <RecipeThumbnail
+                        key={`${collection.id}-thumb-${index}`}
+                        imageUrl={thumb}
+                        title={collection.name}
+                        style={styles.collectionThumb}
+                      />
+                    ))
+                  ) : (
+                    Array.from({ length: 4 }).map((_, index) => (
+                      <View key={`${collection.id}-empty-${index}`} style={styles.collectionThumbPlaceholder} />
+                    ))
+                  )}
                 </View>
                 <View style={styles.collectionInfo}>
                   <Text style={styles.collectionName}>{collection.name}</Text>
@@ -714,6 +737,8 @@ export const MyRecipes: React.FC<MyRecipesProps> = ({
                   <Ionicons name="trash-outline" size={16} color={colors.red500} />
                 </Pressable>
               </Pressable>
+                );
+              })()
             ))
           )}
         </View>
@@ -1226,13 +1251,23 @@ const styles = StyleSheet.create({
     borderColor: colors.gray100,
     backgroundColor: colors.white,
   },
-  collectionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    backgroundColor: colors.purple600,
-    alignItems: "center",
-    justifyContent: "center",
+  collectionThumbGrid: {
+    width: 56,
+    height: 56,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+  },
+  collectionThumb: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.sm,
+  },
+  collectionThumbPlaceholder: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.sm,
+    backgroundColor: colors.gray100,
   },
   collectionInfo: {
     flex: 1,

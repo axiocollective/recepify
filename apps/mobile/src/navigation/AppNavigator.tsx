@@ -107,6 +107,7 @@ export const AppNavigator: React.FC = () => {
   const [aiCompletionNotice, setAiCompletionNotice] = React.useState<{
     type: "optimize" | "translate";
     creditsUsed: number | null;
+    modelName?: string | null;
   } | null>(null);
   const aiNoticeShownRef = React.useRef(false);
   const [authStep, setAuthStep] = React.useState<"welcome" | "login">("welcome");
@@ -191,10 +192,11 @@ export const AppNavigator: React.FC = () => {
     if (!aiCompletionNotice || aiNoticeShownRef.current) return;
     aiNoticeShownRef.current = true;
     const title = aiCompletionNotice.type === "translate" ? "Recipe translated" : "Recipe optimized";
+    const modelLine = aiCompletionNotice.modelName ? `\n\nModel: ${aiCompletionNotice.modelName}` : "";
     const body = `Please review the changes before saving.\n\n${formatAiCreditUsage(
       aiCompletionNotice.creditsUsed ?? 0,
       aiCompletionNotice.type
-    )}`;
+    )}${modelLine}`;
     Alert.alert(
       title,
       body,
@@ -752,6 +754,7 @@ export const AppNavigator: React.FC = () => {
               setAiCompletionNotice({
                 type: payload.type,
                 creditsUsed: payload.creditsUsed ?? 0,
+                modelName: payload.modelName ?? null,
               });
               setAiReturnToDetail(false);
               setCurrentScreen("recipeDetail");
